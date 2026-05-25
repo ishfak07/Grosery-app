@@ -654,6 +654,13 @@ class AdminProductManagementScreen extends StatelessWidget {
       body: StreamBuilder<List<Product>>(
         stream: appState.firestoreService.watchProducts(activeOnly: false),
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return EmptyState(
+              icon: Icons.error_outline,
+              title: 'Could not load products',
+              message: snapshot.error.toString(),
+            );
+          }
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const LoadingView();
           }

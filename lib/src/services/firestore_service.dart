@@ -127,16 +127,7 @@ class FirestoreService {
     if (!_firebaseAvailable) {
       return Stream<List<Product>>.value(const <Product>[]);
     }
-    return _products.snapshots().timeout(
-      const Duration(seconds: 15),
-      onTimeout: (sink) {
-        sink.addError(
-          TimeoutException(
-            'Products did not load from Firestore. Check internet, Firebase rules, and product documents.',
-          ),
-        );
-      },
-    ).map((snapshot) {
+    return _products.snapshots().map((snapshot) {
       final products = snapshot.docs
           .map((doc) => Product.fromMap(doc.data(), doc.id))
           .where(
