@@ -88,6 +88,7 @@ class AppState extends ChangeNotifier {
       _profile = authService.bootstrapAdminProfile(user.uid);
       _isInitializing = false;
       notifyListeners();
+      await _configureNotificationsForProfile(_profile);
       return;
     }
 
@@ -96,12 +97,16 @@ class AppState extends ChangeNotifier {
         _profile = profile;
         _isInitializing = false;
         notifyListeners();
-        if (profile != null && _notificationsConfiguredForUid != profile.uid) {
-          _notificationsConfiguredForUid = profile.uid;
-          await notificationService.configureForUser(profile.uid);
-        }
+        await _configureNotificationsForProfile(profile);
       },
     );
+  }
+
+  Future<void> _configureNotificationsForProfile(UserProfile? profile) async {
+    if (profile != null && _notificationsConfiguredForUid != profile.uid) {
+      _notificationsConfiguredForUid = profile.uid;
+      await notificationService.configureForUser(profile.uid);
+    }
   }
 
   Future<void> markOnboardingComplete() async {
@@ -134,6 +139,7 @@ class AppState extends ChangeNotifier {
     );
     _profile = user;
     notifyListeners();
+    await _configureNotificationsForProfile(user);
     return user;
   }
 
@@ -156,6 +162,7 @@ class AppState extends ChangeNotifier {
       password: password,
     );
     notifyListeners();
+    await _configureNotificationsForProfile(_profile);
   }
 
   Future<void> updateProfile({
@@ -306,6 +313,7 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _authSubscription?.cancel();
     _profileSubscription?.cancel();
+    notificationService.dispose();
     super.dispose();
   }
 }
