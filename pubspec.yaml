@@ -31,13 +31,11 @@ dependencies:
   flutter:
     sdk: flutter
 
-  cached_network_image: ^3.3.1
   cloud_firestore: ^5.6.12
   cupertino_icons: ^1.0.6
   firebase_auth: ^5.7.0
   firebase_core: ^3.15.2
   firebase_messaging: ^15.2.10
-  firebase_storage: ^12.4.10
   image_picker: ^1.1.2
   intl: ^0.19.0
   path: ^1.9.0
@@ -45,6 +43,7 @@ dependencies:
   shared_preferences: ^2.3.3
   url_launcher: ^6.3.0
   uuid: ^4.4.0
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:

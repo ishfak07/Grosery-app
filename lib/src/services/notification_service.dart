@@ -6,11 +6,14 @@ class NotificationService {
       : _firebaseAvailable = firebaseAvailable;
 
   final bool _firebaseAvailable;
+  String? _configuredUserId;
+  var _foregroundListenerConfigured = false;
 
   Future<void> configureForUser(String uid) async {
-    if (!_firebaseAvailable) {
+    if (!_firebaseAvailable || _configuredUserId == uid) {
       return;
     }
+    _configuredUserId = uid;
 
     final messaging = FirebaseMessaging.instance;
     await messaging.requestPermission();
@@ -25,9 +28,12 @@ class NotificationService {
       );
     }
 
-    FirebaseMessaging.onMessage.listen((message) {
-      // Foreground messages are intentionally kept in-app for the MVP.
-      // Firestore notification documents provide the notification inbox.
-    });
+    if (!_foregroundListenerConfigured) {
+      _foregroundListenerConfigured = true;
+      FirebaseMessaging.onMessage.listen((message) {
+        // Foreground messages are intentionally kept in-app for the MVP.
+        // Firestore notification documents provide the notification inbox.
+      });
+    }
   }
 }

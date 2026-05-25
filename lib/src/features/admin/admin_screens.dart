@@ -1,11 +1,13 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../services/cloudinary_service.dart';
+import '../../../services/image_picker_helper.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/validators.dart';
@@ -610,14 +612,19 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
         return Dialog(
           insetPadding: const EdgeInsets.all(12),
           child: InteractiveViewer(
-            child: CachedNetworkImage(
-              imageUrl: url,
+            child: Image.network(
+              url,
               fit: BoxFit.contain,
-              placeholder: (_, __) => const SizedBox(
-                height: 280,
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              errorWidget: (_, __, ___) => const SizedBox(
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) {
+                  return child;
+                }
+                return const SizedBox(
+                  height: 280,
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              },
+              errorBuilder: (_, __, ___) => const SizedBox(
                 height: 280,
                 child: Center(child: Icon(Icons.broken_image)),
               ),
@@ -865,27 +872,41 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                   },
                 ),
                 const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final picked = await ImagePicker().pickImage(
-                      source: ImageSource.gallery,
-                      imageQuality: 82,
-                    );
-                    if (picked != null) {
-                      setState(() => _imagePath = picked.path);
-                    }
-                  },
-                  icon: const Icon(Icons.image),
-                  label: Text(_imagePath == null
-                      ? 'Choose product image'
-                      : 'Image selected'),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _isSaving
+                            ? null
+                            : () => _pickProductImage(fromCamera: false),
+                        icon: const Icon(Icons.image),
+                        label: const Text('Gallery'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _isSaving
+                            ? null
+                            : () => _pickProductImage(fromCamera: true),
+                        icon: const Icon(Icons.photo_camera),
+                        label: const Text('Camera'),
+                      ),
+                    ),
+                  ],
                 ),
+                if (_imagePath != null) ...[
+                  const SizedBox(height: 8),
+                  const Text('Product image selected.'),
+                ],
                 const SizedBox(height: 18),
                 PrimaryActionButton(
                   label: 'Save product',
                   icon: Icons.save,
                   isLoading: _isSaving,
-                  onPressed: shops.isEmpty ? null : () => _saveProduct(shops),
+                  onPressed: shops.isEmpty || _isSaving
+                      ? null
+                      : () => _saveProduct(shops),
                 ),
               ],
             ),
@@ -896,6 +917,9 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   }
 
   Future<void> _saveProduct(List<Shop> shops) async {
+    if (_isSaving) {
+      return;
+    }
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -910,10 +934,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       final productId = widget.product?.productId ?? const Uuid().v4();
       var imageUrl = widget.product?.imageUrl ?? '';
       if (_imagePath != null) {
-        imageUrl = await appState.storageService.uploadFile(
-          localPath: _imagePath!,
-          storagePath: 'product_images/$productId',
-        );
+        imageUrl = await CloudinaryService.uploadImage(File(_imagePath!));
       }
       final now = DateTime.now();
       final product = Product(
@@ -944,6 +965,15 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         setState(() => _isSaving = false);
       }
     }
+  }
+
+  Future<void> _pickProductImage({required bool fromCamera}) async {
+    final imageFile =
+        fromCamera ? await takePhotoFromCamera() : await pickImageFromGallery();
+    if (!mounted || imageFile == null) {
+      return;
+    }
+    setState(() => _imagePath = imageFile.path);
   }
 
   List<Shop> _uniqueShops(List<Shop> shops) {

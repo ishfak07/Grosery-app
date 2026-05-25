@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../services/cloudinary_service.dart';
 import '../core/constants/app_constants.dart';
 import '../models/models.dart';
 import '../services/auth_service.dart';
@@ -11,7 +13,6 @@ import '../services/firebase_bootstrap.dart';
 import '../services/firestore_service.dart';
 import '../services/local_storage_service.dart';
 import '../services/notification_service.dart';
-import '../services/storage_service.dart';
 
 class AppState extends ChangeNotifier {
   AppState(FirebaseBootstrap bootstrap)
@@ -19,7 +20,6 @@ class AppState extends ChangeNotifier {
         firebaseError = bootstrap.errorMessage,
         firestoreService =
             FirestoreService(firebaseAvailable: bootstrap.isReady),
-        storageService = StorageService(firebaseAvailable: bootstrap.isReady),
         notificationService =
             NotificationService(firebaseAvailable: bootstrap.isReady) {
     authService = AuthService(
@@ -31,7 +31,6 @@ class AppState extends ChangeNotifier {
   final bool firebaseAvailable;
   final String? firebaseError;
   final FirestoreService firestoreService;
-  final StorageService storageService;
   final NotificationService notificationService;
   final LocalStorageService localStorageService = LocalStorageService();
   late final AuthService authService;
@@ -45,6 +44,7 @@ class AppState extends ChangeNotifier {
   UserProfile? _profile;
   List<CartItem> _cartItems = const <CartItem>[];
   String? _billImagePath;
+  String? _notificationsConfiguredForUid;
 
   bool get isInitializing => _isInitializing;
   bool get hasSeenOnboarding => _hasSeenOnboarding;
@@ -77,6 +77,7 @@ class AppState extends ChangeNotifier {
     await _profileSubscription?.cancel();
     if (user == null) {
       _profile = null;
+      _notificationsConfiguredForUid = null;
       _isInitializing = false;
       notifyListeners();
       return;
@@ -94,7 +95,8 @@ class AppState extends ChangeNotifier {
         _profile = profile;
         _isInitializing = false;
         notifyListeners();
-        if (profile != null) {
+        if (profile != null && _notificationsConfiguredForUid != profile.uid) {
+          _notificationsConfiguredForUid = profile.uid;
           await notificationService.configureForUser(profile.uid);
         }
       },
@@ -245,10 +247,8 @@ class AppState extends ChangeNotifier {
     final orderId = _uuid.v4();
     String uploadedImageUrl = '';
     if (hasBillImage) {
-      uploadedImageUrl = await storageService.uploadFile(
-        localPath: _billImagePath!,
-        storagePath: 'order_uploads/${current.uid}/$orderId',
-      );
+      uploadedImageUrl =
+          await CloudinaryService.uploadImage(File(_billImagePath!));
     }
 
     final subtotal = cartSubtotal;

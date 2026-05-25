@@ -24,7 +24,7 @@ class FirebaseSetupBanner extends StatelessWidget {
       ),
       child: Text(
         appState.firebaseError ??
-            'Firebase is not configured. Login, OTP, database, storage, and FCM need real Firebase config files.',
+            'Firebase is not configured. Login, OTP, database, and FCM need real Firebase config files.',
         style: Theme.of(context).textTheme.bodySmall,
       ),
     );

@@ -1,11 +1,11 @@
 import 'dart:io';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../../services/cloudinary_service.dart';
+import '../../../services/image_picker_helper.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/validators.dart';
@@ -125,45 +125,7 @@ class CustomerHomeScreen extends StatelessWidget {
                 MaterialPageRoute(builder: (_) => const ProductListScreen()),
               ),
             ),
-            StreamBuilder<List<Product>>(
-              stream: appState.firestoreService.watchProducts(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return _DataErrorState(
-                    message: _friendlyDataError(snapshot.error),
-                  );
-                }
-                final products =
-                    (snapshot.data ?? const <Product>[]).take(6).toList();
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                if (products.isEmpty) {
-                  return const EmptyState(
-                    icon: Icons.inventory_2_outlined,
-                    title: 'No products yet',
-                    message: 'Admin can add products from the admin dashboard.',
-                  );
-                }
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: products.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.72,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                  ),
-                  itemBuilder: (context, index) {
-                    return ProductCard(product: products[index]);
-                  },
-                );
-              },
-            ),
+            const _RecentProductsGrid(),
           ],
         ),
       ),
@@ -191,6 +153,65 @@ class CustomerHomeScreen extends StatelessWidget {
               icon: Icon(Icons.person_outline), label: 'Profile'),
         ],
       ),
+    );
+  }
+}
+
+class _RecentProductsGrid extends StatefulWidget {
+  const _RecentProductsGrid();
+
+  @override
+  State<_RecentProductsGrid> createState() => _RecentProductsGridState();
+}
+
+class _RecentProductsGridState extends State<_RecentProductsGrid> {
+  late final Stream<List<Product>> _productsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _productsStream = context.read<AppState>().firestoreService.watchProducts();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Product>>(
+      stream: _productsStream,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _DataErrorState(
+            message: _friendlyDataError(snapshot.error),
+          );
+        }
+        final products = (snapshot.data ?? const <Product>[]).take(6).toList();
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (products.isEmpty) {
+          return const EmptyState(
+            icon: Icons.inventory_2_outlined,
+            title: 'No products yet',
+            message: 'Admin can add products from the admin dashboard.',
+          );
+        }
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: products.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 0.72,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+          ),
+          itemBuilder: (context, index) {
+            return ProductCard(product: products[index]);
+          },
+        );
+      },
     );
   }
 }
@@ -307,6 +328,16 @@ class ProductListScreen extends StatefulWidget {
 
 class _ProductListScreenState extends State<ProductListScreen> {
   final _search = TextEditingController();
+  late final Stream<List<Product>> _productsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _productsStream = context.read<AppState>().firestoreService.watchProducts(
+          shopId: widget.shop?.shopId,
+          category: widget.category,
+        );
+  }
 
   @override
   void dispose() {
@@ -350,10 +381,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
           ),
           Expanded(
             child: StreamBuilder<List<Product>>(
-              stream: appState.firestoreService.watchProducts(
-                shopId: widget.shop?.shopId,
-                category: widget.category,
-              ),
+              stream: _productsStream,
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return _DataErrorState(
@@ -511,6 +539,12 @@ class ProductImage extends StatelessWidget {
       color: const Color(0xFFEAF0EA),
       child: const Icon(Icons.local_grocery_store, size: 42),
     );
+    final brokenImage = Container(
+      width: double.infinity,
+      height: double.infinity,
+      color: const Color(0xFFEAF0EA),
+      child: const Icon(Icons.broken_image, size: 42),
+    );
 
     if (url.isEmpty) {
       return ClipRRect(
@@ -521,13 +555,18 @@ class ProductImage extends StatelessWidget {
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
-      child: CachedNetworkImage(
-        imageUrl: url,
+      child: Image.network(
+        url,
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
-        placeholder: (_, __) => placeholder,
-        errorWidget: (_, __, ___) => placeholder,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) {
+            return child;
+          }
+          return placeholder;
+        },
+        errorBuilder: (_, __, ___) => brokenImage,
       ),
     );
   }
@@ -755,21 +794,42 @@ class UploadBillScreen extends StatelessWidget {
           if (appState.hasBillImage)
             _BillImagePreview(path: appState.billImagePath!),
           const SizedBox(height: 12),
-          PrimaryActionButton(
-            label:
-                appState.hasBillImage ? 'Choose another photo' : 'Choose photo',
-            icon: Icons.photo_library,
-            onPressed: () async {
-              final picker = ImagePicker();
-              final picked = await picker.pickImage(
-                source: ImageSource.gallery,
-                imageQuality: 82,
-              );
-              if (picked == null) {
-                return;
-              }
-              await appState.setBillImagePath(picked.path);
-            },
+          Row(
+            children: [
+              Expanded(
+                child: PrimaryActionButton(
+                  label: appState.hasBillImage ? 'Gallery' : 'Choose photo',
+                  icon: Icons.photo_library,
+                  onPressed: () async {
+                    final imageFile = await pickImageFromGallery();
+                    if (imageFile == null) {
+                      return;
+                    }
+                    if (!context.mounted) {
+                      return;
+                    }
+                    await appState.setBillImagePath(imageFile.path);
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final imageFile = await takePhotoFromCamera();
+                    if (imageFile == null) {
+                      return;
+                    }
+                    if (!context.mounted) {
+                      return;
+                    }
+                    await appState.setBillImagePath(imageFile.path);
+                  },
+                  icon: const Icon(Icons.photo_camera),
+                  label: Text(appState.hasBillImage ? 'Retake' : 'Camera'),
+                ),
+              ),
+            ],
           ),
           if (appState.hasBillImage) ...[
             const SizedBox(height: 10),
@@ -945,6 +1005,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _submit() async {
+    if (_isSubmitting) {
+      return;
+    }
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -1547,15 +1610,7 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
               children: [
                 IconButton(
                   tooltip: 'Attach image',
-                  onPressed: () async {
-                    final picked = await ImagePicker().pickImage(
-                      source: ImageSource.gallery,
-                      imageQuality: 80,
-                    );
-                    if (picked != null) {
-                      setState(() => _imagePath = picked.path);
-                    }
-                  },
+                  onPressed: _isSending ? null : _chooseSupportImage,
                   icon: Icon(
                     _imagePath == null ? Icons.image_outlined : Icons.image,
                   ),
@@ -1590,6 +1645,9 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
   }
 
   Future<void> _sendMessage() async {
+    if (_isSending) {
+      return;
+    }
     if (_message.text.trim().isEmpty && _imagePath == null) {
       return;
     }
@@ -1598,11 +1656,7 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
       final appState = context.read<AppState>();
       var imageUrl = '';
       if (_imagePath != null) {
-        imageUrl = await appState.storageService.uploadFile(
-          localPath: _imagePath!,
-          storagePath:
-              'support_images/${appState.profile!.uid}/${widget.ticket.ticketId}/${DateTime.now().millisecondsSinceEpoch}',
-        );
+        imageUrl = await CloudinaryService.uploadImage(File(_imagePath!));
       }
       await appState.firestoreService.sendSupportMessage(
         ticket: widget.ticket,
@@ -1611,8 +1665,10 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
             _message.text.trim().isEmpty ? 'Image attached' : _message.text,
         imageUrl: imageUrl,
       );
-      _message.clear();
-      setState(() => _imagePath = null);
+      if (mounted) {
+        _message.clear();
+        setState(() => _imagePath = null);
+      }
     } catch (error) {
       if (mounted) {
         showSnack(context, error.toString());
@@ -1622,6 +1678,41 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
         setState(() => _isSending = false);
       }
     }
+  }
+
+  Future<void> _chooseSupportImage() async {
+    final fromCamera = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Gallery'),
+                onTap: () => Navigator.of(context).pop(false),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Camera'),
+                onTap: () => Navigator.of(context).pop(true),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (fromCamera == null) {
+      return;
+    }
+
+    final imageFile =
+        fromCamera ? await takePhotoFromCamera() : await pickImageFromGallery();
+    if (!mounted || imageFile == null) {
+      return;
+    }
+    setState(() => _imagePath = imageFile.path);
   }
 }
 

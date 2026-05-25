@@ -288,6 +288,10 @@ class AuthService {
       return 'Firebase real SMS OTP is blocked because billing is not enabled. Test phone numbers work without SMS, but real Phone Auth SMS requires Firebase billing/Blaze.';
     }
 
+    if (_mentionsAndroidVerificationInternalError(message)) {
+      return 'Firebase blocked this OTP before sending SMS. For this Android build, add the debug SHA-1 and SHA-256 fingerprints in Firebase Project settings, download the fresh google-services.json, and test real SMS on a physical phone. Android emulators should use Firebase test phone numbers.';
+    }
+
     switch (error.code) {
       case 'operation-not-allowed':
         if (_mentionsSmsRegionPolicy(message)) {
@@ -329,6 +333,13 @@ class AuthService {
     return message.contains('billing_not_enabled') ||
         message.contains('billing not enabled') ||
         message.contains('billing-not-enabled');
+  }
+
+  bool _mentionsAndroidVerificationInternalError(String message) {
+    return message.contains('error code:39') ||
+        message.contains('error code:-39') ||
+        message.contains('status code: 17499') ||
+        message.contains('unknown status code: 17499');
   }
 
   String _authErrorMessage(FirebaseAuthException error) {

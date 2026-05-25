@@ -28,7 +28,6 @@ class DefaultFirebaseOptions {
     appId: '1:471895063005:android:9864a4a2f11d8e68859e34',
     messagingSenderId: '471895063005',
     projectId: 'grocery-delivery-app-388bc',
-    storageBucket: 'grocery-delivery-app-388bc.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -36,7 +35,6 @@ class DefaultFirebaseOptions {
     appId: '1:471895063005:ios:12fdd5511cad0087859e34',
     messagingSenderId: '471895063005',
     projectId: 'grocery-delivery-app-388bc',
-    storageBucket: 'grocery-delivery-app-388bc.firebasestorage.app',
     iosBundleId: 'com.ishi.grocerydelivery',
   );
 }

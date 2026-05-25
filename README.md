@@ -1,7 +1,7 @@
 # Ishi Grocery Delivery
 
 Flutter MVP for Android and iOS using Firebase Authentication, Firestore,
-Storage, and FCM.
+Firebase Cloud Messaging, and Cloudinary unsigned image uploads.
 
 ## Firebase setup
 
@@ -23,8 +23,10 @@ Enable these Firebase products in the console:
 
 - Authentication: Phone and Email/Password providers
 - Firestore Database
-- Firebase Storage
 - Firebase Cloud Messaging
+
+Image uploads use the unsigned Cloudinary preset `grocery_unsigned` in the
+`grocery_app` folder. Do not add a Cloudinary API secret to the Flutter app.
 
 ### Phone OTP with real numbers
 
@@ -70,8 +72,8 @@ Password: admin123
 ```
 
 This signs in with Firebase Email/Password using `94768976111@app.local`, so it
-does not send a Phone OTP SMS. Deploy the included Firestore and Storage rules
-so this account can manage admin data.
+does not send a Phone OTP SMS. Deploy the included Firestore rules so this
+account can manage admin data.
 
 ## Verification run
 

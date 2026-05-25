@@ -46,9 +46,9 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Camera access is used to capture shopping list and support issue photos.</string>
+	<string>We need camera access to capture bill and product images.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Photo library access is used to upload shopping list, product, and support issue images.</string>
+	<string>We need photo library access to upload product and bill images.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Photo access is used for selecting grocery order images.</string>
 	<key>UIBackgroundModes</key>

@@ -58,6 +58,19 @@ void main() {
     expect(message, contains('google-services.json'));
   });
 
+  test('explains Firebase phone auth internal error 39', () {
+    final message = authService.phoneAuthErrorMessageForTesting(
+      FirebaseAuthException(
+        code: 'unknown',
+        message: 'An internal error has occurred. [ Error code:39 ]',
+      ),
+    );
+
+    expect(message, contains('before sending SMS'));
+    expect(message, contains('SHA-1 and SHA-256'));
+    expect(message, contains('physical phone'));
+  });
+
   test('recognizes the bootstrap admin login only with the fixed password', () {
     expect(
       authService.isBootstrapAdminLogin('+94768976111', 'admin123'),
