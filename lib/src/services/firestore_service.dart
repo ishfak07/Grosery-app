@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
 
@@ -125,19 +127,28 @@ class FirestoreService {
     if (!_firebaseAvailable) {
       return Stream<List<Product>>.value(const <Product>[]);
     }
-    Query<Map<String, dynamic>> query = _products;
-    if (activeOnly) {
-      query = query.where('isActive', isEqualTo: true);
-    }
-    if (shopId != null && shopId.isNotEmpty) {
-      query = query.where('shopId', isEqualTo: shopId);
-    }
-    if (category != null && category.isNotEmpty) {
-      query = query.where('category', isEqualTo: category);
-    }
-    return query.snapshots().map((snapshot) {
+    return _products.snapshots().timeout(
+      const Duration(seconds: 15),
+      onTimeout: (sink) {
+        sink.addError(
+          TimeoutException(
+            'Products did not load from Firestore. Check internet, Firebase rules, and product documents.',
+          ),
+        );
+      },
+    ).map((snapshot) {
       final products = snapshot.docs
           .map((doc) => Product.fromMap(doc.data(), doc.id))
+          .where(
+            (product) =>
+                (!activeOnly || product.isActive) &&
+                (shopId == null ||
+                    shopId.isEmpty ||
+                    product.shopId == shopId) &&
+                (category == null ||
+                    category.isEmpty ||
+                    product.category == category),
+          )
           .toList()
         ..sort((a, b) => a.name.compareTo(b.name));
       return products;

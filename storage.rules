@@ -6,9 +6,16 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function isAdmin() {
+    function isBootstrapAdmin() {
       return signedIn() &&
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        request.auth.token.email == '94768976111@app.local';
+    }
+
+    function isAdmin() {
+      return signedIn() && (
+        isBootstrapAdmin() ||
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
     }
 
     match /product_images/{productId} {

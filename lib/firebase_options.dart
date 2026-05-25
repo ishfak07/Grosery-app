@@ -2,11 +2,6 @@ import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 
-/// Placeholder Firebase options.
-///
-/// Replace this file by running `flutterfire configure` after logging in to the
-/// Firebase CLI. The app detects these placeholder values and shows a setup
-/// warning instead of trying to connect to a fake Firebase project.
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
@@ -29,19 +24,19 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'REPLACE_WITH_ANDROID_API_KEY',
-    appId: '1:000000000000:android:0000000000000000',
-    messagingSenderId: '000000000000',
-    projectId: 'replace-with-firebase-project',
-    storageBucket: 'replace-with-firebase-project.appspot.com',
+    apiKey: 'AIzaSyDAtj58p_V5l9JcnkqC5SyoNXtSFgRFm1U',
+    appId: '1:471895063005:android:9864a4a2f11d8e68859e34',
+    messagingSenderId: '471895063005',
+    projectId: 'grocery-delivery-app-388bc',
+    storageBucket: 'grocery-delivery-app-388bc.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'REPLACE_WITH_IOS_API_KEY',
-    appId: '1:000000000000:ios:0000000000000000',
-    messagingSenderId: '000000000000',
-    projectId: 'replace-with-firebase-project',
-    storageBucket: 'replace-with-firebase-project.appspot.com',
+    apiKey: 'AIzaSyB60FN0NH87vE7fN--t2kWDn12hVU4LYNw',
+    appId: '1:471895063005:ios:12fdd5511cad0087859e34',
+    messagingSenderId: '471895063005',
+    projectId: 'grocery-delivery-app-388bc',
+    storageBucket: 'grocery-delivery-app-388bc.firebasestorage.app',
     iosBundleId: 'com.ishi.grocerydelivery',
   );
 }

@@ -3,6 +3,9 @@ class AppConstants {
 
   static const appName = 'Ishi Grocery Delivery';
   static const packageName = 'com.ishi.grocerydelivery';
+  static const bootstrapAdminPhone = '+94768976111';
+  static const bootstrapAdminPassword = 'admin123';
+  static const bootstrapAdminName = 'Admin';
   static const currency = 'LKR';
   static const defaultDeliveryCharge = 250.0;
   static const defaultServiceCharge = 0.0;

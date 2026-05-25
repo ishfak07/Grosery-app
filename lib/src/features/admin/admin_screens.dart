@@ -713,7 +713,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   String _category = AppConstants.productCategories.first;
   String _unit = AppConstants.productUnits.first;
   String _stockStatus = 'available';
-  Shop? _shop;
+  String? _selectedShopId;
   String? _imagePath;
   var _isSaving = false;
 
@@ -728,6 +728,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       _category = product.category;
       _unit = product.unit;
       _stockStatus = product.stockStatus;
+      _selectedShopId = product.shopId;
     }
   }
 
@@ -749,14 +750,12 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       body: StreamBuilder<List<Shop>>(
         stream: appState.firestoreService.watchShops(activeOnly: true),
         builder: (context, snapshot) {
-          final shops = snapshot.data ?? const <Shop>[];
-          if (_shop == null && widget.product != null && shops.isNotEmpty) {
-            _shop = shops
-                .where((shop) => shop.shopId == widget.product!.shopId)
-                .cast<Shop?>()
-                .firstOrNull;
+          final shops = _uniqueShops(snapshot.data ?? const <Shop>[]);
+          if (_selectedShopId != null &&
+              _shopForId(shops, _selectedShopId) == null) {
+            _selectedShopId = null;
           }
-          _shop ??= shops.isEmpty ? null : shops.first;
+          _selectedShopId ??= shops.isEmpty ? null : shops.first.shopId;
           return Form(
             key: _formKey,
             child: ListView(
@@ -776,18 +775,22 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                   prefixIcon: Icons.inventory_2_outlined,
                 ),
                 const SizedBox(height: 10),
-                DropdownButtonFormField<Shop>(
-                  value: _shop,
+                DropdownButtonFormField<String>(
+                  value: _selectedShopId,
                   decoration: const InputDecoration(labelText: 'Shop'),
                   items: shops
                       .map(
                         (shop) => DropdownMenuItem(
-                          value: shop,
+                          value: shop.shopId,
                           child: Text(shop.shopName),
                         ),
                       )
                       .toList(),
-                  onChanged: (value) => setState(() => _shop = value),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _selectedShopId = value);
+                    }
+                  },
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
@@ -882,7 +885,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                   label: 'Save product',
                   icon: Icons.save,
                   isLoading: _isSaving,
-                  onPressed: shops.isEmpty ? null : _saveProduct,
+                  onPressed: shops.isEmpty ? null : () => _saveProduct(shops),
                 ),
               ],
             ),
@@ -892,11 +895,12 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     );
   }
 
-  Future<void> _saveProduct() async {
+  Future<void> _saveProduct(List<Shop> shops) async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    if (_shop == null) {
+    final selectedShop = _shopForId(shops, _selectedShopId);
+    if (selectedShop == null) {
       showSnack(context, 'Select a shop.');
       return;
     }
@@ -914,8 +918,8 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       final now = DateTime.now();
       final product = Product(
         productId: productId,
-        shopId: _shop!.shopId,
-        shopName: _shop!.shopName,
+        shopId: selectedShop.shopId,
+        shopName: selectedShop.shopName,
         name: _name.text.trim(),
         category: _category,
         description: _description.text.trim(),
@@ -940,6 +944,26 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         setState(() => _isSaving = false);
       }
     }
+  }
+
+  List<Shop> _uniqueShops(List<Shop> shops) {
+    final seenIds = <String>{};
+    return [
+      for (final shop in shops)
+        if (seenIds.add(shop.shopId)) shop,
+    ];
+  }
+
+  Shop? _shopForId(List<Shop> shops, String? shopId) {
+    if (shopId == null) {
+      return null;
+    }
+    for (final shop in shops) {
+      if (shop.shopId == shopId) {
+        return shop;
+      }
+    }
+    return null;
   }
 }
 
@@ -1166,8 +1190,4 @@ class AdminCustomerManagementScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-extension _FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }

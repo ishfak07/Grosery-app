@@ -10,8 +10,14 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(uid));
     }
 
+    function isBootstrapAdmin() {
+      return signedIn() &&
+        request.auth.token.email == '94768976111@app.local';
+    }
+
     function isAdmin() {
-      return signedIn() && profile(request.auth.uid).data.role == 'admin';
+      return signedIn() &&
+        (isBootstrapAdmin() || profile(request.auth.uid).data.role == 'admin');
     }
 
     function notBlocked() {
@@ -23,7 +29,8 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow create: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn() && request.auth.uid == uid &&
+        (isBootstrapAdmin() || request.resource.data.role == 'user');
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow update: if signedIn() && (
         isAdmin() ||

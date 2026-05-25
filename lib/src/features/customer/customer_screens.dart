@@ -128,6 +128,11 @@ class CustomerHomeScreen extends StatelessWidget {
             StreamBuilder<List<Product>>(
               stream: appState.firestoreService.watchProducts(),
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return _DataErrorState(
+                    message: _friendlyDataError(snapshot.error),
+                  );
+                }
                 final products =
                     (snapshot.data ?? const <Product>[]).take(6).toList();
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -350,6 +355,11 @@ class _ProductListScreenState extends State<ProductListScreen> {
                 category: widget.category,
               ),
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return _DataErrorState(
+                    message: _friendlyDataError(snapshot.error),
+                  );
+                }
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const LoadingView();
                 }
@@ -389,6 +399,35 @@ class _ProductListScreenState extends State<ProductListScreen> {
       ),
     );
   }
+}
+
+class _DataErrorState extends StatelessWidget {
+  const _DataErrorState({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return EmptyState(
+      icon: Icons.error_outline,
+      title: 'Could not load products',
+      message: message,
+    );
+  }
+}
+
+String _friendlyDataError(Object? error) {
+  final text = error.toString();
+  if (text.contains('permission-denied')) {
+    return 'Firebase rules blocked product reads. Deploy the latest Firestore rules.';
+  }
+  if (text.contains('failed-precondition') || text.contains('index')) {
+    return 'Firestore needs an index for this product query. The app now uses a simpler product query, so restart and try again.';
+  }
+  if (text.contains('TimeoutException')) {
+    return 'Firestore did not answer in time. Check the device internet connection and Firebase project.';
+  }
+  return text;
 }
 
 class ProductCard extends StatelessWidget {

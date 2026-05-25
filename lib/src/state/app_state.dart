@@ -82,6 +82,13 @@ class AppState extends ChangeNotifier {
       return;
     }
 
+    if (authService.isBootstrapAdminUser(user)) {
+      _profile = authService.bootstrapAdminProfile(user.uid);
+      _isInitializing = false;
+      notifyListeners();
+      return;
+    }
+
     _profileSubscription = firestoreService.watchUserProfile(user.uid).listen(
       (profile) async {
         _profile = profile;

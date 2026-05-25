@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "000000000000",
-    "project_id": "replace-with-firebase-project",
-    "storage_bucket": "replace-with-firebase-project.appspot.com"
+    "project_number": "471895063005",
+    "project_id": "grocery-delivery-app-388bc",
+    "storage_bucket": "grocery-delivery-app-388bc.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+        "mobilesdk_app_id": "1:471895063005:android:9864a4a2f11d8e68859e34",
         "android_client_info": {
           "package_name": "com.ishi.grocerydelivery"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "REPLACE_WITH_ANDROID_API_KEY"
+          "current_key": "AIzaSyDAtj58p_V5l9JcnkqC5SyoNXtSFgRFm1U"
         }
       ],
       "services": {

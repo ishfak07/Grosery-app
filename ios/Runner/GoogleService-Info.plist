@@ -3,28 +3,28 @@
 <plist version="1.0">
 <dict>
 	<key>API_KEY</key>
-	<string>REPLACE_WITH_IOS_API_KEY</string>
+	<string>AIzaSyB60FN0NH87vE7fN--t2kWDn12hVU4LYNw</string>
 	<key>GCM_SENDER_ID</key>
-	<string>000000000000</string>
+	<string>471895063005</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
 	<string>com.ishi.grocerydelivery</string>
 	<key>PROJECT_ID</key>
-	<string>replace-with-firebase-project</string>
+	<string>grocery-delivery-app-388bc</string>
 	<key>STORAGE_BUCKET</key>
-	<string>replace-with-firebase-project.appspot.com</string>
+	<string>grocery-delivery-app-388bc.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
-	<false/>
+	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
-	<false/>
+	<false></false>
 	<key>IS_APPINVITE_ENABLED</key>
-	<true/>
+	<true></true>
 	<key>IS_GCM_ENABLED</key>
-	<true/>
+	<true></true>
 	<key>IS_SIGNIN_ENABLED</key>
-	<true/>
+	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:000000000000:ios:0000000000000000</string>
+	<string>1:471895063005:ios:12fdd5511cad0087859e34</string>
 </dict>
 </plist>
