@@ -10,6 +10,7 @@ import '../../../services/cloudinary_service.dart';
 import '../../../services/image_picker_helper.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/phone_utils.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/common_widgets.dart';
 import '../../models/models.dart';
@@ -405,6 +406,60 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+              const SectionTitle(title: 'Payment'),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _OrderInfoRow('Method', order.paymentMethod),
+                      _OrderInfoRow('Payment status', order.paymentStatus),
+                      _OrderInfoRow('Order total', order.totalAmount.money),
+                      if (order.paymentMethod ==
+                          AppConstants.paymentMethodBankTransfer) ...[
+                        const Divider(height: 22),
+                        const _OrderInfoRow(
+                          'Account name',
+                          AppConstants.bankAccountName,
+                        ),
+                        const _OrderInfoRow('Bank', AppConstants.bankName),
+                        const _OrderInfoRow(
+                          'Branch',
+                          AppConstants.bankBranch,
+                        ),
+                        const _OrderInfoRow(
+                          'Account number',
+                          AppConstants.bankAccountNumber,
+                        ),
+                        const SizedBox(height: 12),
+                        if (order.hasPaymentReceipt) ...[
+                          const Text(
+                            'Transfer receipt',
+                            style: TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 8),
+                          GestureDetector(
+                            onTap: () =>
+                                _showZoomImage(order.paymentReceiptImageUrl),
+                            child: AspectRatio(
+                              aspectRatio: 1.35,
+                              child: ProductImage(
+                                url: order.paymentReceiptImageUrl,
+                              ),
+                            ),
+                          ),
+                        ] else
+                          const Text(
+                            'No transfer receipt uploaded.',
+                            style: TextStyle(color: Color(0xFFC83A2B)),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
               if (order.items.isNotEmpty) ...[
                 const SectionTitle(title: 'Items'),
                 for (final item in order.items)
@@ -476,12 +531,22 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
-                        value: _paymentStatus,
+                        value: [
+                          'pending',
+                          'receipt uploaded',
+                          'collected',
+                        ].contains(_paymentStatus)
+                            ? _paymentStatus
+                            : 'pending',
                         decoration:
                             const InputDecoration(labelText: 'Payment status'),
                         items: const [
                           DropdownMenuItem(
                               value: 'pending', child: Text('pending')),
+                          DropdownMenuItem(
+                            value: 'receipt uploaded',
+                            child: Text('receipt uploaded'),
+                          ),
                           DropdownMenuItem(
                               value: 'collected', child: Text('collected')),
                         ],
@@ -650,6 +715,41 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _OrderInfoRow extends StatelessWidget {
+  const _OrderInfoRow(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 118,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF66736B),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1079,7 +1179,9 @@ class AdminShopManagementScreen extends StatelessWidget {
   void _showShopDialog(BuildContext context, {Shop? shop}) {
     final name = TextEditingController(text: shop?.shopName ?? '');
     final address = TextEditingController(text: shop?.address ?? '');
-    final phone = TextEditingController(text: shop?.phone ?? '');
+    final phone = TextEditingController(
+      text: PhoneUtils.localSriLankanDigits(shop?.phone ?? ''),
+    );
     showDialog<void>(
       context: context,
       builder: (dialogContext) {
@@ -1094,10 +1196,9 @@ class AdminShopManagementScreen extends StatelessWidget {
                   decoration: const InputDecoration(labelText: 'Shop name'),
                 ),
                 const SizedBox(height: 8),
-                TextField(
+                AppPhoneField(
                   controller: phone,
-                  decoration: const InputDecoration(labelText: 'Phone'),
-                  keyboardType: TextInputType.phone,
+                  label: 'Phone',
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -1119,12 +1220,17 @@ class AdminShopManagementScreen extends StatelessWidget {
                 if (name.text.trim().isEmpty) {
                   return;
                 }
+                final phoneError = Validators.phone(phone.text);
+                if (phoneError != null) {
+                  showSnack(context, phoneError);
+                  return;
+                }
                 final appState = context.read<AppState>();
                 final saved = Shop(
                   shopId: shop?.shopId ?? const Uuid().v4(),
                   shopName: name.text.trim(),
                   address: address.text.trim(),
-                  phone: phone.text.trim(),
+                  phone: PhoneUtils.normalizeSriLankanPhone(phone.text),
                   isActive: shop?.isActive ?? true,
                   createdAt: shop?.createdAt ?? DateTime.now(),
                 );

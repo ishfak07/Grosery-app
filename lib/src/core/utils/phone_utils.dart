@@ -11,6 +11,9 @@ class PhoneUtils {
     }
 
     final digits = compact.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.length == 9) {
+      return '+94$digits';
+    }
     if (digits.startsWith('0') && digits.length >= 9) {
       return '+94${digits.substring(1)}';
     }
@@ -18,6 +21,18 @@ class PhoneUtils {
       return '+$digits';
     }
     return '+$digits';
+  }
+
+  static String localSriLankanDigits(String raw) {
+    final normalized = normalizeSriLankanPhone(raw);
+    final digits = normalized.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.startsWith('94') && digits.length > 2) {
+      return digits.substring(2);
+    }
+    if (digits.startsWith('0') && digits.length > 1) {
+      return digits.substring(1);
+    }
+    return digits;
   }
 
   static String hiddenEmailForPhone(String phone) {

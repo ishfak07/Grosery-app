@@ -8,6 +8,7 @@ import '../../../services/cloudinary_service.dart';
 import '../../../services/image_picker_helper.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/phone_utils.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/common_widgets.dart';
 import '../../models/models.dart';
@@ -664,8 +665,11 @@ class CartScreen extends StatelessWidget {
             )
           else ...[
             for (final item in items) _CartItemTile(item: item),
-            if (appState.hasBillImage)
+            if (appState.hasBillImage) ...[
               _BillImagePreview(path: appState.billImagePath!),
+              const SizedBox(height: 10),
+              const _AttachedListPriceNotice(),
+            ],
             const SizedBox(height: 12),
             Card(
               child: Padding(
@@ -705,7 +709,7 @@ class CartScreen extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             PrimaryActionButton(
-              label: 'Checkout COD',
+              label: 'Checkout',
               icon: Icons.payments,
               onPressed: items.isNotEmpty || appState.hasBillImage
                   ? () => Navigator.of(context).push(
@@ -899,6 +903,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   late final TextEditingController _phone;
   late final TextEditingController _address;
   final _notes = TextEditingController();
+  String _paymentMethod = AppConstants.paymentMethodCod;
+  String? _receiptImagePath;
   var _isSubmitting = false;
 
   @override
@@ -906,7 +912,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     super.initState();
     final profile = context.read<AppState>().profile!;
     _name = TextEditingController(text: profile.fullName);
-    _phone = TextEditingController(text: profile.phone);
+    _phone = TextEditingController(
+      text: PhoneUtils.localSriLankanDigits(profile.phone),
+    );
     _address = TextEditingController(text: profile.address);
   }
 
@@ -922,6 +930,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    final isBankTransfer =
+        _paymentMethod == AppConstants.paymentMethodBankTransfer;
     final total = appState.cartSubtotal +
         AppConstants.defaultDeliveryCharge +
         AppConstants.defaultServiceCharge;
@@ -940,17 +950,59 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Cash on Delivery',
+                        'Payment method',
                         style: TextStyle(fontWeight: FontWeight.w900),
                       ),
-                      const SizedBox(height: 6),
-                      const Text('Pay by cash when your order is delivered.'),
+                      RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        value: AppConstants.paymentMethodCod,
+                        groupValue: _paymentMethod,
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _paymentMethod = value);
+                          }
+                        },
+                        title: const Text('Cash on Delivery'),
+                        subtitle: const Text(
+                          'Pay by cash when your order is delivered.',
+                        ),
+                      ),
+                      RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        value: AppConstants.paymentMethodBankTransfer,
+                        groupValue: _paymentMethod,
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _paymentMethod = value);
+                          }
+                        },
+                        title: const Text('Bank transfer'),
+                        subtitle: const Text(
+                          'Transfer to the store account and upload your receipt.',
+                        ),
+                      ),
+                      if (isBankTransfer) ...[
+                        const SizedBox(height: 8),
+                        const _BankTransferDetails(),
+                        const SizedBox(height: 12),
+                        _ReceiptUploadSection(
+                          imagePath: _receiptImagePath,
+                          onGallery: _pickReceiptFromGallery,
+                          onCamera: _takeReceiptPhoto,
+                          onRemove: () =>
+                              setState(() => _receiptImagePath = null),
+                        ),
+                      ],
                       const Divider(height: 24),
                       _AmountRow('Subtotal', appState.cartSubtotal.money),
                       _AmountRow('Delivery charge',
                           AppConstants.defaultDeliveryCharge.money),
                       _AmountRow('Service charge',
                           AppConstants.defaultServiceCharge.money),
+                      if (appState.hasBillImage) ...[
+                        const SizedBox(height: 10),
+                        const _AttachedListPriceNotice(),
+                      ],
                       const Divider(height: 24),
                       _AmountRow('Estimated total', total.money,
                           isStrong: true),
@@ -967,12 +1019,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 prefixIcon: Icons.person,
               ),
               const SizedBox(height: 12),
-              AppTextField(
+              AppPhoneField(
                 controller: _phone,
-                label: 'Phone number',
-                validator: Validators.phone,
-                keyboardType: TextInputType.phone,
-                prefixIcon: Icons.phone,
               ),
               const SizedBox(height: 12),
               AppTextField(
@@ -992,8 +1040,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
               const SizedBox(height: 18),
               PrimaryActionButton(
-                label: 'Place COD order',
-                icon: Icons.check_circle,
+                label: isBankTransfer
+                    ? 'Place bank transfer order'
+                    : 'Place COD order',
+                icon:
+                    isBankTransfer ? Icons.account_balance : Icons.check_circle,
                 isLoading: _isSubmitting,
                 onPressed: _isSubmitting ? null : _submit,
               ),
@@ -1011,13 +1062,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
+    if (_paymentMethod == AppConstants.paymentMethodBankTransfer &&
+        (_receiptImagePath == null || _receiptImagePath!.isEmpty)) {
+      showSnack(context, 'Upload the bank transfer receipt before checkout.');
+      return;
+    }
     setState(() => _isSubmitting = true);
     try {
       final order = await context.read<AppState>().createOrder(
             customerName: _name.text,
-            customerPhone: _phone.text,
+            customerPhone: PhoneUtils.normalizeSriLankanPhone(_phone.text),
             customerAddress: _address.text,
             orderNotes: _notes.text,
+            paymentMethod: _paymentMethod,
+            paymentReceiptImagePath: _receiptImagePath,
           );
       if (!mounted) {
         return;
@@ -1035,6 +1093,22 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         setState(() => _isSubmitting = false);
       }
     }
+  }
+
+  Future<void> _pickReceiptFromGallery() async {
+    final imageFile = await pickImageFromGallery();
+    if (imageFile == null || !mounted) {
+      return;
+    }
+    setState(() => _receiptImagePath = imageFile.path);
+  }
+
+  Future<void> _takeReceiptPhoto() async {
+    final imageFile = await takePhotoFromCamera();
+    if (imageFile == null || !mounted) {
+      return;
+    }
+    setState(() => _receiptImagePath = imageFile.path);
   }
 }
 
@@ -1063,6 +1137,192 @@ class _AmountRow extends StatelessWidget {
   }
 }
 
+class _AttachedListPriceNotice extends StatelessWidget {
+  const _AttachedListPriceNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    const danger = Color(0xFFC83A2B);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF0EE),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFF0B1A8)),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, color: danger, size: 20),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'The prices of attached list items are not calculated in this estimate. Admin will review the photo and update the final bill.',
+              style: TextStyle(
+                color: danger,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BankTransferDetails extends StatelessWidget {
+  const _BankTransferDetails();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F8F5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFDDE5DD)),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Transfer account',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          SizedBox(height: 8),
+          _BankDetailRow('Name', AppConstants.bankAccountName),
+          _BankDetailRow('Bank', AppConstants.bankName),
+          _BankDetailRow('Branch', AppConstants.bankBranch),
+          _BankDetailRow('Account number', AppConstants.bankAccountNumber),
+        ],
+      ),
+    );
+  }
+}
+
+class _BankDetailRow extends StatelessWidget {
+  const _BankDetailRow(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 112,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF66736B),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReceiptUploadSection extends StatelessWidget {
+  const _ReceiptUploadSection({
+    required this.imagePath,
+    required this.onGallery,
+    required this.onCamera,
+    required this.onRemove,
+  });
+
+  final String? imagePath;
+  final VoidCallback onGallery;
+  final VoidCallback onCamera;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = imagePath != null && imagePath!.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Payment receipt',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 8),
+        if (hasImage)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: AspectRatio(
+              aspectRatio: 1.6,
+              child: Image.file(
+                File(imagePath!),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const ColoredBox(
+                  color: Color(0xFFEAF0EA),
+                  child: Center(child: Icon(Icons.broken_image)),
+                ),
+              ),
+            ),
+          )
+        else
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFDDE5DD)),
+            ),
+            child: const Text(
+              'Upload the bank slip or transfer screenshot before placing the order.',
+              style: TextStyle(color: Color(0xFF66736B)),
+            ),
+          ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onGallery,
+                icon: const Icon(Icons.photo_library),
+                label: Text(hasImage ? 'Change' : 'Gallery'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onCamera,
+                icon: const Icon(Icons.photo_camera),
+                label: Text(hasImage ? 'Retake' : 'Camera'),
+              ),
+            ),
+          ],
+        ),
+        if (hasImage) ...[
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: onRemove,
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Remove receipt'),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class OrderSuccessScreen extends StatelessWidget {
   const OrderSuccessScreen({super.key, required this.order});
 
@@ -1070,12 +1330,16 @@ class OrderSuccessScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isBankTransfer =
+        order.paymentMethod == AppConstants.paymentMethodBankTransfer;
     return Scaffold(
       appBar: AppBar(title: const Text('Order placed')),
       body: EmptyState(
         icon: Icons.check_circle,
         title: 'Order received',
-        message: 'Your COD order is pending admin review.',
+        message: isBankTransfer
+            ? 'Your bank transfer order is pending admin receipt review.'
+            : 'Your COD order is pending admin review.',
         action: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1238,9 +1502,19 @@ class OrderTrackingScreen extends StatelessWidget {
               if (order.hasUpload) ...[
                 const SizedBox(height: 12),
                 const SectionTitle(title: 'Uploaded list'),
+                const _AttachedListPriceNotice(),
+                const SizedBox(height: 10),
                 AspectRatio(
                   aspectRatio: 1.4,
                   child: ProductImage(url: order.uploadedImageUrl),
+                ),
+              ],
+              if (order.hasPaymentReceipt) ...[
+                const SizedBox(height: 12),
+                const SectionTitle(title: 'Payment receipt'),
+                AspectRatio(
+                  aspectRatio: 1.4,
+                  child: ProductImage(url: order.paymentReceiptImageUrl),
                 ),
               ],
               const SizedBox(height: 18),

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../utils/phone_utils.dart';
+import '../utils/validators.dart';
 import '../../state/app_state.dart';
 
 class FirebaseSetupBanner extends StatelessWidget {
@@ -210,6 +213,82 @@ class AppTextField extends StatelessWidget {
         labelText: label,
         prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
       ),
+    );
+  }
+}
+
+class AppPhoneField extends StatelessWidget {
+  const AppPhoneField({
+    super.key,
+    required this.controller,
+    this.label = 'Phone number',
+    this.enabled = true,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final prefixColor = enabled
+        ? Theme.of(context).colorScheme.onSurfaceVariant
+        : Theme.of(context).disabledColor;
+    return TextFormField(
+      controller: controller,
+      enabled: enabled,
+      validator: Validators.phone,
+      keyboardType: TextInputType.phone,
+      autofillHints: const [AutofillHints.telephoneNumberNational],
+      maxLength: 9,
+      inputFormatters: const [_SriLankanPhoneInputFormatter()],
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Padding(
+          padding: const EdgeInsetsDirectional.only(start: 12, end: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.phone, color: prefixColor, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                '+94',
+                style: TextStyle(
+                  color: prefixColor,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: 0,
+          minHeight: 0,
+        ),
+        counterText: '',
+      ),
+    );
+  }
+}
+
+class _SriLankanPhoneInputFormatter extends TextInputFormatter {
+  const _SriLankanPhoneInputFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    var digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.startsWith('94') || digits.startsWith('0')) {
+      digits = PhoneUtils.localSriLankanDigits(newValue.text);
+    }
+    if (digits.length > 9) {
+      digits = digits.substring(0, 9);
+    }
+    return TextEditingValue(
+      text: digits,
+      selection: TextSelection.collapsed(offset: digits.length),
     );
   }
 }

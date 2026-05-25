@@ -9,6 +9,12 @@ class AppConstants {
   static const currency = 'LKR';
   static const defaultDeliveryCharge = 250.0;
   static const defaultServiceCharge = 0.0;
+  static const paymentMethodCod = 'COD';
+  static const paymentMethodBankTransfer = 'Bank Transfer';
+  static const bankAccountName = 'Ishfaque mif';
+  static const bankName = 'Bank Of Cylon (BOC)';
+  static const bankBranch = 'Puttalam';
+  static const bankAccountNumber = '89001476';
 
   static const orderStatuses = <String>[
     'Pending',

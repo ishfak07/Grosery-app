@@ -395,6 +395,7 @@ class OrderModel {
     required this.customerAddress,
     required this.items,
     required this.uploadedImageUrl,
+    required this.paymentReceiptImageUrl,
     required this.orderNotes,
     required this.subtotal,
     required this.deliveryCharge,
@@ -416,6 +417,7 @@ class OrderModel {
   final String customerAddress;
   final List<OrderItem> items;
   final String uploadedImageUrl;
+  final String paymentReceiptImageUrl;
   final String orderNotes;
   final double subtotal;
   final double deliveryCharge;
@@ -430,9 +432,11 @@ class OrderModel {
   final DateTime updatedAt;
 
   bool get hasUpload => uploadedImageUrl.isNotEmpty;
+  bool get hasPaymentReceipt => paymentReceiptImageUrl.isNotEmpty;
 
   OrderModel copyWith({
     List<OrderItem>? items,
+    String? paymentReceiptImageUrl,
     String? orderStatus,
     String? adminNotes,
     String? assignedDeliveryPerson,
@@ -450,6 +454,8 @@ class OrderModel {
       customerAddress: customerAddress,
       items: items ?? this.items,
       uploadedImageUrl: uploadedImageUrl,
+      paymentReceiptImageUrl:
+          paymentReceiptImageUrl ?? this.paymentReceiptImageUrl,
       orderNotes: orderNotes,
       subtotal: subtotal ?? this.subtotal,
       deliveryCharge: deliveryCharge ?? this.deliveryCharge,
@@ -475,6 +481,7 @@ class OrderModel {
       'customerAddress': customerAddress,
       'items': items.map((item) => item.toMap()).toList(),
       'uploadedImageUrl': uploadedImageUrl,
+      'paymentReceiptImageUrl': paymentReceiptImageUrl,
       'orderNotes': orderNotes,
       'subtotal': subtotal,
       'deliveryCharge': deliveryCharge,
@@ -502,6 +509,7 @@ class OrderModel {
           .map(OrderItem.fromMap)
           .toList(),
       uploadedImageUrl: map['uploadedImageUrl'] as String? ?? '',
+      paymentReceiptImageUrl: map['paymentReceiptImageUrl'] as String? ?? '',
       orderNotes: map['orderNotes'] as String? ?? '',
       subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0,
       deliveryCharge: (map['deliveryCharge'] as num?)?.toDouble() ?? 0,

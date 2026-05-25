@@ -345,7 +345,7 @@ class AuthService {
   String _authErrorMessage(FirebaseAuthException error) {
     switch (error.code) {
       case 'invalid-phone-number':
-        return 'Enter a valid phone number with country code, for example +94768976222.';
+        return 'Enter the 9 digits after +94, for example 768976222.';
       case 'too-many-requests':
         return 'Too many OTP attempts. Please wait a few minutes and try again.';
       case 'quota-exceeded':

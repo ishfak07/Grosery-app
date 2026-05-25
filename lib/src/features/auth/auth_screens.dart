@@ -231,12 +231,8 @@ class _LoginScreenState extends State<LoginScreen> {
               key: _formKey,
               child: Column(
                 children: [
-                  AppTextField(
+                  AppPhoneField(
                     controller: _phone,
-                    label: 'Phone number',
-                    keyboardType: TextInputType.phone,
-                    validator: Validators.phone,
-                    prefixIcon: Icons.phone,
                   ),
                   const SizedBox(height: 12),
                   AppTextField(
@@ -294,7 +290,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     try {
       await context.read<AppState>().login(
-            phone: _phone.text,
+            phone: PhoneUtils.normalizeSriLankanPhone(_phone.text),
             password: _password.text,
           );
     } catch (error) {
@@ -358,16 +354,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
               const SizedBox(height: 8),
               Text(
                 _isCodeSent
-                    ? 'Enter the SMS OTP sent to ${_phone.text}.'
+                    ? 'Enter the SMS OTP sent to ${PhoneUtils.normalizeSriLankanPhone(_phone.text)}.'
                     : 'Enter your phone number to receive a Firebase OTP.',
               ),
               const SizedBox(height: 20),
-              AppTextField(
+              AppPhoneField(
                 controller: _phone,
-                label: 'Phone number',
-                keyboardType: TextInputType.phone,
-                validator: Validators.phone,
-                prefixIcon: Icons.phone,
               ),
               if (_isCodeSent) ...[
                 const SizedBox(height: 12),
@@ -404,7 +396,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       final verificationId = await context
           .read<AppState>()
           .authService
-          .sendOtp(_phone.text.trim());
+          .sendOtp(PhoneUtils.normalizeSriLankanPhone(_phone.text));
       if (!mounted) {
         return;
       }
@@ -506,12 +498,8 @@ class _ForgotPasswordPhoneScreenState extends State<ForgotPasswordPhoneScreen> {
               const SizedBox(height: 8),
               const Text('We will send an OTP before allowing a new password.'),
               const SizedBox(height: 20),
-              AppTextField(
+              AppPhoneField(
                 controller: _phone,
-                label: 'Phone number',
-                keyboardType: TextInputType.phone,
-                validator: Validators.phone,
-                prefixIcon: Icons.phone,
               ),
               const SizedBox(height: 18),
               PrimaryActionButton(
@@ -536,7 +524,7 @@ class _ForgotPasswordPhoneScreenState extends State<ForgotPasswordPhoneScreen> {
       final verificationId = await context
           .read<AppState>()
           .authService
-          .sendOtp(_phone.text.trim());
+          .sendOtp(PhoneUtils.normalizeSriLankanPhone(_phone.text));
       if (!mounted) {
         return;
       }

@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../services/cloudinary_service.dart';
 import '../core/constants/app_constants.dart';
+import '../core/utils/phone_utils.dart';
 import '../models/models.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_bootstrap.dart';
@@ -231,6 +232,8 @@ class AppState extends ChangeNotifier {
     required String customerPhone,
     required String customerAddress,
     required String orderNotes,
+    required String paymentMethod,
+    String? paymentReceiptImagePath,
   }) async {
     final current = _profile;
     if (current == null) {
@@ -243,12 +246,24 @@ class AppState extends ChangeNotifier {
       throw StateError(
           'Add products or upload a shopping list before checkout.');
     }
+    if (paymentMethod == AppConstants.paymentMethodBankTransfer &&
+        (paymentReceiptImagePath == null ||
+            paymentReceiptImagePath.trim().isEmpty)) {
+      throw StateError('Upload the bank transfer receipt before checkout.');
+    }
 
     final orderId = _uuid.v4();
     String uploadedImageUrl = '';
     if (hasBillImage) {
       uploadedImageUrl =
           await CloudinaryService.uploadImage(File(_billImagePath!));
+    }
+    String paymentReceiptImageUrl = '';
+    if (paymentMethod == AppConstants.paymentMethodBankTransfer &&
+        paymentReceiptImagePath != null &&
+        paymentReceiptImagePath.trim().isNotEmpty) {
+      paymentReceiptImageUrl =
+          await CloudinaryService.uploadImage(File(paymentReceiptImagePath));
     }
 
     final subtotal = cartSubtotal;
@@ -260,17 +275,20 @@ class AppState extends ChangeNotifier {
       orderId: orderId,
       userId: current.uid,
       customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
+      customerPhone: PhoneUtils.normalizeSriLankanPhone(customerPhone),
       customerAddress: customerAddress.trim(),
       items: _cartItems.map(OrderItem.fromCart).toList(),
       uploadedImageUrl: uploadedImageUrl,
+      paymentReceiptImageUrl: paymentReceiptImageUrl,
       orderNotes: orderNotes.trim(),
       subtotal: subtotal,
       deliveryCharge: AppConstants.defaultDeliveryCharge,
       serviceCharge: AppConstants.defaultServiceCharge,
       totalAmount: total,
-      paymentMethod: 'COD',
-      paymentStatus: 'pending',
+      paymentMethod: paymentMethod,
+      paymentStatus: paymentMethod == AppConstants.paymentMethodBankTransfer
+          ? 'receipt uploaded'
+          : 'pending',
       orderStatus: 'Pending',
       adminNotes: '',
       assignedDeliveryPerson: '',

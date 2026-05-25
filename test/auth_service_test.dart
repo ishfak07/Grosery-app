@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grocerydelivery/src/core/utils/phone_utils.dart';
 import 'package:grocerydelivery/src/services/auth_service.dart';
 import 'package:grocerydelivery/src/services/firestore_service.dart';
 
@@ -83,6 +84,21 @@ void main() {
     expect(
       authService.isBootstrapAdminLogin('+94768976111', 'wrong'),
       isFalse,
+    );
+  });
+
+  test('normalizes Sri Lankan phone numbers from local input', () {
+    expect(
+      PhoneUtils.normalizeSriLankanPhone('768976111'),
+      '+94768976111',
+    );
+    expect(
+      PhoneUtils.normalizeSriLankanPhone('0768976111'),
+      '+94768976111',
+    );
+    expect(
+      PhoneUtils.localSriLankanDigits('+94768976111'),
+      '768976111',
     );
   });
 

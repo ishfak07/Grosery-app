@@ -5,12 +5,34 @@ allprojects {
     }
 }
 
+ext {
+    FlutterFire = [
+        FirebaseSDKVersion: '33.16.0',
+    ]
+}
+
 rootProject.buildDir = "../build"
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
 subprojects {
     project.evaluationDependsOn(":app")
+}
+subprojects { subproject ->
+    subproject.plugins.withId("kotlin-android") {
+        subproject.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+            kotlinOptions {
+                freeCompilerArgs += ["-Xskip-metadata-version-check"]
+            }
+        }
+    }
+    subproject.plugins.withId("org.jetbrains.kotlin.android") {
+        subproject.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+            kotlinOptions {
+                freeCompilerArgs += ["-Xskip-metadata-version-check"]
+            }
+        }
+    }
 }
 
 tasks.register("clean", Delete) {

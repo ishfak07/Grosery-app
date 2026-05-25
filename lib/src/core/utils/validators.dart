@@ -1,3 +1,5 @@
+import 'phone_utils.dart';
+
 class Validators {
   const Validators._();
 
@@ -12,8 +14,8 @@ class Validators {
     if (value == null || value.trim().isEmpty) {
       return 'Phone number is required';
     }
-    if (value.replaceAll(RegExp(r'[^0-9+]'), '').length < 9) {
-      return 'Enter a valid phone number';
+    if (PhoneUtils.localSriLankanDigits(value).length != 9) {
+      return 'Enter the 9 digits after +94';
     }
     return null;
   }
