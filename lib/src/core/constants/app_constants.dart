@@ -23,13 +23,7 @@ class AppConstants {
     'Rejected',
   ];
 
-  static const customerTrackingStatuses = <String>[
-    'Pending',
-    'Accepted',
-    'Shopping Started',
-    'Out for Delivery',
-    'Delivered',
-  ];
+  static const customerTrackingStatuses = orderStatuses;
 
   static const productUnits = <String>[
     'kg',

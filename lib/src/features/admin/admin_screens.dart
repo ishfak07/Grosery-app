@@ -410,12 +410,30 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                 for (final item in order.items)
                   Card(
                     child: CheckboxListTile(
+                      enabled: true,
                       value: item.isAvailable,
                       onChanged: null,
-                      title: Text(item.name),
+                      title: Text(
+                        item.name,
+                        style: const TextStyle(
+                          color: Color(0xFF17201B),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                       subtitle: Text(
-                          '${item.quantity} x ${item.price.money} / ${item.unit}'),
-                      secondary: Text(item.lineTotal.money),
+                        '${item.quantity} x ${item.price.money} / ${item.unit}',
+                        style: const TextStyle(
+                          color: Color(0xFF4B5A51),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      secondary: Text(
+                        item.lineTotal.money,
+                        style: const TextStyle(
+                          color: Color(0xFF4B5A51),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
               ],

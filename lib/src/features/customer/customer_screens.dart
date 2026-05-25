@@ -1270,55 +1270,83 @@ class _TrackingSteps extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = AppConstants.customerTrackingStatuses.indexOf(status);
+    const statuses = AppConstants.customerTrackingStatuses;
+    final currentIndex = statuses.indexOf(status);
     final effectiveIndex = currentIndex < 0 ? 0 : currentIndex;
+    final isTerminalStatus = status == 'Cancelled' || status == 'Rejected';
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
           children: [
-            for (var i = 0;
-                i < AppConstants.customerTrackingStatuses.length;
-                i++)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Column(
+            for (var i = 0; i < statuses.length; i++)
+              Builder(
+                builder: (context) {
+                  final isCurrent = i == effectiveIndex && currentIndex >= 0;
+                  final isComplete = isTerminalStatus
+                      ? i == 0 || isCurrent
+                      : i <= effectiveIndex;
+                  final stepColor = isCurrent
+                      ? _currentStepColor(status, primaryColor)
+                      : primaryColor;
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        i <= effectiveIndex
-                            ? Icons.check_circle
-                            : Icons.radio_button_unchecked,
-                        color: i <= effectiveIndex
-                            ? Theme.of(context).colorScheme.primary
-                            : const Color(0xFFB8C2BB),
+                      Column(
+                        children: [
+                          Icon(
+                            isComplete
+                                ? Icons.check_circle
+                                : Icons.radio_button_unchecked,
+                            color: isComplete
+                                ? stepColor
+                                : const Color(0xFFB8C2BB),
+                          ),
+                          if (i != statuses.length - 1)
+                            Container(
+                              height: 28,
+                              width: 2,
+                              color: !isTerminalStatus && i < effectiveIndex
+                                  ? primaryColor
+                                  : const Color(0xFFDDE5DD),
+                            ),
+                        ],
                       ),
-                      if (i != AppConstants.customerTrackingStatuses.length - 1)
-                        Container(
-                          height: 28,
-                          width: 2,
-                          color: i < effectiveIndex
-                              ? Theme.of(context).colorScheme.primary
-                              : const Color(0xFFDDE5DD),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            statuses[i],
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
-                    ],
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        AppConstants.customerTrackingStatuses[i],
-                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
-                    ),
-                  ),
-                ],
+                    ],
+                  );
+                },
               ),
           ],
         ),
       ),
     );
+  }
+
+  Color _currentStepColor(String status, Color fallback) {
+    switch (status) {
+      case 'Cancelled':
+      case 'Rejected':
+      case 'Item Unavailable':
+        return const Color(0xFFC83A2B);
+      case 'Need Clarification':
+      case 'Bill Updated':
+        return const Color(0xFFB66D00);
+      default:
+        return fallback;
+    }
   }
 }
 
