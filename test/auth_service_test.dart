@@ -59,7 +59,7 @@ void main() {
     expect(message, contains('google-services.json'));
   });
 
-  test('explains Firebase phone auth internal error 39', () {
+  test('explains Firebase phone auth quota error 39', () {
     final message = authService.phoneAuthErrorMessageForTesting(
       FirebaseAuthException(
         code: 'unknown',
@@ -68,8 +68,20 @@ void main() {
     );
 
     expect(message, contains('before sending SMS'));
-    expect(message, contains('SHA-1 and SHA-256'));
-    expect(message, contains('physical phone'));
+    expect(message, contains('Auth quota or fraud limit'));
+    expect(message, contains('Sign-up quota'));
+  });
+
+  test('explains reCAPTCHA setup blocks after SHA setup', () {
+    final message = authService.phoneAuthErrorMessageForTesting(
+      FirebaseAuthException(
+        code: 'unknown',
+        message: 'reCAPTCHA failed because the API key is not authorized.',
+      ),
+    );
+
+    expect(message, contains('reCAPTCHA app verification failed'));
+    expect(message, contains('grocery-delivery-app-388bc.firebaseapp.com'));
   });
 
   test('recognizes the bootstrap admin login only with the fixed password', () {

@@ -12,7 +12,16 @@
           "package_name": "com.ishi.grocerydelivery"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "471895063005-se32ndmfh9iv2qh0mrga7nfnkntf3m8k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ishi.grocerydelivery",
+            "certificate_hash": "0b78be68e642a1ffe46a7e4a635f5e78cb315a65"
+          }
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDAtj58p_V5l9JcnkqC5SyoNXtSFgRFm1U"

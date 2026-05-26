@@ -28,6 +28,14 @@ class AuthService {
   final bool _firebaseAvailable;
   final FirestoreService _firestoreService;
   static const _otpTimeout = Duration(seconds: 75);
+  static const _debugTestPhone =
+      String.fromEnvironment('FIREBASE_AUTH_TEST_PHONE');
+  static const _debugTestCode =
+      String.fromEnvironment('FIREBASE_AUTH_TEST_CODE');
+  static const _debugForceRecaptcha = bool.fromEnvironment(
+    'FIREBASE_AUTH_FORCE_RECAPTCHA',
+    defaultValue: true,
+  );
 
   FirebaseAuth get _auth {
     if (!_firebaseAvailable) {
@@ -80,15 +88,17 @@ class AuthService {
   Future<String> sendOtp(String phone) async {
     final normalizedPhone = PhoneUtils.normalizeSriLankanPhone(phone);
     final completer = Completer<String>();
+    final auth = _auth;
 
     try {
-      await _auth.verifyPhoneNumber(
+      await _configureDebugPhoneAuthTesting(auth, normalizedPhone);
+      await auth.verifyPhoneNumber(
         phoneNumber: normalizedPhone,
         timeout: const Duration(seconds: 60),
         verificationCompleted: (credential) async {
           if (!completer.isCompleted) {
             try {
-              await _auth.signInWithCredential(credential);
+              await auth.signInWithCredential(credential);
               completer.complete('AUTO_VERIFIED');
             } catch (error, stackTrace) {
               completer.completeError(error, stackTrace);
@@ -127,6 +137,38 @@ class AuthService {
       );
       throw AuthServiceException(_phoneAuthErrorMessage(error));
     }
+  }
+
+  Future<void> _configureDebugPhoneAuthTesting(
+    FirebaseAuth auth,
+    String normalizedPhone,
+  ) async {
+    if (!kDebugMode) {
+      return;
+    }
+
+    final testPhone = PhoneUtils.normalizeSriLankanPhone(_debugTestPhone);
+    final testCode = _debugTestCode.trim();
+
+    if (testPhone.isNotEmpty &&
+        testCode.isNotEmpty &&
+        normalizedPhone == testPhone) {
+      debugPrint('Firebase Phone Auth test mode enabled for $testPhone.');
+      await auth.setSettings(
+        appVerificationDisabledForTesting: true,
+        phoneNumber: testPhone,
+        smsCode: testCode,
+        forceRecaptchaFlow: false,
+      );
+      return;
+    }
+
+    await auth.setSettings(
+      appVerificationDisabledForTesting: false,
+      phoneNumber: null,
+      smsCode: null,
+      forceRecaptchaFlow: _debugForceRecaptcha,
+    );
   }
 
   Future<void> verifyOtp({
@@ -288,8 +330,12 @@ class AuthService {
       return 'Firebase real SMS OTP is blocked because billing is not enabled. Test phone numbers work without SMS, but real Phone Auth SMS requires Firebase billing/Blaze.';
     }
 
-    if (_mentionsAndroidVerificationInternalError(message)) {
-      return 'Firebase blocked this OTP before sending SMS. For this Android build, add the debug SHA-1 and SHA-256 fingerprints in Firebase Project settings, download the fresh google-services.json, and test real SMS on a physical phone. Android emulators should use Firebase test phone numbers.';
+    if (_mentionsQuotaExceededInternalError(message)) {
+      return 'Firebase blocked this OTP before sending SMS because the Auth quota or fraud limit is reached. Open Firebase Authentication > Settings > Sign-up quota, raise the temporary quota, then wait for the device/project throttle to cool down before trying again.';
+    }
+
+    if (_mentionsRecaptchaSetupProblem(message)) {
+      return 'Firebase reCAPTCHA app verification failed before SMS. Use a physical Android device with Google Play services, keep SHA-1/SHA-256 attached to com.ishi.grocerydelivery, and make sure the Firebase API key is unrestricted or allows grocery-delivery-app-388bc.firebaseapp.com.';
     }
 
     switch (error.code) {
@@ -306,7 +352,9 @@ class AuthService {
       case 'app-not-authorized':
       case 'invalid-app-credential':
       case 'missing-client-identifier':
-        return 'Firebase rejected this Android app for Phone OTP. Add the SHA-1 and SHA-256 fingerprints for com.ishi.grocerydelivery in Firebase Project settings, then download a fresh google-services.json.';
+        return 'Firebase rejected this Android app for Phone OTP. Confirm the SHA-1 and SHA-256 fingerprints are attached to the Firebase Android app com.ishi.grocerydelivery, download a fresh google-services.json, then reinstall the app.';
+      case 'missing-activity-for-recaptcha':
+        return 'Firebase needs the Android reCAPTCHA fallback but could not open its verification activity. Rebuild and reinstall the app, then test on a physical device with Google Play services.';
       default:
         return _authErrorMessage(error);
     }
@@ -335,11 +383,20 @@ class AuthService {
         message.contains('billing-not-enabled');
   }
 
-  bool _mentionsAndroidVerificationInternalError(String message) {
+  bool _mentionsQuotaExceededInternalError(String message) {
     return message.contains('error code:39') ||
         message.contains('error code:-39') ||
         message.contains('status code: 17499') ||
         message.contains('unknown status code: 17499');
+  }
+
+  bool _mentionsRecaptchaSetupProblem(String message) {
+    return message.contains('recaptcha') &&
+        (message.contains('api key') ||
+            message.contains('not authorized') ||
+            message.contains('initial state') ||
+            message.contains('domain') ||
+            message.contains('missing activity'));
   }
 
   String _authErrorMessage(FirebaseAuthException error) {
@@ -359,7 +416,7 @@ class AuthService {
       case 'captcha-check-failed':
       case 'web-context-cancelled':
       case 'web-context-already-presented':
-        return 'Firebase opened browser verification but it failed. On an emulator, use a Firebase test phone number and test code. For real SMS, run on a physical phone.';
+        return 'Firebase opened browser verification but it failed. For real SMS, test on a physical phone with Google Play services and allow grocery-delivery-app-388bc.firebaseapp.com if your Firebase API key is restricted. Emulators should use Firebase test phone numbers.';
       case 'user-not-found':
       case 'wrong-password':
       case 'invalid-credential':
