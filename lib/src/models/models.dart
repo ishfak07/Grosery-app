@@ -622,6 +622,64 @@ class SupportMessage {
   }
 }
 
+class PasswordResetRequest {
+  const PasswordResetRequest({
+    required this.requestId,
+    required this.userId,
+    required this.customerName,
+    required this.phone,
+    required this.hiddenEmail,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+    this.approvedBy = '',
+    this.rejectedBy = '',
+    this.completedAt,
+    this.rejectedAt,
+    this.approvedAt,
+  });
+
+  final String requestId;
+  final String userId;
+  final String customerName;
+  final String phone;
+  final String hiddenEmail;
+  final String status;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final String approvedBy;
+  final String rejectedBy;
+  final DateTime? completedAt;
+  final DateTime? rejectedAt;
+  final DateTime? approvedAt;
+
+  bool get isPending => status == 'pending';
+  bool get isApproved => status == 'approved';
+  bool get isCompleted => status == 'completed';
+  bool get isRejected => status == 'rejected';
+
+  factory PasswordResetRequest.fromMap(Map<String, dynamic> map, String id) {
+    return PasswordResetRequest(
+      requestId: map['requestId'] as String? ?? id,
+      userId: map['userId'] as String? ?? '',
+      customerName: map['customerName'] as String? ?? '',
+      phone: map['phone'] as String? ?? '',
+      hiddenEmail: map['hiddenEmail'] as String? ?? '',
+      status: map['status'] as String? ?? 'pending',
+      createdAt: _readDate(map['createdAt']),
+      updatedAt: _readDate(map['updatedAt']),
+      approvedBy: map['approvedBy'] as String? ?? '',
+      rejectedBy: map['rejectedBy'] as String? ?? '',
+      approvedAt:
+          map['approvedAt'] == null ? null : _readDate(map['approvedAt']),
+      rejectedAt:
+          map['rejectedAt'] == null ? null : _readDate(map['rejectedAt']),
+      completedAt:
+          map['completedAt'] == null ? null : _readDate(map['completedAt']),
+    );
+  }
+}
+
 class AppNotification {
   const AppNotification({
     required this.notificationId,

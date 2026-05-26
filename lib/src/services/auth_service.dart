@@ -1,5 +1,4 @@
-import 'dart:async';
-
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
@@ -18,6 +17,37 @@ class AuthServiceException implements Exception {
   String toString() => message;
 }
 
+class PasswordResetStatusResult {
+  const PasswordResetStatusResult({
+    required this.requestId,
+    required this.status,
+    required this.phone,
+    required this.customerName,
+    required this.message,
+  });
+
+  final String requestId;
+  final String status;
+  final String phone;
+  final String customerName;
+  final String message;
+
+  bool get isApproved => status == 'approved';
+  bool get isPending => status == 'pending';
+  bool get isRejected => status == 'rejected';
+  bool get isCompleted => status == 'completed';
+
+  factory PasswordResetStatusResult.fromMap(Map<dynamic, dynamic> map) {
+    return PasswordResetStatusResult(
+      requestId: map['requestId']?.toString() ?? '',
+      status: map['status']?.toString() ?? 'pending',
+      phone: map['phone']?.toString() ?? '',
+      customerName: map['customerName']?.toString() ?? '',
+      message: map['message']?.toString() ?? '',
+    );
+  }
+}
+
 class AuthService {
   AuthService({
     required bool firebaseAvailable,
@@ -27,21 +57,19 @@ class AuthService {
 
   final bool _firebaseAvailable;
   final FirestoreService _firestoreService;
-  static const _otpTimeout = Duration(seconds: 75);
-  static const _debugTestPhone =
-      String.fromEnvironment('FIREBASE_AUTH_TEST_PHONE');
-  static const _debugTestCode =
-      String.fromEnvironment('FIREBASE_AUTH_TEST_CODE');
-  static const _debugForceRecaptcha = bool.fromEnvironment(
-    'FIREBASE_AUTH_FORCE_RECAPTCHA',
-    defaultValue: false,
-  );
 
   FirebaseAuth get _auth {
     if (!_firebaseAvailable) {
       throw const FirebaseUnavailableException();
     }
     return FirebaseAuth.instance;
+  }
+
+  FirebaseFunctions get _functions {
+    if (!_firebaseAvailable) {
+      throw const FirebaseUnavailableException();
+    }
+    return FirebaseFunctions.instance;
   }
 
   Stream<User?> authStateChanges() {
@@ -85,137 +113,32 @@ class AuthService {
     return hiddenEmailForPhone(AppConstants.bootstrapAdminPhone).toLowerCase();
   }
 
-  Future<String> sendOtp(String phone) async {
-    final normalizedPhone = PhoneUtils.normalizeSriLankanPhone(phone);
-    final completer = Completer<String>();
-    final auth = _auth;
-
-    try {
-      await _configureDebugPhoneAuthTesting(auth, normalizedPhone);
-      await auth.verifyPhoneNumber(
-        phoneNumber: normalizedPhone,
-        timeout: const Duration(seconds: 60),
-        verificationCompleted: (credential) async {
-          if (!completer.isCompleted) {
-            try {
-              await auth.signInWithCredential(credential);
-              completer.complete('AUTO_VERIFIED');
-            } catch (error, stackTrace) {
-              completer.completeError(error, stackTrace);
-            }
-          }
-        },
-        verificationFailed: (error) {
-          if (!completer.isCompleted) {
-            completer.completeError(error);
-          }
-        },
-        codeSent: (verificationId, resendToken) {
-          if (!completer.isCompleted) {
-            completer.complete(verificationId);
-          }
-        },
-        codeAutoRetrievalTimeout: (verificationId) {
-          if (!completer.isCompleted) {
-            completer.complete(verificationId);
-          }
-        },
-      );
-
-      return await completer.future.timeout(
-        _otpTimeout,
-        onTimeout: () {
-          throw const AuthServiceException(
-            'OTP verification timed out. On an emulator, use a Firebase test phone number and test code. For real SMS, run the app on a physical phone.',
-          );
-        },
-      );
-    } on FirebaseAuthException catch (error) {
-      debugPrint(
-        'Firebase phone auth failed [${error.code}]: '
-        '${error.message ?? 'No message'}',
-      );
-      throw AuthServiceException(_phoneAuthErrorMessage(error));
-    }
-  }
-
-  Future<void> _configureDebugPhoneAuthTesting(
-    FirebaseAuth auth,
-    String normalizedPhone,
-  ) async {
-    if (!kDebugMode) {
-      return;
-    }
-
-    final testPhone = PhoneUtils.normalizeSriLankanPhone(_debugTestPhone);
-    final testCode = _debugTestCode.trim();
-
-    if (testPhone.isNotEmpty &&
-        testCode.isNotEmpty &&
-        normalizedPhone == testPhone) {
-      debugPrint('Firebase Phone Auth test mode enabled for $testPhone.');
-      await auth.setSettings(
-        appVerificationDisabledForTesting: true,
-        phoneNumber: testPhone,
-        smsCode: testCode,
-        forceRecaptchaFlow: false,
-      );
-      return;
-    }
-
-    await auth.setSettings(
-      appVerificationDisabledForTesting: false,
-      phoneNumber: null,
-      smsCode: null,
-      forceRecaptchaFlow: _debugForceRecaptcha,
-    );
-  }
-
-  Future<void> verifyOtp({
-    required String verificationId,
-    required String smsCode,
-  }) async {
-    if (verificationId == 'AUTO_VERIFIED') {
-      return;
-    }
-
-    final credential = PhoneAuthProvider.credential(
-      verificationId: verificationId,
-      smsCode: smsCode,
-    );
-    try {
-      await _auth.signInWithCredential(credential);
-    } on FirebaseAuthException catch (error) {
-      throw AuthServiceException(_phoneAuthErrorMessage(error));
-    }
-  }
-
   Future<UserProfile> completeRegistration({
     required String fullName,
     required String phone,
     required String address,
     required String password,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      throw StateError('Verify your phone number first.');
+    final normalizedPhone = PhoneUtils.normalizeSriLankanPhone(phone);
+    if (!PhoneUtils.isSriLankanMobile(normalizedPhone)) {
+      throw const AuthServiceException(
+        'Enter a valid Sri Lankan mobile number starting with 7.',
+      );
     }
 
-    final normalizedPhone = PhoneUtils.normalizeSriLankanPhone(phone);
     final hiddenEmail = hiddenEmailForPhone(normalizedPhone);
-    final credential = EmailAuthProvider.credential(
-      email: hiddenEmail,
-      password: password,
-    );
+    late final UserCredential credential;
 
     try {
-      await user.linkWithCredential(credential);
+      credential = await _auth.createUserWithEmailAndPassword(
+        email: hiddenEmail,
+        password: password,
+      );
     } on FirebaseAuthException catch (error) {
-      if (error.code != 'provider-already-linked') {
-        throw AuthServiceException(_authErrorMessage(error));
-      }
+      throw AuthServiceException(_registrationErrorMessage(error));
     }
 
+    final user = credential.user!;
     await user.updateDisplayName(fullName.trim());
 
     final now = DateTime.now();
@@ -299,15 +222,65 @@ class AuthService {
     return profile;
   }
 
-  Future<void> updatePasswordAfterOtp(String newPassword) async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      throw StateError('Verify your phone number first.');
-    }
+  Future<PasswordResetStatusResult> requestPasswordReset(String phone) {
+    return _callPasswordResetFunction(
+      'requestPasswordReset',
+      {'phone': PhoneUtils.normalizeSriLankanPhone(phone)},
+    );
+  }
+
+  Future<PasswordResetStatusResult> fetchPasswordResetStatus(String phone) {
+    return _callPasswordResetFunction(
+      'getPasswordResetStatus',
+      {'phone': PhoneUtils.normalizeSriLankanPhone(phone)},
+    );
+  }
+
+  Future<void> completeApprovedPasswordReset({
+    required String phone,
+    required String newPassword,
+  }) async {
     try {
-      await user.updatePassword(newPassword);
-    } on FirebaseAuthException catch (error) {
-      throw AuthServiceException(_authErrorMessage(error));
+      await _functions.httpsCallable('completeApprovedPasswordReset').call({
+        'phone': PhoneUtils.normalizeSriLankanPhone(phone),
+        'newPassword': newPassword,
+      });
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
+  Future<void> approvePasswordReset(String requestId) async {
+    try {
+      await _functions.httpsCallable('approvePasswordReset').call({
+        'requestId': requestId,
+      });
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
+  Future<void> rejectPasswordReset(String requestId) async {
+    try {
+      await _functions.httpsCallable('rejectPasswordReset').call({
+        'requestId': requestId,
+      });
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
+  Future<PasswordResetStatusResult> _callPasswordResetFunction(
+    String name,
+    Map<String, Object?> data,
+  ) async {
+    try {
+      final result = await _functions.httpsCallable(name).call(data);
+      return PasswordResetStatusResult.fromMap(
+        result.data as Map<dynamic, dynamic>,
+      );
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthServiceException(_functionsErrorMessage(error));
     }
   }
 
@@ -318,85 +291,32 @@ class AuthService {
     await _auth.signOut();
   }
 
-  @visibleForTesting
-  String phoneAuthErrorMessageForTesting(FirebaseAuthException error) {
-    return _phoneAuthErrorMessage(error);
-  }
-
-  String _phoneAuthErrorMessage(FirebaseAuthException error) {
-    final message = error.message?.toLowerCase() ?? '';
-
-    if (_mentionsBillingNotEnabled(message)) {
-      return 'Firebase real SMS OTP is blocked because billing is not enabled. Test phone numbers work without SMS, but real Phone Auth SMS requires Firebase billing/Blaze.';
-    }
-
-    if (_mentionsQuotaExceededInternalError(message)) {
-      return 'Firebase blocked this OTP before sending SMS because the Auth quota or fraud limit is reached. Open Firebase Authentication > Settings > Sign-up quota, raise the temporary quota, then wait for the device/project throttle to cool down before trying again.';
-    }
-
-    if (_mentionsRecaptchaSetupProblem(message)) {
-      return 'Firebase reCAPTCHA app verification failed before SMS. Use a physical Android device with Google Play services, keep SHA-1/SHA-256 attached to com.ishi.grocerydelivery, and make sure the Firebase API key is unrestricted or allows grocery-delivery-app-388bc.firebaseapp.com.';
-    }
-
+  String _registrationErrorMessage(FirebaseAuthException error) {
     switch (error.code) {
-      case 'operation-not-allowed':
-        if (_mentionsSmsRegionPolicy(message)) {
-          return 'Firebase is blocking SMS to this country. In Firebase Console, enable Authentication > Sign-in method > Phone, then allow Sri Lanka (+94) in Authentication > Settings > SMS region policy.';
-        }
-        if (_mentionsBillingOrPlan(message)) {
-          return 'Firebase test phone numbers work because no real SMS is sent. Real OTP SMS is not available on the Firebase Spark plan; use Blaze for Firebase SMS or switch this app to a no-SMS registration flow.';
-        }
-        return 'Firebase blocked Phone OTP. Enable Phone in Authentication > Sign-in method, allow Sri Lanka (+94) in SMS region policy, and use Blaze for real SMS. Test phone numbers can still work because no SMS is sent.';
-      case 'quota-exceeded':
-        return 'Firebase SMS quota or billing limit is reached. Test phone numbers do not use SMS; real OTP SMS needs Firebase Phone Auth billing and region setup.';
-      case 'app-not-authorized':
-      case 'invalid-app-credential':
-      case 'missing-client-identifier':
-        return 'Firebase rejected this Android app for Phone OTP. Confirm the SHA-1 and SHA-256 fingerprints are attached to the Firebase Android app com.ishi.grocerydelivery, download a fresh google-services.json, then reinstall the app.';
-      case 'missing-activity-for-recaptcha':
-        return 'Firebase needs the Android reCAPTCHA fallback but could not open its verification activity. Rebuild and reinstall the app, then test on a physical device with Google Play services.';
+      case 'email-already-in-use':
+        return 'An account already exists for this phone number. Login or request a password reset.';
       default:
         return _authErrorMessage(error);
     }
   }
 
-  bool _mentionsSmsRegionPolicy(String message) {
-    return message.contains('sms region') ||
-        message.contains('region policy') ||
-        (message.contains('region') && message.contains('sms')) ||
-        message.contains('country') && message.contains('sms');
-  }
-
-  bool _mentionsBillingOrPlan(String message) {
-    return message.contains('spark') ||
-        message.contains('blaze') ||
-        message.contains('billing') ||
-        message.contains('payment') ||
-        message.contains('pay-as-you-go') ||
-        message.contains('pay as you go') ||
-        message.contains('not applicable');
-  }
-
-  bool _mentionsBillingNotEnabled(String message) {
-    return message.contains('billing_not_enabled') ||
-        message.contains('billing not enabled') ||
-        message.contains('billing-not-enabled');
-  }
-
-  bool _mentionsQuotaExceededInternalError(String message) {
-    return message.contains('error code:39') ||
-        message.contains('error code:-39') ||
-        message.contains('status code: 17499') ||
-        message.contains('unknown status code: 17499');
-  }
-
-  bool _mentionsRecaptchaSetupProblem(String message) {
-    return message.contains('recaptcha') &&
-        (message.contains('api key') ||
-            message.contains('not authorized') ||
-            message.contains('initial state') ||
-            message.contains('domain') ||
-            message.contains('missing activity'));
+  String _functionsErrorMessage(FirebaseFunctionsException error) {
+    final message = error.message;
+    switch (error.code) {
+      case 'invalid-argument':
+        return message ?? 'Check the details and try again.';
+      case 'not-found':
+        return message ?? 'No account was found for that phone number.';
+      case 'failed-precondition':
+        return message ?? 'This request is not ready yet.';
+      case 'permission-denied':
+      case 'unauthenticated':
+        return message ?? 'You are not allowed to perform this action.';
+      case 'unavailable':
+        return 'Password reset service is unavailable. Try again shortly.';
+      default:
+        return message ?? 'Password reset failed. Try again.';
+    }
   }
 
   String _authErrorMessage(FirebaseAuthException error) {
@@ -404,25 +324,17 @@ class AuthService {
       case 'invalid-phone-number':
         return 'Enter the 9 digits after +94, for example 768976222.';
       case 'too-many-requests':
-        return 'Too many OTP attempts. Please wait a few minutes and try again.';
+        return 'Too many attempts. Please wait a few minutes and try again.';
       case 'quota-exceeded':
-        return 'Firebase SMS quota is exceeded. Check Firebase Authentication usage and billing.';
-      case 'invalid-verification-code':
-        return 'The OTP code is incorrect. Check the SMS and try again.';
-      case 'session-expired':
-        return 'The OTP expired. Request a new code.';
+        return 'Firebase authentication quota is exceeded. Try again later.';
       case 'network-request-failed':
         return 'Network error. Check your connection and try again.';
-      case 'captcha-check-failed':
-      case 'web-context-cancelled':
-      case 'web-context-already-presented':
-        return 'Firebase opened browser verification but it failed. For real SMS, test on a physical phone with Google Play services and allow grocery-delivery-app-388bc.firebaseapp.com if your Firebase API key is restricted. Emulators should use Firebase test phone numbers.';
       case 'user-not-found':
       case 'wrong-password':
       case 'invalid-credential':
         return 'Phone number or password is incorrect.';
       case 'operation-not-allowed':
-        return 'Firebase sign-in is disabled. Enable Phone and Email/Password in Authentication > Sign-in method.';
+        return 'Firebase sign-in is disabled. Enable Email/Password in Authentication > Sign-in method.';
       default:
         return error.message ?? 'Firebase authentication failed. Try again.';
     }

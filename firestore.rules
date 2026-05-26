@@ -100,6 +100,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /password_reset_requests/{requestId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     match /app_settings/{settingId} {
       allow read: if signedIn();
       allow write: if isAdmin();

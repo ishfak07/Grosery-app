@@ -5,6 +5,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/utils/phone_utils.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/common_widgets.dart';
+import '../../services/auth_service.dart';
 import '../../state/app_state.dart';
 
 class SplashScreen extends StatelessWidget {
@@ -225,7 +226,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-                'Login with phone and password. OTP is only for registration and password reset.'),
+                'Login with phone and password. Registration and password reset do not use OTP.'),
             const SizedBox(height: 24),
             Form(
               key: _formKey,
@@ -257,9 +258,7 @@ class _LoginScreenState extends State<LoginScreen> {
               onPressed: appState.firebaseAvailable
                   ? () => Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => const OtpVerificationScreen(
-                            mode: OtpMode.registration,
-                          ),
+                          builder: (_) => const RegisterDetailsScreen(),
                         ),
                       )
                   : null,
@@ -305,161 +304,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-enum OtpMode { registration, forgotPassword }
-
-class OtpVerificationScreen extends StatefulWidget {
-  const OtpVerificationScreen({super.key, required this.mode});
-
-  final OtpMode mode;
-
-  @override
-  State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
-}
-
-class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _phone = TextEditingController();
-  final _otp = TextEditingController();
-  String? _verificationId;
-  var _isLoading = false;
-
-  bool get _isCodeSent => _verificationId != null;
-
-  @override
-  void dispose() {
-    _phone.dispose();
-    _otp.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isRegister = widget.mode == OtpMode.registration;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(isRegister ? 'Verify phone' : 'Forgot password'),
-      ),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text(
-                isRegister ? 'First-time registration' : 'Verify ownership',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _isCodeSent
-                    ? 'Enter the SMS OTP sent to ${PhoneUtils.normalizeSriLankanPhone(_phone.text)}.'
-                    : 'Enter your phone number to receive a Firebase OTP.',
-              ),
-              const SizedBox(height: 20),
-              AppPhoneField(
-                controller: _phone,
-              ),
-              if (_isCodeSent) ...[
-                const SizedBox(height: 12),
-                AppTextField(
-                  controller: _otp,
-                  label: 'OTP code',
-                  keyboardType: TextInputType.number,
-                  validator: (value) =>
-                      Validators.requiredText(value, 'OTP code'),
-                  prefixIcon: Icons.password,
-                ),
-              ],
-              const SizedBox(height: 18),
-              PrimaryActionButton(
-                label: _isCodeSent ? 'Verify OTP' : 'Send OTP',
-                icon: _isCodeSent ? Icons.verified_user : Icons.sms,
-                isLoading: _isLoading,
-                onPressed:
-                    _isLoading ? null : (_isCodeSent ? _verifyOtp : _sendOtp),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _sendOtp() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-    setState(() => _isLoading = true);
-    try {
-      final verificationId = await context
-          .read<AppState>()
-          .authService
-          .sendOtp(PhoneUtils.normalizeSriLankanPhone(_phone.text));
-      if (!mounted) {
-        return;
-      }
-      if (verificationId == 'AUTO_VERIFIED') {
-        await _afterOtpVerified();
-      } else {
-        setState(() => _verificationId = verificationId);
-        showSnack(context, 'OTP sent.');
-      }
-    } catch (error) {
-      if (mounted) {
-        showSnack(context, error.toString());
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _verifyOtp() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-    setState(() => _isLoading = true);
-    try {
-      await context.read<AppState>().authService.verifyOtp(
-            verificationId: _verificationId!,
-            smsCode: _otp.text.trim(),
-          );
-      if (mounted) {
-        await _afterOtpVerified();
-      }
-    } catch (error) {
-      if (mounted) {
-        showSnack(context, error.toString());
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _afterOtpVerified() async {
-    final normalizedPhone = PhoneUtils.normalizeSriLankanPhone(_phone.text);
-    if (widget.mode == OtpMode.registration) {
-      await Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => RegisterDetailsScreen(phone: normalizedPhone),
-        ),
-      );
-      return;
-    }
-
-    await Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => ResetPasswordScreen(phone: normalizedPhone),
-      ),
-    );
-  }
-}
-
 class ForgotPasswordPhoneScreen extends StatefulWidget {
   const ForgotPasswordPhoneScreen({super.key});
 
@@ -496,17 +340,18 @@ class _ForgotPasswordPhoneScreenState extends State<ForgotPasswordPhoneScreen> {
                     ),
               ),
               const SizedBox(height: 8),
-              const Text('We will send an OTP before allowing a new password.'),
+              const Text(
+                  'Request approval from admin. After approval, you can set a new password here.'),
               const SizedBox(height: 20),
               AppPhoneField(
                 controller: _phone,
               ),
               const SizedBox(height: 18),
               PrimaryActionButton(
-                label: 'Send OTP',
-                icon: Icons.sms,
+                label: 'Request reset',
+                icon: Icons.lock_reset,
                 isLoading: _isLoading,
-                onPressed: _sendOtp,
+                onPressed: _requestReset,
               ),
             ],
           ),
@@ -515,123 +360,23 @@ class _ForgotPasswordPhoneScreenState extends State<ForgotPasswordPhoneScreen> {
     );
   }
 
-  Future<void> _sendOtp() async {
+  Future<void> _requestReset() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
     setState(() => _isLoading = true);
     try {
-      final verificationId = await context
+      final phone = PhoneUtils.normalizeSriLankanPhone(_phone.text);
+      final status = await context
           .read<AppState>()
           .authService
-          .sendOtp(PhoneUtils.normalizeSriLankanPhone(_phone.text));
+          .requestPasswordReset(phone);
       if (!mounted) {
         return;
       }
-      final phone = PhoneUtils.normalizeSriLankanPhone(_phone.text);
-      if (verificationId == 'AUTO_VERIFIED') {
-        await Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => ResetPasswordScreen(phone: phone)),
-        );
-      } else {
-        await Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => ForgotPasswordOtpScreen(
-              phone: phone,
-              verificationId: verificationId,
-            ),
-          ),
-        );
-      }
-    } catch (error) {
-      if (mounted) {
-        showSnack(context, error.toString());
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-}
-
-class ForgotPasswordOtpScreen extends StatefulWidget {
-  const ForgotPasswordOtpScreen({
-    super.key,
-    required this.phone,
-    required this.verificationId,
-  });
-
-  final String phone;
-  final String verificationId;
-
-  @override
-  State<ForgotPasswordOtpScreen> createState() =>
-      _ForgotPasswordOtpScreenState();
-}
-
-class _ForgotPasswordOtpScreenState extends State<ForgotPasswordOtpScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _otp = TextEditingController();
-  var _isLoading = false;
-
-  @override
-  void dispose() {
-    _otp.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Verify OTP')),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text('OTP sent to ${widget.phone}'),
-              const SizedBox(height: 16),
-              AppTextField(
-                controller: _otp,
-                label: 'OTP code',
-                keyboardType: TextInputType.number,
-                validator: (value) =>
-                    Validators.requiredText(value, 'OTP code'),
-                prefixIcon: Icons.password,
-              ),
-              const SizedBox(height: 18),
-              PrimaryActionButton(
-                label: 'Verify',
-                icon: Icons.verified,
-                isLoading: _isLoading,
-                onPressed: _verify,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _verify() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-    setState(() => _isLoading = true);
-    try {
-      await context.read<AppState>().authService.verifyOtp(
-            verificationId: widget.verificationId,
-            smsCode: _otp.text.trim(),
-          );
-      if (!mounted) {
-        return;
-      }
+      showSnack(context, status.message);
       await Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => ResetPasswordScreen(phone: widget.phone),
-        ),
+        MaterialPageRoute(builder: (_) => ResetPasswordScreen(phone: phone)),
       );
     } catch (error) {
       if (mounted) {
@@ -646,9 +391,7 @@ class _ForgotPasswordOtpScreenState extends State<ForgotPasswordOtpScreen> {
 }
 
 class RegisterDetailsScreen extends StatefulWidget {
-  const RegisterDetailsScreen({super.key, required this.phone});
-
-  final String phone;
+  const RegisterDetailsScreen({super.key});
 
   @override
   State<RegisterDetailsScreen> createState() => _RegisterDetailsScreenState();
@@ -657,6 +400,7 @@ class RegisterDetailsScreen extends StatefulWidget {
 class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
+  final _phone = TextEditingController();
   final _address = TextEditingController();
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
@@ -665,6 +409,7 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
   @override
   void dispose() {
     _name.dispose();
+    _phone.dispose();
     _address.dispose();
     _password.dispose();
     _confirmPassword.dispose();
@@ -682,13 +427,13 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               Text(
-                'Phone verified',
+                'Create account',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.w900,
                     ),
               ),
               const SizedBox(height: 6),
-              Text(widget.phone),
+              const Text('Enter your details. No OTP is required.'),
               const SizedBox(height: 20),
               AppTextField(
                 controller: _name,
@@ -696,6 +441,10 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
                 validator: (value) =>
                     Validators.requiredText(value, 'Full name'),
                 prefixIcon: Icons.person,
+              ),
+              const SizedBox(height: 12),
+              AppPhoneField(
+                controller: _phone,
               ),
               const SizedBox(height: 12),
               AppTextField(
@@ -745,7 +494,7 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
     try {
       await context.read<AppState>().completeRegistration(
             fullName: _name.text,
-            phone: widget.phone,
+            phone: PhoneUtils.normalizeSriLankanPhone(_phone.text),
             address: _address.text,
             password: _password.text,
           );
@@ -777,7 +526,15 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
+  PasswordResetStatusResult? _status;
   var _isLoading = false;
+  var _isChecking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkStatus());
+  }
 
   @override
   void dispose() {
@@ -788,6 +545,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final status = _status;
+    final isApproved = status?.isApproved ?? false;
     return Scaffold(
       appBar: AppBar(title: const Text('Set new password')),
       body: SafeArea(
@@ -800,35 +559,92 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 widget.phone,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
+              const SizedBox(height: 8),
+              Text(_statusMessage(status)),
               const SizedBox(height: 16),
-              AppTextField(
-                controller: _password,
-                label: 'New password',
-                obscureText: true,
-                validator: Validators.password,
-                prefixIcon: Icons.lock,
-              ),
-              const SizedBox(height: 12),
-              AppTextField(
-                controller: _confirmPassword,
-                label: 'Confirm new password',
-                obscureText: true,
-                validator: (value) =>
-                    Validators.confirmPassword(value, _password.text),
-                prefixIcon: Icons.lock_outline,
-              ),
-              const SizedBox(height: 18),
-              PrimaryActionButton(
-                label: 'Update password',
-                icon: Icons.save,
-                isLoading: _isLoading,
-                onPressed: _reset,
-              ),
+              if (isApproved) ...[
+                AppTextField(
+                  controller: _password,
+                  label: 'New password',
+                  obscureText: true,
+                  validator: Validators.password,
+                  prefixIcon: Icons.lock,
+                ),
+                const SizedBox(height: 12),
+                AppTextField(
+                  controller: _confirmPassword,
+                  label: 'Confirm new password',
+                  obscureText: true,
+                  validator: (value) =>
+                      Validators.confirmPassword(value, _password.text),
+                  prefixIcon: Icons.lock_outline,
+                ),
+                const SizedBox(height: 18),
+                PrimaryActionButton(
+                  label: 'Update password',
+                  icon: Icons.save,
+                  isLoading: _isLoading,
+                  onPressed: _reset,
+                ),
+              ] else ...[
+                PrimaryActionButton(
+                  label: _isChecking ? 'Checking' : 'Check approval',
+                  icon: Icons.refresh,
+                  isLoading: _isChecking,
+                  onPressed: _checkStatus,
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
+  }
+
+  String _statusMessage(PasswordResetStatusResult? status) {
+    if (_isChecking && status == null) {
+      return 'Checking admin approval...';
+    }
+    if (status == null) {
+      return 'Waiting for admin approval.';
+    }
+    if (status.message.isNotEmpty) {
+      return status.message;
+    }
+    if (status.isApproved) {
+      return 'Approved. Set your new password.';
+    }
+    if (status.isRejected) {
+      return 'Rejected. Contact admin support.';
+    }
+    if (status.isCompleted) {
+      return 'Password was already updated. Login with the new password.';
+    }
+    return 'Pending admin approval.';
+  }
+
+  Future<void> _checkStatus() async {
+    if (_isChecking || _isLoading) {
+      return;
+    }
+    setState(() => _isChecking = true);
+    try {
+      final status = await context
+          .read<AppState>()
+          .authService
+          .fetchPasswordResetStatus(widget.phone);
+      if (mounted) {
+        setState(() => _status = status);
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isChecking = false);
+      }
+    }
   }
 
   Future<void> _reset() async {
@@ -838,8 +654,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     setState(() => _isLoading = true);
     try {
       final appState = context.read<AppState>();
-      await appState.authService.updatePasswordAfterOtp(_password.text);
-      await appState.refreshProfile();
+      await appState.authService.completeApprovedPasswordReset(
+        phone: widget.phone,
+        newPassword: _password.text,
+      );
+      await appState.login(phone: widget.phone, password: _password.text);
       if (mounted) {
         Navigator.of(context).popUntil((route) => route.isFirst);
         showSnack(context, 'Password updated.');

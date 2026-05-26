@@ -34,12 +34,14 @@ Color _adminStatusColor(String status) {
     case 'available':
     case 'Active':
     case 'open':
+    case 'completed':
       return _adminPrimary;
     case 'Cancelled':
     case 'Rejected':
     case 'Item Unavailable':
     case 'unavailable':
     case 'Blocked':
+    case 'rejected':
       return const Color(0xFFC83A2B);
     case 'Pending':
     case 'Need Clarification':
@@ -50,6 +52,7 @@ Color _adminStatusColor(String status) {
     case 'Accepted':
     case 'Out for Delivery':
     case 'replied':
+    case 'approved':
       return _adminBlue;
     default:
       return _adminMuted;
@@ -623,6 +626,17 @@ class AdminDashboardScreen extends StatelessWidget {
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => const AdminCustomerManagementScreen(),
+                    ),
+                  ),
+                ),
+                _AdminTile(
+                  icon: Icons.lock_reset,
+                  title: 'Password resets',
+                  subtitle: 'Approve requests',
+                  accent: _adminBlue,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AdminPasswordResetScreen(),
                     ),
                   ),
                 ),
@@ -2448,6 +2462,183 @@ class AdminCustomerManagementScreen extends StatelessWidget {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+class AdminPasswordResetScreen extends StatefulWidget {
+  const AdminPasswordResetScreen({super.key});
+
+  @override
+  State<AdminPasswordResetScreen> createState() =>
+      _AdminPasswordResetScreenState();
+}
+
+class _AdminPasswordResetScreenState extends State<AdminPasswordResetScreen> {
+  String? _busyRequestId;
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.read<AppState>();
+    return _AdminScaffold(
+      title: 'Password resets',
+      body: _AdminPage(
+        child: StreamBuilder<List<PasswordResetRequest>>(
+          stream: appState.firestoreService.watchPasswordResetRequests(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const LoadingView();
+            }
+            final requests = snapshot.data ?? const <PasswordResetRequest>[];
+            if (requests.isEmpty) {
+              return const EmptyState(
+                icon: Icons.lock_reset,
+                title: 'No reset requests',
+                message: 'Customer password reset requests will appear here.',
+              );
+            }
+            return ListView.separated(
+              padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
+              itemCount: requests.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final request = requests[index];
+                return _AdminReveal(
+                  index: index,
+                  child: _AdminPasswordResetTile(
+                    request: request,
+                    isBusy: _busyRequestId == request.requestId,
+                    onApprove: request.isPending
+                        ? () => _setRequestStatus(request, approve: true)
+                        : null,
+                    onReject: request.isPending
+                        ? () => _setRequestStatus(request, approve: false)
+                        : null,
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _setRequestStatus(
+    PasswordResetRequest request, {
+    required bool approve,
+  }) async {
+    setState(() => _busyRequestId = request.requestId);
+    try {
+      final authService = context.read<AppState>().authService;
+      if (approve) {
+        await authService.approvePasswordReset(request.requestId);
+      } else {
+        await authService.rejectPasswordReset(request.requestId);
+      }
+      if (mounted) {
+        showSnack(context, approve ? 'Reset approved.' : 'Reset rejected.');
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busyRequestId = null);
+      }
+    }
+  }
+}
+
+class _AdminPasswordResetTile extends StatelessWidget {
+  const _AdminPasswordResetTile({
+    required this.request,
+    required this.isBusy,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  final PasswordResetRequest request;
+  final bool isBusy;
+  final VoidCallback? onApprove;
+  final VoidCallback? onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = _adminStatusColor(request.status);
+    final requestedAt = DateFormat.yMMMd().add_jm().format(request.createdAt);
+    return _AdminCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _AdminIconBadge(
+                icon: Icons.lock_reset,
+                color: statusColor,
+                size: 48,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      request.customerName.isEmpty
+                          ? request.phone
+                          : request.customerName,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _adminInk,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      '${request.phone} - $requestedAt',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _adminMuted,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _AdminPill(
+                label: request.status,
+                color: statusColor,
+                icon: Icons.circle,
+              ),
+            ],
+          ),
+          if (request.isPending) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: isBusy ? null : onReject,
+                    icon: const Icon(Icons.close),
+                    label: const Text('Reject'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: isBusy ? null : onApprove,
+                    icon: const Icon(Icons.check),
+                    label: Text(isBusy ? 'Saving' : 'Approve'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }

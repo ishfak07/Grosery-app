@@ -34,6 +34,8 @@ class FirestoreService {
       _db.collection('support_messages');
   CollectionReference<Map<String, dynamic>> get _notifications =>
       _db.collection('notifications');
+  CollectionReference<Map<String, dynamic>> get _passwordResetRequests =>
+      _db.collection('password_reset_requests');
 
   Future<UserProfile?> fetchUserProfile(String uid) async {
     final doc = await _users.doc(uid).get();
@@ -417,6 +419,21 @@ class FirestoreService {
     return _tickets.doc(ticketId).update({
       'status': 'closed',
       'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Stream<List<PasswordResetRequest>> watchPasswordResetRequests() {
+    if (!_firebaseAvailable) {
+      return Stream<List<PasswordResetRequest>>.value(
+        const <PasswordResetRequest>[],
+      );
+    }
+    return _passwordResetRequests.snapshots().map((snapshot) {
+      final requests = snapshot.docs
+          .map((doc) => PasswordResetRequest.fromMap(doc.data(), doc.id))
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return requests;
     });
   }
 
