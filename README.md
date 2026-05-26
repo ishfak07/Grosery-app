@@ -41,6 +41,9 @@ phone OTP is blocked. For real Sri Lanka numbers (`+94...`), check all of these:
 - If your Google API key is restricted, allow the browser verification fallback
   domain `grocery-delivery-app-388bc.firebaseapp.com`. Debug or sideloaded
   Android builds can fall back to reCAPTCHA even after the SHA keys are correct.
+  The app does not force reCAPTCHA by default; pass
+  `--dart-define=FIREBASE_AUTH_FORCE_RECAPTCHA=true` only when intentionally
+  testing that fallback.
 - If Firebase returns `BILLING_NOT_ENABLED`, the app reached Firebase but real
   SMS sending is blocked until billing/Blaze is enabled. On Spark, use Firebase
   test phone numbers during development or use the no-OTP admin login below.

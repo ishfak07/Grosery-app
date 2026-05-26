@@ -34,7 +34,7 @@ class AuthService {
       String.fromEnvironment('FIREBASE_AUTH_TEST_CODE');
   static const _debugForceRecaptcha = bool.fromEnvironment(
     'FIREBASE_AUTH_FORCE_RECAPTCHA',
-    defaultValue: true,
+    defaultValue: false,
   );
 
   FirebaseAuth get _auth {
