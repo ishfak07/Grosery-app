@@ -85,15 +85,17 @@ class _CustomerScrollView extends StatelessWidget {
   const _CustomerScrollView({
     required this.children,
     this.padding = const EdgeInsets.fromLTRB(16, 16, 16, 24),
+    this.safeAreaTop = false,
   });
 
   final List<Widget> children;
   final EdgeInsetsGeometry padding;
+  final bool safeAreaTop;
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      top: false,
+      top: safeAreaTop,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final horizontal = constraints.maxWidth >= 720 ? 24.0 : 16.0;
@@ -537,6 +539,7 @@ class CustomerHomeScreen extends StatelessWidget {
       body: _CustomerBackdrop(
         child: _CustomerScrollView(
           padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
+          safeAreaTop: true,
           children: [
             FirebaseSetupBanner(appState: appState),
             _HomeHeader(

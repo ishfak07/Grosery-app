@@ -248,7 +248,7 @@ class SectionTitle extends StatelessWidget {
   }
 }
 
-class AppTextField extends StatelessWidget {
+class AppTextField extends StatefulWidget {
   const AppTextField({
     super.key,
     required this.controller,
@@ -269,16 +269,50 @@ class AppTextField extends StatelessWidget {
   final IconData? prefixIcon;
 
   @override
+  State<AppTextField> createState() => _AppTextFieldState();
+}
+
+class _AppTextFieldState extends State<AppTextField> {
+  late bool _obscureText;
+
+  @override
+  void initState() {
+    super.initState();
+    _obscureText = widget.obscureText;
+  }
+
+  @override
+  void didUpdateWidget(covariant AppTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.obscureText != widget.obscureText) {
+      _obscureText = widget.obscureText;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return TextFormField(
-      controller: controller,
-      validator: validator,
-      keyboardType: keyboardType,
-      obscureText: obscureText,
-      maxLines: obscureText ? 1 : maxLines,
+      controller: widget.controller,
+      validator: widget.validator,
+      keyboardType: widget.keyboardType,
+      obscureText: _obscureText,
+      maxLines: widget.obscureText ? 1 : widget.maxLines,
       decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
+        labelText: widget.label,
+        prefixIcon: widget.prefixIcon == null ? null : Icon(widget.prefixIcon),
+        suffixIcon: widget.obscureText
+            ? IconButton(
+                tooltip: _obscureText ? 'Show password' : 'Hide password',
+                onPressed: () => setState(() {
+                  _obscureText = !_obscureText;
+                }),
+                icon: Icon(
+                  _obscureText
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+              )
+            : null,
       ),
     );
   }
