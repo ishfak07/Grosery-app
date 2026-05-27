@@ -2,6 +2,7 @@ class AppConstants {
   const AppConstants._();
 
   static const appName = 'Puttalam Drop';
+  static const appLogoAsset = 'assets/images/puttalam_drop_logo.png';
   static const packageName = 'com.ishi.grocerydelivery';
   static const bootstrapAdminPhone = '+94768976111';
   static const bootstrapAdminPassword = 'admin123';

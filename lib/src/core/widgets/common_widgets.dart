@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../constants/app_constants.dart';
 import '../utils/phone_utils.dart';
 import '../utils/validators.dart';
 import '../../state/app_state.dart';
@@ -390,6 +391,53 @@ class _SriLankanPhoneInputFormatter extends TextInputFormatter {
     return TextEditingValue(
       text: digits,
       selection: TextSelection.collapsed(offset: digits.length),
+    );
+  }
+}
+
+class AppLogoMark extends StatelessWidget {
+  const AppLogoMark({
+    super.key,
+    this.size = 52,
+    this.padding = 3,
+    this.showShadow = false,
+    this.borderRadius = 8,
+  });
+
+  final double size;
+  final double padding;
+  final bool showShadow;
+  final double borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageRadius = borderRadius > padding ? borderRadius - padding : 4.0;
+    return Container(
+      width: size,
+      height: size,
+      padding: EdgeInsets.all(padding),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(color: const Color(0xFFDDE8DF)),
+        boxShadow: showShadow
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF163526).withOpacity(0.14),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ]
+            : null,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(imageRadius),
+        child: Image.asset(
+          AppConstants.appLogoAsset,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+        ),
+      ),
     );
   }
 }

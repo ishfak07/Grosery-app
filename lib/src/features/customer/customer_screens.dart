@@ -131,19 +131,17 @@ class _CustomerCard extends StatelessWidget {
     required this.child,
     this.padding = const EdgeInsets.all(14),
     this.onTap,
-    this.color = _customerSurface,
   });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(8);
     final content = Material(
-      color: color,
+      color: _customerSurface,
       borderRadius: radius,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -476,29 +474,6 @@ class _ListSkeleton extends StatelessWidget {
   }
 }
 
-IconData _categoryIcon(String category) {
-  switch (category) {
-    case 'Vegetables':
-      return Icons.eco_outlined;
-    case 'Fruits':
-      return Icons.local_florist_outlined;
-    case 'Rice & Grains':
-      return Icons.rice_bowl_outlined;
-    case 'Dairy':
-      return Icons.icecream_outlined;
-    case 'Meat & Fish':
-      return Icons.set_meal_outlined;
-    case 'Bakery':
-      return Icons.bakery_dining_outlined;
-    case 'Beverages':
-      return Icons.local_cafe_outlined;
-    case 'Household':
-      return Icons.cleaning_services_outlined;
-    default:
-      return Icons.local_grocery_store_outlined;
-  }
-}
-
 Color _statusAccent(String status) {
   switch (status) {
     case 'Delivered':
@@ -585,22 +560,6 @@ class CustomerHomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 22),
             _CustomerSectionHeader(
-              title: 'Categories',
-              subtitle: 'Shop by daily needs',
-              actionLabel: 'All products',
-              onAction: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ProductListScreen()),
-              ),
-            ),
-            _CategoryRail(
-              onCategoryTap: (category) => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => ProductListScreen(category: category),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            _CustomerSectionHeader(
               title: 'Fresh picks',
               subtitle: 'Recently added to the catalog',
               actionLabel: 'View all',
@@ -635,50 +594,60 @@ class _HomeHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Column(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                AppConstants.appName,
-                style: TextStyle(
-                  color: _customerMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Hi $firstName',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: _customerInk,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(
-                    Icons.location_on_outlined,
-                    size: 18,
-                    color: _customerAccent,
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      profile.address,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+              const AppLogoMark(size: 44, padding: 2),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      AppConstants.appName,
+                      style: TextStyle(
                         color: _customerMuted,
-                        height: 1.25,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    Text(
+                      'Hi $firstName',
+                      style:
+                          Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                color: _customerInk,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0,
+                              ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.location_on_outlined,
+                          size: 18,
+                          color: _customerAccent,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            profile.address,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _customerMuted,
+                              height: 1.25,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -719,7 +688,7 @@ class _HomeSearchCallout extends StatelessWidget {
           SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Search groceries, shops, categories',
+              'Search groceries and shops',
               style: TextStyle(
                 color: _customerMuted,
                 fontWeight: FontWeight.w700,
@@ -843,85 +812,6 @@ class _HomePromoBanner extends StatelessWidget {
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _CategoryRail extends StatelessWidget {
-  const _CategoryRail({required this.onCategoryTap});
-
-  final ValueChanged<String> onCategoryTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 78,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: AppConstants.productCategories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final category = AppConstants.productCategories[index];
-          return _FadeSlideIn(
-            index: index,
-            child: _CategoryPill(
-              category: category,
-              onTap: () => onCategoryTap(category),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _CategoryPill extends StatelessWidget {
-  const _CategoryPill({
-    required this.category,
-    required this.onTap,
-  });
-
-  final String category;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return _CustomerCard(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      onTap: onTap,
-      color: const Color(0xFFFFFFFF),
-      child: SizedBox(
-        width: 104,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: _customerPrimaryLight,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                _categoryIcon(category),
-                size: 18,
-                color: _customerPrimary,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              category,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: _customerInk,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1256,10 +1146,9 @@ class _ShopCard extends StatelessWidget {
 }
 
 class ProductListScreen extends StatefulWidget {
-  const ProductListScreen({super.key, this.shop, this.category});
+  const ProductListScreen({super.key, this.shop});
 
   final Shop? shop;
-  final String? category;
 
   @override
   State<ProductListScreen> createState() => _ProductListScreenState();
@@ -1274,7 +1163,6 @@ class _ProductListScreenState extends State<ProductListScreen> {
     super.initState();
     _productsStream = context.read<AppState>().firestoreService.watchProducts(
           shopId: widget.shop?.shopId,
-          category: widget.category,
         );
   }
 
@@ -1287,7 +1175,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final title = widget.shop?.shopName ?? widget.category ?? 'Products';
+    final title = widget.shop?.shopName ?? 'Products';
     return _CustomerScaffold(
       title: title,
       actions: [
@@ -1350,14 +1238,14 @@ class _ProductListScreenState extends State<ProductListScreen> {
                       (product) =>
                           query.isEmpty ||
                           product.name.toLowerCase().contains(query) ||
-                          product.category.toLowerCase().contains(query),
+                          product.shopName.toLowerCase().contains(query),
                     )
                     .toList();
                 if (products.isEmpty) {
                   return const EmptyState(
                     icon: Icons.search_off,
                     title: 'No products found',
-                    message: 'Try a different search or category.',
+                    message: 'Try a different product name or shop.',
                   );
                 }
                 return LayoutBuilder(
@@ -1442,43 +1330,6 @@ class ProductCard extends StatelessWidget {
               children: [
                 Positioned.fill(
                   child: ProductImage(url: product.imageUrl, radius: 0),
-                ),
-                Positioned(
-                  left: 8,
-                  top: 8,
-                  right: 42,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.92),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _categoryIcon(product.category),
-                          size: 13,
-                          color: _customerPrimary,
-                        ),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            product.category,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: _customerInk,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
                 Positioned(
                   right: 8,
@@ -1693,40 +1544,13 @@ class ProductDetailsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        product.name,
-                        style:
-                            Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  color: _customerInk,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0,
-                                ),
+                Text(
+                  product.name,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: _customerInk,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _customerPrimaryLight,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        product.category,
-                        style: const TextStyle(
-                          color: _customerPrimary,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
                 const SizedBox(height: 10),
                 Row(

@@ -1730,7 +1730,6 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   final _name = TextEditingController();
   final _description = TextEditingController();
   final _price = TextEditingController();
-  String _category = AppConstants.productCategories.first;
   String _unit = AppConstants.productUnits.first;
   String _stockStatus = 'available';
   String? _selectedShopId;
@@ -1745,7 +1744,6 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       _name.text = product.name;
       _description.text = product.description;
       _price.text = product.price.toStringAsFixed(2);
-      _category = product.category;
       _unit = product.unit;
       _stockStatus = product.stockStatus;
       _selectedShopId = product.shopId;
@@ -1822,30 +1820,6 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                             onChanged: (value) {
                               if (value != null) {
                                 setState(() => _selectedShopId = value);
-                              }
-                            },
-                          ),
-                          const SizedBox(height: 10),
-                          DropdownButtonFormField<String>(
-                            value: AppConstants.productCategories
-                                    .contains(_category)
-                                ? _category
-                                : AppConstants.productCategories.first,
-                            decoration: const InputDecoration(
-                              labelText: 'Category',
-                              prefixIcon: Icon(Icons.category_outlined),
-                            ),
-                            items: AppConstants.productCategories
-                                .map(
-                                  (category) => DropdownMenuItem(
-                                    value: category,
-                                    child: Text(category),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() => _category = value);
                               }
                             },
                           ),
@@ -2023,7 +1997,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         shopId: selectedShop.shopId,
         shopName: selectedShop.shopName,
         name: _name.text.trim(),
-        category: _category,
+        category: widget.product?.category ?? 'Other',
         description: _description.text.trim(),
         price: double.parse(_price.text.trim()),
         imageUrl: imageUrl,

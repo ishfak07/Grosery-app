@@ -143,34 +143,11 @@ class _AuthBrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return const Row(
       children: [
-        Container(
-          width: 52,
-          height: 52,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [_authPrimary, _authAccent],
-            ),
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: [
-              BoxShadow(
-                color: _authPrimary.withOpacity(0.22),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.local_grocery_store,
-            color: Colors.white,
-            size: 27,
-          ),
-        ),
-        const SizedBox(width: 12),
-        const Expanded(
+        AppLogoMark(size: 52, padding: 2, showShadow: true),
+        SizedBox(width: 12),
+        Expanded(
           child: Text(
             AppConstants.appName,
             style: TextStyle(
@@ -290,22 +267,10 @@ class SplashScreen extends StatelessWidget {
                       builder: (context, value, child) {
                         return Transform.scale(scale: value, child: child);
                       },
-                      child: Container(
-                        width: 88,
-                        height: 88,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [_authPrimary, _authAccent],
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.local_grocery_store,
-                          color: Colors.white,
-                          size: 44,
-                        ),
+                      child: const AppLogoMark(
+                        size: 96,
+                        padding: 4,
+                        showShadow: true,
                       ),
                     ),
                     const SizedBox(height: 18),
