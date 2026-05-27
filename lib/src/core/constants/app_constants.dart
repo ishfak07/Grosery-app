@@ -1,7 +1,7 @@
 class AppConstants {
   const AppConstants._();
 
-  static const appName = 'Ishi Grocery Delivery';
+  static const appName = 'Puttalam Drop';
   static const packageName = 'com.ishi.grocerydelivery';
   static const bootstrapAdminPhone = '+94768976111';
   static const bootstrapAdminPassword = 'admin123';

@@ -5,10 +5,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-const _notificationChannelId = 'ishi_grocery_alerts';
+const _notificationChannelId = 'puttalam_drop_alerts';
 const _notificationChannel = AndroidNotificationChannel(
   _notificationChannelId,
-  'Ishi Grocery Alerts',
+  'Puttalam Drop Alerts',
   description: 'Order, support, and account updates.',
   importance: Importance.max,
 );
@@ -107,7 +107,7 @@ class NotificationService {
       return;
     }
 
-    final title = message.notification?.title ?? 'Ishi Grocery';
+    final title = message.notification?.title ?? 'Puttalam Drop';
     final body = message.notification?.body ?? 'You have a new update.';
     final notificationId = message.data['notificationId'] ?? message.messageId;
     final localId =
@@ -121,7 +121,7 @@ class NotificationService {
       const NotificationDetails(
         android: AndroidNotificationDetails(
           _notificationChannelId,
-          'Ishi Grocery Alerts',
+          'Puttalam Drop Alerts',
           channelDescription: 'Order, support, and account updates.',
           importance: Importance.max,
           priority: Priority.high,
