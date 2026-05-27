@@ -1045,7 +1045,7 @@ class ShopListScreen extends StatelessWidget {
           return _CustomerScrollView(
             children: [
               const _CustomerSectionHeader(
-                title: 'Choose your store',
+                title: 'Choose your Items',
                 subtitle: 'Browse needed items near you',
               ),
               for (var index = 0; index < shops.length; index++) ...[
