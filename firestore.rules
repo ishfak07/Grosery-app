@@ -28,6 +28,10 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/support_tickets/$(ticketId));
     }
 
+    function ticketAfter(ticketId) {
+      return getAfter(/databases/$(database)/documents/support_tickets/$(ticketId));
+    }
+
     match /users/{uid} {
       allow create: if signedIn() && request.auth.uid == uid &&
         (isBootstrapAdmin() || request.resource.data.role == 'user');
@@ -76,9 +80,10 @@ service cloud.firestore {
     }
 
     match /support_messages/{messageId} {
-      allow create: if notBlocked() && (
+      allow create: if notBlocked() &&
+        request.resource.data.senderId == request.auth.uid && (
         isAdmin() ||
-        ticket(request.resource.data.ticketId).data.userId == request.auth.uid
+        ticketAfter(request.resource.data.ticketId).data.userId == request.auth.uid
       );
       allow read: if signedIn() && (
         isAdmin() ||

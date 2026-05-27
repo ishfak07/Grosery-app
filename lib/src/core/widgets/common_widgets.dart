@@ -24,6 +24,13 @@ class FirebaseSetupBanner extends StatelessWidget {
         color: const Color(0xFFFFF5E5),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFFFFD89A)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4F3615).withOpacity(0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Text(
         appState.firebaseError ??
@@ -53,31 +60,67 @@ class EmptyState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 52, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE1EAE3)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF173C2A).withOpacity(0.07),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF66736B),
+            child: Padding(
+              padding: const EdgeInsets.all(22),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 68,
+                    height: 68,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      icon,
+                      size: 34,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
+                  const SizedBox(height: 14),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: const Color(0xFF66736B),
+                          height: 1.35,
+                        ),
+                  ),
+                  if (action != null) ...[
+                    const SizedBox(height: 18),
+                    action!,
+                  ],
+                ],
+              ),
             ),
-            if (action != null) ...[
-              const SizedBox(height: 16),
-              action!,
-            ],
-          ],
+          ),
         ),
       ),
     );
@@ -92,13 +135,35 @@ class LoadingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 12),
-          Text(message),
-        ],
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE1EAE3)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF173C2A).withOpacity(0.06),
+              blurRadius: 22,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(strokeWidth: 2.6),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -116,6 +181,7 @@ class StatusChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
+        border: Border.all(color: color.withOpacity(0.2)),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -168,6 +234,7 @@ class SectionTitle extends StatelessWidget {
             title,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w900,
+                  letterSpacing: 0,
                 ),
           ),
         ),
@@ -329,7 +396,14 @@ class PrimaryActionButton extends StatelessWidget {
 
     return ElevatedButton(
       onPressed: isLoading ? null : onPressed,
-      child: child,
+      style: ElevatedButton.styleFrom(
+        disabledBackgroundColor: const Color(0xFFC8D7CD),
+        disabledForegroundColor: Colors.white,
+      ),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 180),
+        child: child,
+      ),
     );
   }
 }

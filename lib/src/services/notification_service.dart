@@ -32,18 +32,23 @@ class NotificationService {
     await _configureLocalNotifications();
 
     final messaging = FirebaseMessaging.instance;
-    await messaging.requestPermission(alert: true, badge: true, sound: true);
-    await messaging.setForegroundNotificationPresentationOptions(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-    await _saveToken(uid, await messaging.getToken());
-    await _tokenRefreshSubscription?.cancel();
-    _tokenRefreshSubscription =
-        FirebaseMessaging.instance.onTokenRefresh.listen(
-      (token) => unawaited(_saveToken(uid, token)),
-    );
+    try {
+      await messaging.requestPermission(alert: true, badge: true, sound: true);
+      await messaging.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      await _trySaveToken(uid, await messaging.getToken());
+      await _tokenRefreshSubscription?.cancel();
+      _tokenRefreshSubscription =
+          FirebaseMessaging.instance.onTokenRefresh.listen(
+        (token) => unawaited(_trySaveToken(uid, token)),
+      );
+    } catch (_) {
+      // FCM can fail on emulators or devices with restricted Google services.
+      // Core app flows should continue without push token registration.
+    }
 
     if (!_foregroundListenerConfigured) {
       _foregroundListenerConfigured = true;
@@ -87,6 +92,14 @@ class NotificationService {
       },
       SetOptions(merge: true),
     );
+  }
+
+  Future<void> _trySaveToken(String uid, String? token) async {
+    try {
+      await _saveToken(uid, token);
+    } catch (_) {
+      // Token persistence is best-effort and should never block app usage.
+    }
   }
 
   Future<void> _showForegroundNotification(RemoteMessage message) async {

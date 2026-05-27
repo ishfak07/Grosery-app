@@ -8,44 +8,337 @@ import '../../core/widgets/common_widgets.dart';
 import '../../services/auth_service.dart';
 import '../../state/app_state.dart';
 
+const _authBackground = Color(0xFFF7FAF5);
+const _authSurface = Color(0xFFFFFFFF);
+const _authInk = Color(0xFF10231A);
+const _authMuted = Color(0xFF66736B);
+const _authLine = Color(0xFFDDE8DF);
+const _authPrimary = Color(0xFF176B45);
+const _authPrimaryLight = Color(0xFFE9F7EF);
+const _authAccent = Color(0xFFE86F4A);
+
+class _AuthBackdrop extends StatelessWidget {
+  const _AuthBackdrop({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFFBFDF9),
+            Color(0xFFEFF7F2),
+            Color(0xFFFFF8F3),
+          ],
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _AuthScaffold extends StatelessWidget {
+  const _AuthScaffold({
+    required this.title,
+    required this.children,
+    this.appBarTitle,
+  });
+
+  final String title;
+  final String? appBarTitle;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _authBackground,
+      appBar: appBarTitle == null
+          ? null
+          : AppBar(
+              title: Text(appBarTitle!),
+              backgroundColor: _authBackground.withOpacity(0.96),
+              shape: const Border(bottom: BorderSide(color: _authLine)),
+            ),
+      body: _AuthBackdrop(
+        child: SafeArea(
+          top: appBarTitle == null,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final horizontal = constraints.maxWidth >= 720 ? 24.0 : 16.0;
+              return ListView(
+                padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 24),
+                children: [
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 520),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (appBarTitle == null) ...[
+                            const _AuthBrandMark(),
+                            const SizedBox(height: 20),
+                          ],
+                          Text(
+                            title,
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(
+                                  color: _authInk,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0,
+                                ),
+                          ),
+                          const SizedBox(height: 14),
+                          ...children,
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthCard extends StatelessWidget {
+  const _AuthCard(
+      {required this.child, this.padding = const EdgeInsets.all(16)});
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: _authSurface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _authLine),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF163526).withOpacity(0.08),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _AuthBrandMark extends StatelessWidget {
+  const _AuthBrandMark();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [_authPrimary, _authAccent],
+            ),
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: _authPrimary.withOpacity(0.22),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.local_grocery_store,
+            color: Colors.white,
+            size: 27,
+          ),
+        ),
+        const SizedBox(width: 12),
+        const Expanded(
+          child: Text(
+            AppConstants.appName,
+            style: TextStyle(
+              color: _authInk,
+              fontWeight: FontWeight.w900,
+              fontSize: 17,
+              letterSpacing: 0,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AuthHeroPanel extends StatelessWidget {
+  const _AuthHeroPanel({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF163D2C),
+            Color(0xFF176B45),
+            Color(0xFFE86F4A),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _authPrimary.withOpacity(0.2),
+            blurRadius: 28,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 21,
+                    fontWeight: FontWeight.w900,
+                    height: 1.15,
+                    letterSpacing: 0,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  message,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.82),
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withOpacity(0.18)),
+            ),
+            child: Icon(icon, color: Colors.white, size: 40),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 92,
-                height: 92,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: const Icon(
-                  Icons.local_grocery_store,
-                  color: Colors.white,
-                  size: 44,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                AppConstants.appName,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
+      backgroundColor: _authBackground,
+      body: _AuthBackdrop(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: _AuthCard(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.92, end: 1),
+                      duration: const Duration(milliseconds: 900),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, child) {
+                        return Transform.scale(scale: value, child: child);
+                      },
+                      child: Container(
+                        width: 88,
+                        height: 88,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [_authPrimary, _authAccent],
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.local_grocery_store,
+                          color: Colors.white,
+                          size: 44,
+                        ),
+                      ),
                     ),
+                    const SizedBox(height: 18),
+                    Text(
+                      AppConstants.appName,
+                      textAlign: TextAlign.center,
+                      style:
+                          Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                color: _authInk,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0,
+                              ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Local groceries, lists, pickup, and COD delivery.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _authMuted,
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(strokeWidth: 2.6),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 8),
-              const Text('Local groceries, lists, pickup, and COD delivery.'),
-              const SizedBox(height: 24),
-              const CircularProgressIndicator(),
-            ],
+            ),
           ),
         ),
       ),
@@ -92,88 +385,202 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            FirebaseSetupBanner(appState: appState),
-            Expanded(
-              child: PageView.builder(
-                controller: _controller,
-                onPageChanged: (value) => setState(() => _page = value),
-                itemCount: _items.length,
-                itemBuilder: (context, index) {
-                  final item = _items[index];
-                  return Padding(
-                    padding: const EdgeInsets.all(28),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          item.icon,
-                          size: 90,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(height: 28),
-                        Text(
-                          item.title,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w900),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          item.message,
-                          textAlign: TextAlign.center,
-                          style:
-                              Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    color: const Color(0xFF66736B),
-                                  ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+      backgroundColor: _authBackground,
+      body: _AuthBackdrop(
+        child: SafeArea(
+          child: Column(
+            children: [
+              FirebaseSetupBanner(appState: appState),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: _AuthBrandMark(),
               ),
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                _items.length,
-                (index) => AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: _page == index ? 26 : 8,
-                  height: 8,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    color: _page == index
-                        ? Theme.of(context).colorScheme.primary
-                        : const Color(0xFFD7DED8),
-                    borderRadius: BorderRadius.circular(20),
+              Expanded(
+                child: PageView.builder(
+                  controller: _controller,
+                  onPageChanged: (value) => setState(() => _page = value),
+                  itemCount: _items.length,
+                  itemBuilder: (context, index) {
+                    final item = _items[index];
+                    return SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            constraints: const BoxConstraints(maxWidth: 420),
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              gradient: const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Color(0xFF163D2C),
+                                  Color(0xFF176B45),
+                                  Color(0xFFE86F4A),
+                                ],
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: _authPrimary.withOpacity(0.2),
+                                  blurRadius: 28,
+                                  offset: const Offset(0, 16),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: [
+                                Container(
+                                  width: 94,
+                                  height: 94,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: Colors.white.withOpacity(0.18),
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    item.icon,
+                                    size: 48,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                Text(
+                                  item.title,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0,
+                                      ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  item.message,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.82),
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          const Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _OnboardingChip(
+                                icon: Icons.eco_outlined,
+                                label: 'Fresh',
+                              ),
+                              _OnboardingChip(
+                                icon: Icons.flash_on_outlined,
+                                label: 'Fast',
+                              ),
+                              _OnboardingChip(
+                                icon: Icons.verified_outlined,
+                                label: 'Trusted',
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  _items.length,
+                  (index) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 240),
+                    curve: Curves.easeOutCubic,
+                    width: _page == index ? 28 : 8,
+                    height: 8,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: _page == index ? _authPrimary : _authLine,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: PrimaryActionButton(
-                label: _page == _items.length - 1 ? 'Get started' : 'Next',
-                icon: Icons.arrow_forward,
-                onPressed: () async {
-                  if (_page == _items.length - 1) {
-                    await context.read<AppState>().markOnboardingComplete();
-                    return;
-                  }
-                  await _controller.nextPage(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeOut,
-                  );
-                },
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: PrimaryActionButton(
+                    label: _page == _items.length - 1 ? 'Get started' : 'Next',
+                    icon: Icons.arrow_forward,
+                    onPressed: () async {
+                      if (_page == _items.length - 1) {
+                        await context.read<AppState>().markOnboardingComplete();
+                        return;
+                      }
+                      await _controller.nextPage(
+                        duration: const Duration(milliseconds: 280),
+                        curve: Curves.easeOutCubic,
+                      );
+                    },
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _OnboardingChip extends StatelessWidget {
+  const _OnboardingChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _authLine),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF163526).withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 17, color: _authPrimary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: _authInk,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -210,74 +617,67 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    return Scaffold(
-      appBar: AppBar(title: const Text(AppConstants.appName)),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            FirebaseSetupBanner(appState: appState),
-            const SizedBox(height: 16),
-            Text(
-              'Welcome back',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-                'Login with phone and password. Registration and password reset do not use OTP.'),
-            const SizedBox(height: 24),
-            Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  AppPhoneField(
-                    controller: _phone,
-                  ),
-                  const SizedBox(height: 12),
-                  AppTextField(
-                    controller: _password,
-                    label: 'Password',
-                    obscureText: true,
-                    validator: Validators.password,
-                    prefixIcon: Icons.lock,
-                  ),
-                  const SizedBox(height: 18),
-                  PrimaryActionButton(
-                    label: 'Login',
-                    icon: Icons.login,
-                    isLoading: _isLoading,
-                    onPressed: appState.firebaseAvailable ? _login : null,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: appState.firebaseAvailable
-                  ? () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const RegisterDetailsScreen(),
-                        ),
-                      )
-                  : null,
-              icon: const Icon(Icons.person_add),
-              label: const Text('Create account'),
-            ),
-            TextButton(
-              onPressed: appState.firebaseAvailable
-                  ? () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const ForgotPasswordPhoneScreen(),
-                        ),
-                      )
-                  : null,
-              child: const Text('Forgot password?'),
-            ),
-          ],
+    return _AuthScaffold(
+      title: 'Welcome back',
+      children: [
+        FirebaseSetupBanner(appState: appState),
+        const _AuthHeroPanel(
+          icon: Icons.shopping_bag_outlined,
+          title: 'Fresh groceries are waiting',
+          message:
+              'Login with your phone and password to reorder, track deliveries, and send shopping lists.',
         ),
-      ),
+        const SizedBox(height: 16),
+        _AuthCard(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                AppPhoneField(
+                  controller: _phone,
+                ),
+                const SizedBox(height: 12),
+                AppTextField(
+                  controller: _password,
+                  label: 'Password',
+                  obscureText: true,
+                  validator: Validators.password,
+                  prefixIcon: Icons.lock,
+                ),
+                const SizedBox(height: 18),
+                PrimaryActionButton(
+                  label: 'Login',
+                  icon: Icons.login,
+                  isLoading: _isLoading,
+                  onPressed: appState.firebaseAvailable ? _login : null,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: appState.firebaseAvailable
+              ? () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const RegisterDetailsScreen(),
+                    ),
+                  )
+              : null,
+          icon: const Icon(Icons.person_add),
+          label: const Text('Create account'),
+        ),
+        TextButton(
+          onPressed: appState.firebaseAvailable
+              ? () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ForgotPasswordPhoneScreen(),
+                    ),
+                  )
+              : null,
+          child: const Text('Forgot password?'),
+        ),
+      ],
     );
   }
 
@@ -325,38 +725,37 @@ class _ForgotPasswordPhoneScreenState extends State<ForgotPasswordPhoneScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Forgot password')),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text(
-                'Reset securely',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                  'Request approval from admin. After approval, you can set a new password here.'),
-              const SizedBox(height: 20),
-              AppPhoneField(
-                controller: _phone,
-              ),
-              const SizedBox(height: 18),
-              PrimaryActionButton(
-                label: 'Request reset',
-                icon: Icons.lock_reset,
-                isLoading: _isLoading,
-                onPressed: _requestReset,
-              ),
-            ],
+    return _AuthScaffold(
+      appBarTitle: 'Forgot password',
+      title: 'Reset securely',
+      children: [
+        const _AuthHeroPanel(
+          icon: Icons.lock_reset,
+          title: 'Admin-approved reset',
+          message:
+              'Request approval first. Once approved, you can set a new password here.',
+        ),
+        const SizedBox(height: 16),
+        _AuthCard(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                AppPhoneField(
+                  controller: _phone,
+                ),
+                const SizedBox(height: 18),
+                PrimaryActionButton(
+                  label: 'Request reset',
+                  icon: Icons.lock_reset,
+                  isLoading: _isLoading,
+                  onPressed: _requestReset,
+                ),
+              ],
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 
@@ -418,71 +817,71 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Complete profile')),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text(
-                'Create account',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-              ),
-              const SizedBox(height: 6),
-              const Text('Enter your details. No OTP is required.'),
-              const SizedBox(height: 20),
-              AppTextField(
-                controller: _name,
-                label: 'Full name',
-                validator: (value) =>
-                    Validators.requiredText(value, 'Full name'),
-                prefixIcon: Icons.person,
-              ),
-              const SizedBox(height: 12),
-              AppPhoneField(
-                controller: _phone,
-              ),
-              const SizedBox(height: 12),
-              AppTextField(
-                controller: _address,
-                label: 'Delivery address',
-                validator: (value) =>
-                    Validators.requiredText(value, 'Delivery address'),
-                maxLines: 3,
-                prefixIcon: Icons.home,
-              ),
-              const SizedBox(height: 12),
-              AppTextField(
-                controller: _password,
-                label: 'Password',
-                obscureText: true,
-                validator: Validators.password,
-                prefixIcon: Icons.lock,
-              ),
-              const SizedBox(height: 12),
-              AppTextField(
-                controller: _confirmPassword,
-                label: 'Confirm password',
-                obscureText: true,
-                validator: (value) =>
-                    Validators.confirmPassword(value, _password.text),
-                prefixIcon: Icons.lock_outline,
-              ),
-              const SizedBox(height: 18),
-              PrimaryActionButton(
-                label: 'Create account',
-                icon: Icons.check_circle,
-                isLoading: _isLoading,
-                onPressed: _completeRegistration,
-              ),
-            ],
+    return _AuthScaffold(
+      appBarTitle: 'Complete profile',
+      title: 'Create account',
+      children: [
+        const _AuthHeroPanel(
+          icon: Icons.person_add_alt,
+          title: 'Your grocery profile',
+          message:
+              'Add your delivery details once and checkout faster on every order.',
+        ),
+        const SizedBox(height: 16),
+        _AuthCard(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                AppTextField(
+                  controller: _name,
+                  label: 'Full name',
+                  validator: (value) =>
+                      Validators.requiredText(value, 'Full name'),
+                  prefixIcon: Icons.person,
+                ),
+                const SizedBox(height: 12),
+                AppPhoneField(
+                  controller: _phone,
+                ),
+                const SizedBox(height: 12),
+                AppTextField(
+                  controller: _address,
+                  label: 'Delivery address',
+                  validator: (value) =>
+                      Validators.requiredText(value, 'Delivery address'),
+                  maxLines: 3,
+                  prefixIcon: Icons.home,
+                ),
+                const SizedBox(height: 12),
+                AppTextField(
+                  controller: _password,
+                  label: 'Password',
+                  obscureText: true,
+                  validator: Validators.password,
+                  prefixIcon: Icons.lock,
+                ),
+                const SizedBox(height: 12),
+                AppTextField(
+                  controller: _confirmPassword,
+                  label: 'Confirm password',
+                  obscureText: true,
+                  validator: (value) =>
+                      Validators.confirmPassword(value, _password.text),
+                  prefixIcon: Icons.lock_outline,
+                ),
+                const SizedBox(height: 18),
+                PrimaryActionButton(
+                  label: 'Create account',
+                  icon: Icons.check_circle,
+                  isLoading: _isLoading,
+                  onPressed: _completeRegistration,
+                ),
+              ],
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 
@@ -547,57 +946,96 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   Widget build(BuildContext context) {
     final status = _status;
     final isApproved = status?.isApproved ?? false;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Set new password')),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
+    return _AuthScaffold(
+      appBarTitle: 'Set new password',
+      title: 'Password reset',
+      children: [
+        _AuthCard(
+          child: Row(
             children: [
-              Text(
-                widget.phone,
-                style: Theme.of(context).textTheme.titleMedium,
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color:
+                      isApproved ? _authPrimaryLight : const Color(0xFFFFF5E5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  isApproved ? Icons.verified_outlined : Icons.hourglass_top,
+                  color: isApproved ? _authPrimary : _authAccent,
+                ),
               ),
-              const SizedBox(height: 8),
-              Text(_statusMessage(status)),
-              const SizedBox(height: 16),
-              if (isApproved) ...[
-                AppTextField(
-                  controller: _password,
-                  label: 'New password',
-                  obscureText: true,
-                  validator: Validators.password,
-                  prefixIcon: Icons.lock,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.phone,
+                      style: const TextStyle(
+                        color: _authInk,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      _statusMessage(status),
+                      style: const TextStyle(
+                        color: _authMuted,
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                AppTextField(
-                  controller: _confirmPassword,
-                  label: 'Confirm new password',
-                  obscureText: true,
-                  validator: (value) =>
-                      Validators.confirmPassword(value, _password.text),
-                  prefixIcon: Icons.lock_outline,
-                ),
-                const SizedBox(height: 18),
-                PrimaryActionButton(
-                  label: 'Update password',
-                  icon: Icons.save,
-                  isLoading: _isLoading,
-                  onPressed: _reset,
-                ),
-              ] else ...[
-                PrimaryActionButton(
-                  label: _isChecking ? 'Checking' : 'Check approval',
-                  icon: Icons.refresh,
-                  isLoading: _isChecking,
-                  onPressed: _checkStatus,
-                ),
-              ],
+              ),
             ],
           ),
         ),
-      ),
+        const SizedBox(height: 16),
+        _AuthCard(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                if (isApproved) ...[
+                  AppTextField(
+                    controller: _password,
+                    label: 'New password',
+                    obscureText: true,
+                    validator: Validators.password,
+                    prefixIcon: Icons.lock,
+                  ),
+                  const SizedBox(height: 12),
+                  AppTextField(
+                    controller: _confirmPassword,
+                    label: 'Confirm new password',
+                    obscureText: true,
+                    validator: (value) =>
+                        Validators.confirmPassword(value, _password.text),
+                    prefixIcon: Icons.lock_outline,
+                  ),
+                  const SizedBox(height: 18),
+                  PrimaryActionButton(
+                    label: 'Update password',
+                    icon: Icons.save,
+                    isLoading: _isLoading,
+                    onPressed: _reset,
+                  ),
+                ] else ...[
+                  PrimaryActionButton(
+                    label: _isChecking ? 'Checking' : 'Check approval',
+                    icon: Icons.refresh,
+                    isLoading: _isChecking,
+                    onPressed: _checkStatus,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 

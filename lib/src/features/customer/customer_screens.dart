@@ -14,6 +14,517 @@ import '../../core/widgets/common_widgets.dart';
 import '../../models/models.dart';
 import '../../state/app_state.dart';
 
+const _customerBackground = Color(0xFFF7FAF5);
+const _customerSurface = Color(0xFFFFFFFF);
+const _customerInk = Color(0xFF10231A);
+const _customerMuted = Color(0xFF66736B);
+const _customerLine = Color(0xFFDDE8DF);
+const _customerPrimary = Color(0xFF176B45);
+const _customerPrimaryLight = Color(0xFFE9F7EF);
+const _customerAccent = Color(0xFFE86F4A);
+const _customerGold = Color(0xFFF6B84B);
+const _customerBlue = Color(0xFF2E6F9E);
+const _customerDanger = Color(0xFFC83A2B);
+const _customerWarning = Color(0xFFB66D00);
+
+class _CustomerBackdrop extends StatelessWidget {
+  const _CustomerBackdrop({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFFBFDF9),
+            Color(0xFFEFF7F2),
+            Color(0xFFFFF8F3),
+          ],
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _CustomerScaffold extends StatelessWidget {
+  const _CustomerScaffold({
+    required this.title,
+    required this.body,
+    this.actions,
+    this.bottomNavigationBar,
+  });
+
+  final String title;
+  final Widget body;
+  final List<Widget>? actions;
+  final Widget? bottomNavigationBar;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _customerBackground,
+      appBar: AppBar(
+        title: Text(title),
+        actions: actions,
+        backgroundColor: _customerBackground.withOpacity(0.96),
+        foregroundColor: _customerInk,
+        shape: const Border(bottom: BorderSide(color: _customerLine)),
+      ),
+      body: _CustomerBackdrop(child: body),
+      bottomNavigationBar: bottomNavigationBar,
+    );
+  }
+}
+
+class _CustomerScrollView extends StatelessWidget {
+  const _CustomerScrollView({
+    required this.children,
+    this.padding = const EdgeInsets.fromLTRB(16, 16, 16, 24),
+  });
+
+  final List<Widget> children;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final horizontal = constraints.maxWidth >= 720 ? 24.0 : 16.0;
+          return ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: horizontal),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 720),
+                    child: Padding(
+                      padding: padding,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: children,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _CustomerCard extends StatelessWidget {
+  const _CustomerCard({
+    required this.child,
+    this.padding = const EdgeInsets.all(14),
+    this.onTap,
+    this.color = _customerSurface,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final VoidCallback? onTap;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(8);
+    final content = Material(
+      color: color,
+      borderRadius: radius,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: Padding(
+          padding: padding,
+          child: child,
+        ),
+      ),
+    );
+
+    return _Pressable(
+      enabled: onTap != null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          border: Border.all(color: _customerLine),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF163526).withOpacity(0.08),
+              blurRadius: 22,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: content,
+      ),
+    );
+  }
+}
+
+class _Pressable extends StatefulWidget {
+  const _Pressable({
+    required this.child,
+    this.enabled = true,
+  });
+
+  final Widget child;
+  final bool enabled;
+
+  @override
+  State<_Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<_Pressable> {
+  var _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown:
+          widget.enabled ? (_) => setState(() => _pressed = true) : null,
+      onPointerUp:
+          widget.enabled ? (_) => setState(() => _pressed = false) : null,
+      onPointerCancel:
+          widget.enabled ? (_) => setState(() => _pressed = false) : null,
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        scale: _pressed ? 0.985 : 1,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class _FadeSlideIn extends StatelessWidget {
+  const _FadeSlideIn({
+    required this.child,
+    this.index = 0,
+  });
+
+  final Widget child;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = Duration(milliseconds: 360 + index.clamp(0, 5) * 45);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, (1 - value) * 12),
+            child: child,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+}
+
+class _CustomerIconButton extends StatelessWidget {
+  const _CustomerIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    this.badgeCount = 0,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+  final int badgeCount;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget child = Icon(icon, color: _customerInk);
+    if (badgeCount > 0) {
+      child = Badge.count(count: badgeCount, child: child);
+    }
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: IconButton.filledTonal(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: _customerInk,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          side: const BorderSide(color: _customerLine),
+        ),
+        icon: child,
+      ),
+    );
+  }
+}
+
+class _CustomerSectionHeader extends StatelessWidget {
+  const _CustomerSectionHeader({
+    required this.title,
+    this.subtitle,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String title;
+  final String? subtitle;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: _customerInk,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
+                      ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle!,
+                    style: const TextStyle(
+                      color: _customerMuted,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (actionLabel != null)
+            TextButton(
+              onPressed: onAction,
+              child: Text(actionLabel!),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShimmerBox extends StatefulWidget {
+  const _ShimmerBox({
+    this.width,
+    this.height,
+    this.radius = 8,
+  });
+
+  final double? width;
+  final double? height;
+  final double radius;
+
+  @override
+  State<_ShimmerBox> createState() => _ShimmerBoxState();
+}
+
+class _ShimmerBoxState extends State<_ShimmerBox>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final x = (_controller.value * 2) - 1;
+        return Container(
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(widget.radius),
+            gradient: LinearGradient(
+              begin: Alignment(x - 1, -0.8),
+              end: Alignment(x + 1, 0.8),
+              colors: const [
+                Color(0xFFE8F0EA),
+                Color(0xFFF8FBF8),
+                Color(0xFFE8F0EA),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ProductGridSkeleton extends StatelessWidget {
+  const _ProductGridSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final count = constraints.maxWidth >= 720 ? 3 : 2;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: count * 2,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: count,
+            childAspectRatio: 0.66,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+          ),
+          itemBuilder: (context, index) {
+            return const _CustomerCard(
+              padding: EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _ShimmerBox(width: double.infinity)),
+                  SizedBox(height: 10),
+                  _ShimmerBox(width: 110, height: 13),
+                  SizedBox(height: 8),
+                  _ShimmerBox(width: 80, height: 12),
+                  SizedBox(height: 12),
+                  _ShimmerBox(width: double.infinity, height: 42),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _ListSkeleton extends StatelessWidget {
+  const _ListSkeleton({this.itemCount = 4});
+
+  final int itemCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: itemCount,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        return const _CustomerCard(
+          padding: EdgeInsets.all(12),
+          child: Row(
+            children: [
+              _ShimmerBox(width: 58, height: 58),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ShimmerBox(width: 160, height: 13),
+                    SizedBox(height: 10),
+                    _ShimmerBox(width: double.infinity, height: 12),
+                    SizedBox(height: 8),
+                    _ShimmerBox(width: 90, height: 12),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+IconData _categoryIcon(String category) {
+  switch (category) {
+    case 'Vegetables':
+      return Icons.eco_outlined;
+    case 'Fruits':
+      return Icons.local_florist_outlined;
+    case 'Rice & Grains':
+      return Icons.rice_bowl_outlined;
+    case 'Dairy':
+      return Icons.icecream_outlined;
+    case 'Meat & Fish':
+      return Icons.set_meal_outlined;
+    case 'Bakery':
+      return Icons.bakery_dining_outlined;
+    case 'Beverages':
+      return Icons.local_cafe_outlined;
+    case 'Household':
+      return Icons.cleaning_services_outlined;
+    default:
+      return Icons.local_grocery_store_outlined;
+  }
+}
+
+Color _statusAccent(String status) {
+  switch (status) {
+    case 'Delivered':
+    case 'Available':
+    case 'open':
+      return _customerPrimary;
+    case 'Cancelled':
+    case 'Rejected':
+    case 'Item Unavailable':
+    case 'Unavailable':
+    case 'closed':
+      return _customerDanger;
+    case 'Pending':
+    case 'Need Clarification':
+    case 'Bill Updated':
+    case 'pending':
+    case 'receipt uploaded':
+      return _customerWarning;
+    case 'Accepted':
+    case 'Shopping Started':
+    case 'Out for Delivery':
+    case 'replied':
+      return _customerBlue;
+    default:
+      return _customerMuted;
+  }
+}
+
 class CustomerHomeScreen extends StatelessWidget {
   const CustomerHomeScreen({super.key});
 
@@ -22,55 +533,33 @@ class CustomerHomeScreen extends StatelessWidget {
     final appState = context.watch<AppState>();
     final profile = appState.profile!;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(AppConstants.appName),
-        actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-            ),
-            icon: const Icon(Icons.notifications_outlined),
-          ),
-          IconButton(
-            tooltip: 'Cart',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const CartScreen()),
-            ),
-            icon: Badge.count(
-              count: appState.cartCount,
-              isLabelVisible: appState.cartCount > 0,
-              child: const Icon(Icons.shopping_cart_outlined),
-            ),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
+      backgroundColor: _customerBackground,
+      body: _CustomerBackdrop(
+        child: _CustomerScrollView(
+          padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
           children: [
             FirebaseSetupBanner(appState: appState),
-            Text(
-              'Hi ${profile.fullName.split(' ').first}',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+            _HomeHeader(
+              profile: profile,
+              cartCount: appState.cartCount,
             ),
-            const SizedBox(height: 4),
-            Text(
-              profile.address,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Color(0xFF66736B)),
+            const SizedBox(height: 16),
+            _HomeSearchCallout(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ProductListScreen()),
+              ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
+            const _HomePromoBanner(),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
                   child: _HomeActionTile(
                     icon: Icons.storefront,
-                    title: 'Shops',
-                    subtitle: 'Choose a partner shop',
+                    title: 'Partner shops',
+                    subtitle: 'Pick your favorite local store',
+                    accent: _customerPrimary,
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const ShopListScreen()),
                     ),
@@ -80,8 +569,9 @@ class CustomerHomeScreen extends StatelessWidget {
                 Expanded(
                   child: _HomeActionTile(
                     icon: Icons.receipt_long,
-                    title: 'Upload list',
-                    subtitle: 'Photo order',
+                    title: 'Photo list',
+                    subtitle: 'Send any grocery list',
+                    accent: _customerAccent,
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(
                           builder: (_) => const UploadBillScreen()),
@@ -91,36 +581,25 @@ class CustomerHomeScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 22),
-            SectionTitle(
+            _CustomerSectionHeader(
               title: 'Categories',
+              subtitle: 'Shop by daily needs',
               actionLabel: 'All products',
               onAction: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const ProductListScreen()),
               ),
             ),
-            SizedBox(
-              height: 44,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: AppConstants.productCategories.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final category = AppConstants.productCategories[index];
-                  return ActionChip(
-                    label: Text(category),
-                    avatar: const Icon(Icons.category_outlined, size: 18),
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ProductListScreen(category: category),
-                      ),
-                    ),
-                  );
-                },
+            _CategoryRail(
+              onCategoryTap: (category) => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ProductListScreen(category: category),
+                ),
               ),
             ),
             const SizedBox(height: 20),
-            SectionTitle(
-              title: 'Recent products',
+            _CustomerSectionHeader(
+              title: 'Fresh picks',
+              subtitle: 'Recently added to the catalog',
               actionLabel: 'View all',
               onAction: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const ProductListScreen()),
@@ -130,29 +609,385 @@ class CustomerHomeScreen extends StatelessWidget {
           ],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 0,
-        onDestinationSelected: (index) {
-          final routes = [
-            null,
-            const OrderHistoryScreen(),
-            const SupportScreen(),
-            const ProfileScreen(),
-          ];
-          final route = routes[index];
-          if (route != null) {
-            Navigator.of(context)
-                .push(MaterialPageRoute(builder: (_) => route));
-          }
-        },
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.history), label: 'Orders'),
-          NavigationDestination(
-              icon: Icon(Icons.support_agent), label: 'Support'),
-          NavigationDestination(
-              icon: Icon(Icons.person_outline), label: 'Profile'),
+      bottomNavigationBar: const _CustomerBottomNavigation(selectedIndex: 0),
+    );
+  }
+}
+
+class _HomeHeader extends StatelessWidget {
+  const _HomeHeader({
+    required this.profile,
+    required this.cartCount,
+  });
+
+  final UserProfile profile;
+  final int cartCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final firstName = profile.fullName.trim().isEmpty
+        ? 'there'
+        : profile.fullName.trim().split(' ').first;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                AppConstants.appName,
+                style: TextStyle(
+                  color: _customerMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Hi $firstName',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: _customerInk,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.location_on_outlined,
+                    size: 18,
+                    color: _customerAccent,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      profile.address,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _customerMuted,
+                        height: 1.25,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        _CustomerIconButton(
+          tooltip: 'Notifications',
+          icon: Icons.notifications_outlined,
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+          ),
+        ),
+        _CustomerIconButton(
+          tooltip: 'Cart',
+          icon: Icons.shopping_bag_outlined,
+          badgeCount: cartCount,
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const CartScreen()),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HomeSearchCallout extends StatelessWidget {
+  const _HomeSearchCallout({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      onTap: onTap,
+      child: const Row(
+        children: [
+          Icon(Icons.search, color: _customerPrimary),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Search groceries, shops, categories',
+              style: TextStyle(
+                color: _customerMuted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Icon(Icons.tune, color: _customerMuted, size: 20),
         ],
+      ),
+    );
+  }
+}
+
+class _HomePromoBanner extends StatelessWidget {
+  const _HomePromoBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF145C3B),
+            Color(0xFF1E8E5A),
+            Color(0xFFE86F4A),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _customerPrimary.withOpacity(0.22),
+            blurRadius: 28,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.16),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.18)),
+                  ),
+                  child: const Text(
+                    'Fast local delivery',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Fresh groceries, photo lists, and COD in one smooth order.',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    height: 1.15,
+                    letterSpacing: 0,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'We shop from trusted partners and keep you updated.',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.84),
+                    fontWeight: FontWeight.w600,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.13),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white.withOpacity(0.15)),
+                ),
+              ),
+              const Icon(
+                Icons.shopping_basket_outlined,
+                size: 52,
+                color: Colors.white,
+              ),
+              Positioned(
+                right: 4,
+                bottom: 8,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: _customerGold,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.flash_on,
+                    size: 17,
+                    color: _customerInk,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryRail extends StatelessWidget {
+  const _CategoryRail({required this.onCategoryTap});
+
+  final ValueChanged<String> onCategoryTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 78,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: AppConstants.productCategories.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final category = AppConstants.productCategories[index];
+          return _FadeSlideIn(
+            index: index,
+            child: _CategoryPill(
+              category: category,
+              onTap: () => onCategoryTap(category),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _CategoryPill extends StatelessWidget {
+  const _CategoryPill({
+    required this.category,
+    required this.onTap,
+  });
+
+  final String category;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerCard(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      onTap: onTap,
+      color: const Color(0xFFFFFFFF),
+      child: SizedBox(
+        width: 104,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: _customerPrimaryLight,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                _categoryIcon(category),
+                size: 18,
+                color: _customerPrimary,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              category,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _customerInk,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomerBottomNavigation extends StatelessWidget {
+  const _CustomerBottomNavigation({required this.selectedIndex});
+
+  final int selectedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: const Border(top: BorderSide(color: _customerLine)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF10231A).withOpacity(0.07),
+            blurRadius: 22,
+            offset: const Offset(0, -8),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: NavigationBar(
+          selectedIndex: selectedIndex,
+          height: 70,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          onDestinationSelected: (index) {
+            if (index == selectedIndex && index == 0) {
+              return;
+            }
+            final routes = [
+              null,
+              const OrderHistoryScreen(),
+              const SupportScreen(),
+              const ProfileScreen(),
+            ];
+            final route = routes[index];
+            if (route != null) {
+              Navigator.of(context)
+                  .push(MaterialPageRoute(builder: (_) => route));
+            }
+          },
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.receipt_long_outlined),
+              selectedIcon: Icon(Icons.receipt_long),
+              label: 'Orders',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.support_agent_outlined),
+              selectedIcon: Icon(Icons.support_agent),
+              label: 'Support',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -186,10 +1021,7 @@ class _RecentProductsGridState extends State<_RecentProductsGrid> {
         }
         final products = (snapshot.data ?? const <Product>[]).take(6).toList();
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Padding(
-            padding: EdgeInsets.all(24),
-            child: Center(child: CircularProgressIndicator()),
-          );
+          return const _ProductGridSkeleton();
         }
         if (products.isEmpty) {
           return const EmptyState(
@@ -198,18 +1030,26 @@ class _RecentProductsGridState extends State<_RecentProductsGrid> {
             message: 'Admin can add products from the admin dashboard.',
           );
         }
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: products.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 0.72,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemBuilder: (context, index) {
-            return ProductCard(product: products[index]);
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final count = constraints.maxWidth >= 720 ? 3 : 2;
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: products.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: count,
+                childAspectRatio: 0.66,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemBuilder: (context, index) {
+                return _FadeSlideIn(
+                  index: index,
+                  child: ProductCard(product: products[index]),
+                );
+              },
+            );
           },
         );
       },
@@ -222,39 +1062,58 @@ class _HomeActionTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    required this.accent,
     required this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
+  final Color accent;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon,
-                  color: Theme.of(context).colorScheme.primary, size: 30),
-              const SizedBox(height: 14),
-              Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.w900),
+    return _CustomerCard(
+      padding: const EdgeInsets.all(14),
+      onTap: onTap,
+      child: SizedBox(
+        height: 112,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: accent.withOpacity(0.11),
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: const TextStyle(color: Color(0xFF66736B), fontSize: 12),
+              child: Icon(icon, color: accent, size: 24),
+            ),
+            const Spacer(),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _customerInk,
+                fontWeight: FontWeight.w900,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _customerMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                height: 1.2,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -267,13 +1126,13 @@ class ShopListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = context.read<AppState>().firestoreService;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Partner shops')),
+    return _CustomerScaffold(
+      title: 'Partner shops',
       body: StreamBuilder<List<Shop>>(
         stream: store.watchShops(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const LoadingView();
+            return const _ListSkeleton();
           }
           final shops = snapshot.data ?? const <Shop>[];
           if (shops.isEmpty) {
@@ -290,28 +1149,104 @@ class ShopListScreen extends StatelessWidget {
               ),
             );
           }
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: shops.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final shop = shops[index];
-              return Card(
-                child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.storefront)),
-                  title: Text(shop.shopName),
-                  subtitle: Text(shop.address),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ProductListScreen(shop: shop),
+          return _CustomerScrollView(
+            children: [
+              const _CustomerSectionHeader(
+                title: 'Choose your store',
+                subtitle: 'Browse active partners near you',
+              ),
+              for (var index = 0; index < shops.length; index++) ...[
+                _FadeSlideIn(
+                  index: index,
+                  child: _ShopCard(
+                    shop: shops[index],
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ProductListScreen(shop: shops[index]),
+                      ),
                     ),
                   ),
                 ),
-              );
-            },
+                if (index != shops.length - 1) const SizedBox(height: 12),
+              ],
+            ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _ShopCard extends StatelessWidget {
+  const _ShopCard({
+    required this.shop,
+    required this.onTap,
+  });
+
+  final Shop shop;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: _customerPrimaryLight,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.storefront, color: _customerPrimary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  shop.shopName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  shop.address,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _customerMuted,
+                    height: 1.3,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF4F8F5),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: _customerLine),
+            ),
+            child: const Icon(
+              Icons.chevron_right,
+              color: _customerPrimary,
+              size: 20,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -350,33 +1285,44 @@ class _ProductListScreenState extends State<ProductListScreen> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final title = widget.shop?.shopName ?? widget.category ?? 'Products';
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          IconButton(
-            tooltip: 'Cart',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const CartScreen()),
-            ),
-            icon: Badge.count(
-              count: appState.cartCount,
-              isLabelVisible: appState.cartCount > 0,
-              child: const Icon(Icons.shopping_cart_outlined),
-            ),
+    return _CustomerScaffold(
+      title: title,
+      actions: [
+        _CustomerIconButton(
+          tooltip: 'Cart',
+          icon: Icons.shopping_bag_outlined,
+          badgeCount: appState.cartCount,
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const CartScreen()),
           ),
-        ],
-      ),
+        ),
+      ],
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: TextField(
-              controller: _search,
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                labelText: 'Search products',
-                prefixIcon: Icon(Icons.search),
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: TextField(
+                  controller: _search,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Search products',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _search.text.isEmpty
+                        ? const Icon(Icons.tune)
+                        : IconButton(
+                            tooltip: 'Clear search',
+                            onPressed: () {
+                              _search.clear();
+                              setState(() {});
+                            },
+                            icon: const Icon(Icons.close),
+                          ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -390,7 +1336,10 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   );
                 }
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const LoadingView();
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: _ProductGridSkeleton(),
+                  );
                 }
                 final query = _search.text.trim().toLowerCase();
                 final products = (snapshot.data ?? const <Product>[])
@@ -408,17 +1357,25 @@ class _ProductListScreenState extends State<ProductListScreen> {
                     message: 'Try a different search or category.',
                   );
                 }
-                return GridView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: products.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.72,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                  ),
-                  itemBuilder: (context, index) {
-                    return ProductCard(product: products[index]);
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final count = constraints.maxWidth >= 720 ? 3 : 2;
+                    return GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
+                      itemCount: products.length,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: count,
+                        childAspectRatio: 0.66,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                      ),
+                      itemBuilder: (context, index) {
+                        return _FadeSlideIn(
+                          index: index,
+                          child: ProductCard(product: products[index]),
+                        );
+                      },
+                    );
                   },
                 );
               },
@@ -467,60 +1424,157 @@ class ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.read<AppState>();
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ProductDetailsScreen(product: product),
+    return _CustomerCard(
+      padding: EdgeInsets.zero,
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ProductDetailsScreen(product: product),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: ProductImage(url: product.imageUrl, radius: 0),
+                ),
+                Positioned(
+                  left: 8,
+                  top: 8,
+                  right: 42,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.92),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _categoryIcon(product.category),
+                          size: 13,
+                          color: _customerPrimary,
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            product.category,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _customerInk,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      color: product.isAvailable
+                          ? _customerPrimary
+                          : _customerDanger,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: Icon(
+                      product.isAvailable ? Icons.check : Icons.close,
+                      size: 14,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ProductImage(url: product.imageUrl, radius: 0),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(11, 10, 11, 11),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w900,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${product.price.money} / ${product.unit}',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w800,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  product.shopName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _customerMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        product.price.money,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _customerPrimary,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.tonalIcon(
-                      onPressed: product.isAvailable
-                          ? () async {
-                              await appState.addToCart(product);
-                              if (context.mounted) {
-                                showSnack(context, 'Added to cart.');
-                              }
+                    Text(
+                      '/ ${product.unit}',
+                      style: const TextStyle(
+                        color: _customerMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: FilledButton.icon(
+                    onPressed: product.isAvailable
+                        ? () async {
+                            await appState.addToCart(product);
+                            if (context.mounted) {
+                              showSnack(context, 'Added to cart.');
                             }
-                          : null,
-                      icon: const Icon(Icons.add_shopping_cart, size: 18),
-                      label: Text(product.isAvailable ? 'Add' : 'Unavailable'),
+                          }
+                        : null,
+                    icon: Icon(
+                      product.isAvailable
+                          ? Icons.add_shopping_cart
+                          : Icons.block,
+                      size: 17,
                     ),
+                    label: Text(product.isAvailable ? 'Add' : 'Unavailable'),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -534,17 +1588,34 @@ class ProductImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final placeholder = Container(
-      width: double.infinity,
-      height: double.infinity,
-      color: const Color(0xFFEAF0EA),
-      child: const Icon(Icons.local_grocery_store, size: 42),
+    const placeholder = DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFEAF6EF),
+            Color(0xFFFFF8F3),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.local_grocery_store_outlined,
+          color: _customerPrimary,
+          size: 42,
+        ),
+      ),
     );
-    final brokenImage = Container(
-      width: double.infinity,
-      height: double.infinity,
-      color: const Color(0xFFEAF0EA),
-      child: const Icon(Icons.broken_image, size: 42),
+    const brokenImage = DecoratedBox(
+      decoration: BoxDecoration(color: Color(0xFFEAF0EA)),
+      child: Center(
+        child: Icon(
+          Icons.broken_image_outlined,
+          color: _customerMuted,
+          size: 42,
+        ),
+      ),
     );
 
     if (url.isEmpty) {
@@ -565,7 +1636,19 @@ class ProductImage extends StatelessWidget {
           if (loadingProgress == null) {
             return child;
           }
-          return placeholder;
+          return const Stack(
+            fit: StackFit.expand,
+            children: [
+              _ShimmerBox(radius: 0),
+              Center(
+                child: Icon(
+                  Icons.local_grocery_store_outlined,
+                  color: _customerPrimary,
+                  size: 36,
+                ),
+              ),
+            ],
+          );
         },
         errorBuilder: (_, __, ___) => brokenImage,
       ),
@@ -580,59 +1663,169 @@ class ProductDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(product.name)),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+    return _CustomerScaffold(
+      title: product.name,
+      body: _CustomerScrollView(
         children: [
-          AspectRatio(
-            aspectRatio: 1.2,
-            child: ProductImage(url: product.imageUrl),
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  product.name,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+          _CustomerCard(
+            padding: EdgeInsets.zero,
+            child: Stack(
+              children: [
+                AspectRatio(
+                  aspectRatio: 1.05,
+                  child: ProductImage(url: product.imageUrl, radius: 8),
                 ),
-              ),
-              StatusChip(
-                status: product.isAvailable ? 'Available' : 'Unavailable',
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(product.shopName),
-          const SizedBox(height: 8),
-          Text(
-            '${product.price.money} / ${product.unit}',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.w900,
+                Positioned(
+                  left: 12,
+                  top: 12,
+                  child: StatusChip(
+                    status: product.isAvailable ? 'Available' : 'Unavailable',
+                  ),
                 ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
-          Text(product.description.isEmpty
-              ? 'No description added.'
-              : product.description),
-          const SizedBox(height: 24),
-          PrimaryActionButton(
-            label: product.isAvailable ? 'Add to cart' : 'Unavailable',
-            icon: Icons.add_shopping_cart,
-            onPressed: product.isAvailable
-                ? () async {
-                    await context.read<AppState>().addToCart(product);
-                    if (context.mounted) {
-                      showSnack(context, 'Added to cart.');
-                    }
-                  }
-                : null,
+          _CustomerCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        product.name,
+                        style:
+                            Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  color: _customerInk,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0,
+                                ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _customerPrimaryLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        product.category,
+                        style: const TextStyle(
+                          color: _customerPrimary,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.storefront_outlined,
+                      size: 18,
+                      color: _customerMuted,
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        product.shopName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _customerMuted,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF4F8F5),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: _customerLine),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          product.price.money,
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    color: _customerPrimary,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0,
+                                  ),
+                        ),
+                      ),
+                      Text(
+                        'per ${product.unit}',
+                        style: const TextStyle(
+                          color: _customerMuted,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _CustomerCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'About this item',
+                  style: TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  product.description.isEmpty
+                      ? 'No description added yet. You can still add it to your cart and confirm details at checkout.'
+                      : product.description,
+                  style: const TextStyle(
+                    color: _customerMuted,
+                    fontWeight: FontWeight.w600,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+        child: PrimaryActionButton(
+          label: product.isAvailable ? 'Add to cart' : 'Unavailable',
+          icon: product.isAvailable ? Icons.add_shopping_cart : Icons.block,
+          onPressed: product.isAvailable
+              ? () async {
+                  await context.read<AppState>().addToCart(product);
+                  if (context.mounted) {
+                    showSnack(context, 'Added to cart.');
+                  }
+                }
+              : null,
+        ),
       ),
     );
   }
@@ -645,13 +1838,10 @@ class CartScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final items = appState.cartItems;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Cart')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (items.isEmpty && !appState.hasBillImage)
-            EmptyState(
+    return _CustomerScaffold(
+      title: 'Cart',
+      body: items.isEmpty && !appState.hasBillImage
+          ? EmptyState(
               icon: Icons.shopping_cart_outlined,
               title: 'Your cart is empty',
               message: 'Add catalog products or upload a shopping list photo.',
@@ -663,36 +1853,39 @@ class CartScreen extends StatelessWidget {
                 label: const Text('Browse products'),
               ),
             )
-          else ...[
-            for (final item in items) _CartItemTile(item: item),
-            if (appState.hasBillImage) ...[
-              _BillImagePreview(path: appState.billImagePath!),
-              const SizedBox(height: 10),
-              const _AttachedListPriceNotice(),
-            ],
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Catalog subtotal',
-                        style: TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                    ),
-                    Text(
-                      appState.cartSubtotal.money,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                  ],
+          : _CustomerScrollView(
+              children: [
+                _CartSummaryPanel(
+                  itemCount: appState.cartCount,
+                  subtotal: appState.cartSubtotal,
+                  hasBillImage: appState.hasBillImage,
                 ),
-              ),
+                const SizedBox(height: 16),
+                if (items.isNotEmpty)
+                  const _CustomerSectionHeader(
+                    title: 'Items in cart',
+                    subtitle: 'Adjust quantities before checkout',
+                  ),
+                for (var index = 0; index < items.length; index++) ...[
+                  _FadeSlideIn(
+                    index: index,
+                    child: _CartItemTile(item: items[index]),
+                  ),
+                  if (index != items.length - 1) const SizedBox(height: 10),
+                ],
+                if (appState.hasBillImage) ...[
+                  if (items.isNotEmpty) const SizedBox(height: 16),
+                  const _CustomerSectionHeader(
+                    title: 'Attached list',
+                    subtitle: 'Admin will review this with your order',
+                  ),
+                  _BillImagePreview(path: appState.billImagePath!),
+                  const SizedBox(height: 10),
+                  const _AttachedListPriceNotice(),
+                ],
+                const SizedBox(height: 88),
+              ],
             ),
-          ],
-        ],
-      ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(16),
         child: Column(
@@ -725,6 +1918,97 @@ class CartScreen extends StatelessWidget {
   }
 }
 
+class _CartSummaryPanel extends StatelessWidget {
+  const _CartSummaryPanel({
+    required this.itemCount,
+    required this.subtotal,
+    required this.hasBillImage,
+  });
+
+  final int itemCount;
+  final double subtotal;
+  final bool hasBillImage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF163D2C),
+            Color(0xFF176B45),
+            Color(0xFF2E6F9E),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _customerPrimary.withOpacity(0.2),
+            blurRadius: 28,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  itemCount == 1
+                      ? '1 catalog item'
+                      : '$itemCount catalog items',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.82),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  subtotal.money,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  hasBillImage
+                      ? 'Photo list attached for admin pricing'
+                      : 'Catalog subtotal before delivery',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 62,
+            height: 62,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withOpacity(0.18)),
+            ),
+            child: const Icon(
+              Icons.shopping_bag_outlined,
+              color: Colors.white,
+              size: 34,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CartItemTile extends StatelessWidget {
   const _CartItemTile({required this.item});
 
@@ -733,48 +2017,138 @@ class _CartItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.read<AppState>();
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 64,
-              height: 64,
-              child: ProductImage(url: item.imageUrl),
+    return _CustomerCard(
+      padding: const EdgeInsets.all(10),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 68,
+            height: 68,
+            child: ProductImage(url: item.imageUrl),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${item.price.money} / ${item.unit}',
+                  style: const TextStyle(
+                    color: _customerMuted,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  item.lineTotal.money,
+                  style: const TextStyle(
+                    color: _customerPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(item.name,
-                      style: const TextStyle(fontWeight: FontWeight.w900)),
-                  Text('${item.price.money} / ${item.unit}'),
-                  Text(item.lineTotal.money),
-                ],
-              ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF4F8F5),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: _customerLine),
             ),
-            IconButton(
-              tooltip: 'Decrease',
-              onPressed: () => appState.updateCartQuantity(
-                item.productId,
-                item.quantity - 1,
-              ),
-              icon: const Icon(Icons.remove_circle_outline),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Decrease',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => appState.updateCartQuantity(
+                    item.productId,
+                    item.quantity - 1,
+                  ),
+                  icon: const Icon(Icons.remove, size: 18),
+                ),
+                SizedBox(
+                  width: 24,
+                  child: Text(
+                    '${item.quantity}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: _customerInk,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Increase',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => appState.updateCartQuantity(
+                    item.productId,
+                    item.quantity + 1,
+                  ),
+                  icon: const Icon(Icons.add, size: 18),
+                ),
+              ],
             ),
-            Text('${item.quantity}',
-                style: const TextStyle(fontWeight: FontWeight.w900)),
-            IconButton(
-              tooltip: 'Increase',
-              onPressed: () => appState.updateCartQuantity(
-                item.productId,
-                item.quantity + 1,
-              ),
-              icon: const Icon(Icons.add_circle_outline),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UploadPlaceholder extends StatelessWidget {
+  const _UploadPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerCard(
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        children: [
+          Container(
+            width: 78,
+            height: 78,
+            decoration: BoxDecoration(
+              color: _customerPrimaryLight,
+              borderRadius: BorderRadius.circular(8),
             ),
-          ],
-        ),
+            child: const Icon(
+              Icons.add_photo_alternate_outlined,
+              color: _customerPrimary,
+              size: 38,
+            ),
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'No list photo selected',
+            style: TextStyle(
+              color: _customerInk,
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Use gallery or camera to attach your list.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _customerMuted,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -786,18 +2160,45 @@ class UploadBillScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    return Scaffold(
-      appBar: AppBar(title: const Text('Upload list or bill')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+    return _CustomerScaffold(
+      title: 'Upload list',
+      body: _CustomerScrollView(
         children: [
-          const Text(
-            'Upload a clear photo of a handwritten list, printed bill, or shop list.',
+          _CustomerCard(
+            child: Row(
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: _customerPrimaryLight,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.receipt_long,
+                    color: _customerPrimary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Upload a clear handwritten, printed, or shop list photo. Admin will review it and update your final bill.',
+                    style: TextStyle(
+                      color: _customerMuted,
+                      fontWeight: FontWeight.w700,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           if (appState.hasBillImage)
-            _BillImagePreview(path: appState.billImagePath!),
-          const SizedBox(height: 12),
+            _BillImagePreview(path: appState.billImagePath!)
+          else
+            const _UploadPlaceholder(),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
@@ -864,8 +2265,8 @@ class _BillImagePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    return _CustomerCard(
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -876,13 +2277,39 @@ class _BillImagePreview extends StatelessWidget {
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => const ColoredBox(
                 color: Color(0xFFEAF0EA),
-                child: Center(child: Icon(Icons.broken_image)),
+                child: Center(child: Icon(Icons.broken_image_outlined)),
               ),
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.all(12),
-            child: Text('Shopping list image ready for upload.'),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: _customerPrimaryLight,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.check,
+                    color: _customerPrimary,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Shopping list image ready for upload.',
+                    style: TextStyle(
+                      color: _customerInk,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -935,121 +2362,114 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final total = appState.cartSubtotal +
         AppConstants.defaultDeliveryCharge +
         AppConstants.defaultServiceCharge;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Checkout')),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Payment method',
-                        style: TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                      RadioListTile<String>(
-                        contentPadding: EdgeInsets.zero,
-                        value: AppConstants.paymentMethodCod,
-                        groupValue: _paymentMethod,
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => _paymentMethod = value);
-                          }
-                        },
-                        title: const Text('Cash on Delivery'),
-                        subtitle: const Text(
-                          'Pay by cash when your order is delivered.',
-                        ),
-                      ),
-                      RadioListTile<String>(
-                        contentPadding: EdgeInsets.zero,
-                        value: AppConstants.paymentMethodBankTransfer,
-                        groupValue: _paymentMethod,
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => _paymentMethod = value);
-                          }
-                        },
-                        title: const Text('Bank transfer'),
-                        subtitle: const Text(
-                          'Transfer to the store account and upload your receipt.',
-                        ),
-                      ),
-                      if (isBankTransfer) ...[
-                        const SizedBox(height: 8),
-                        const _BankTransferDetails(),
-                        const SizedBox(height: 12),
-                        _ReceiptUploadSection(
-                          imagePath: _receiptImagePath,
-                          onGallery: _pickReceiptFromGallery,
-                          onCamera: _takeReceiptPhoto,
-                          onRemove: () =>
-                              setState(() => _receiptImagePath = null),
-                        ),
-                      ],
-                      const Divider(height: 24),
-                      _AmountRow('Subtotal', appState.cartSubtotal.money),
-                      _AmountRow('Delivery charge',
-                          AppConstants.defaultDeliveryCharge.money),
-                      _AmountRow('Service charge',
-                          AppConstants.defaultServiceCharge.money),
-                      if (appState.hasBillImage) ...[
-                        const SizedBox(height: 10),
-                        const _AttachedListPriceNotice(),
-                      ],
-                      const Divider(height: 24),
-                      _AmountRow('Estimated total', total.money,
-                          isStrong: true),
-                    ],
+    return _CustomerScaffold(
+      title: 'Checkout',
+      body: Form(
+        key: _formKey,
+        child: _CustomerScrollView(
+          children: [
+            _CheckoutSummary(total: total),
+            const SizedBox(height: 14),
+            _CustomerCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Payment method',
+                    style: TextStyle(fontWeight: FontWeight.w900),
                   ),
-                ),
+                  RadioListTile<String>(
+                    contentPadding: EdgeInsets.zero,
+                    value: AppConstants.paymentMethodCod,
+                    groupValue: _paymentMethod,
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _paymentMethod = value);
+                      }
+                    },
+                    title: const Text('Cash on Delivery'),
+                    subtitle: const Text(
+                      'Pay by cash when your order is delivered.',
+                    ),
+                  ),
+                  RadioListTile<String>(
+                    contentPadding: EdgeInsets.zero,
+                    value: AppConstants.paymentMethodBankTransfer,
+                    groupValue: _paymentMethod,
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _paymentMethod = value);
+                      }
+                    },
+                    title: const Text('Bank transfer'),
+                    subtitle: const Text(
+                      'Transfer to the store account and upload your receipt.',
+                    ),
+                  ),
+                  if (isBankTransfer) ...[
+                    const SizedBox(height: 8),
+                    const _BankTransferDetails(),
+                    const SizedBox(height: 12),
+                    _ReceiptUploadSection(
+                      imagePath: _receiptImagePath,
+                      onGallery: _pickReceiptFromGallery,
+                      onCamera: _takeReceiptPhoto,
+                      onRemove: () => setState(() => _receiptImagePath = null),
+                    ),
+                  ],
+                  const Divider(height: 24),
+                  _AmountRow('Subtotal', appState.cartSubtotal.money),
+                  _AmountRow('Delivery charge',
+                      AppConstants.defaultDeliveryCharge.money),
+                  _AmountRow('Service charge',
+                      AppConstants.defaultServiceCharge.money),
+                  if (appState.hasBillImage) ...[
+                    const SizedBox(height: 10),
+                    const _AttachedListPriceNotice(),
+                  ],
+                  const Divider(height: 24),
+                  _AmountRow('Estimated total', total.money, isStrong: true),
+                ],
               ),
-              const SizedBox(height: 14),
-              AppTextField(
-                controller: _name,
-                label: 'Customer name',
-                validator: (value) =>
-                    Validators.requiredText(value, 'Customer name'),
-                prefixIcon: Icons.person,
-              ),
-              const SizedBox(height: 12),
-              AppPhoneField(
-                controller: _phone,
-              ),
-              const SizedBox(height: 12),
-              AppTextField(
-                controller: _address,
-                label: 'Delivery address',
-                validator: (value) =>
-                    Validators.requiredText(value, 'Delivery address'),
-                maxLines: 3,
-                prefixIcon: Icons.home,
-              ),
-              const SizedBox(height: 12),
-              AppTextField(
-                controller: _notes,
-                label: 'Order notes',
-                maxLines: 3,
-                prefixIcon: Icons.notes,
-              ),
-              const SizedBox(height: 18),
-              PrimaryActionButton(
-                label: isBankTransfer
-                    ? 'Place bank transfer order'
-                    : 'Place COD order',
-                icon:
-                    isBankTransfer ? Icons.account_balance : Icons.check_circle,
-                isLoading: _isSubmitting,
-                onPressed: _isSubmitting ? null : _submit,
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 14),
+            AppTextField(
+              controller: _name,
+              label: 'Customer name',
+              validator: (value) =>
+                  Validators.requiredText(value, 'Customer name'),
+              prefixIcon: Icons.person,
+            ),
+            const SizedBox(height: 12),
+            AppPhoneField(
+              controller: _phone,
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
+              controller: _address,
+              label: 'Delivery address',
+              validator: (value) =>
+                  Validators.requiredText(value, 'Delivery address'),
+              maxLines: 3,
+              prefixIcon: Icons.home,
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
+              controller: _notes,
+              label: 'Order notes',
+              maxLines: 3,
+              prefixIcon: Icons.notes,
+            ),
+            const SizedBox(height: 18),
+            PrimaryActionButton(
+              label: isBankTransfer
+                  ? 'Place bank transfer order'
+                  : 'Place COD order',
+              icon: isBankTransfer ? Icons.account_balance : Icons.check_circle,
+              isLoading: _isSubmitting,
+              onPressed: _isSubmitting ? null : _submit,
+            ),
+          ],
         ),
       ),
     );
@@ -1109,6 +2529,87 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
     setState(() => _receiptImagePath = imageFile.path);
+  }
+}
+
+class _CheckoutSummary extends StatelessWidget {
+  const _CheckoutSummary({required this.total});
+
+  final double total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF176B45),
+            Color(0xFF2E6F9E),
+            Color(0xFFE86F4A),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _customerPrimary.withOpacity(0.2),
+            blurRadius: 28,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Estimated total',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.82),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  total.money,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Review payment and delivery details',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withOpacity(0.18)),
+            ),
+            child: const Icon(
+              Icons.payments_outlined,
+              color: Colors.white,
+              size: 32,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1332,34 +2833,87 @@ class OrderSuccessScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final isBankTransfer =
         order.paymentMethod == AppConstants.paymentMethodBankTransfer;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Order placed')),
-      body: EmptyState(
-        icon: Icons.check_circle,
-        title: 'Order received',
-        message: isBankTransfer
-            ? 'Your bank transfer order is pending admin receipt review.'
-            : 'Your COD order is pending admin review.',
-        action: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ElevatedButton.icon(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => OrderTrackingScreen(orderId: order.orderId),
+    return _CustomerScaffold(
+      title: 'Order placed',
+      body: _CustomerScrollView(
+        children: [
+          _CustomerCard(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.78, end: 1),
+                  duration: const Duration(milliseconds: 460),
+                  curve: Curves.elasticOut,
+                  builder: (context, value, child) {
+                    return Transform.scale(scale: value, child: child);
+                  },
+                  child: Container(
+                    width: 84,
+                    height: 84,
+                    decoration: BoxDecoration(
+                      color: _customerPrimaryLight,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.check_circle,
+                      color: _customerPrimary,
+                      size: 50,
+                    ),
+                  ),
                 ),
+                const SizedBox(height: 18),
+                Text(
+                  'Order received',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: _customerInk,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isBankTransfer
+                      ? 'Your bank transfer order is pending admin receipt review.'
+                      : 'Your COD order is pending admin review.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: _customerMuted,
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _CustomerCard(
+            child: Column(
+              children: [
+                _AmountRow('Order', '#${order.orderId.substring(0, 8)}'),
+                _AmountRow('Total', order.totalAmount.money, isStrong: true),
+                _AmountRow('Payment', order.paymentMethod),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => OrderTrackingScreen(orderId: order.orderId),
               ),
-              icon: const Icon(Icons.track_changes),
-              label: const Text('Track order'),
             ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () =>
-                  Navigator.of(context).popUntil((route) => route.isFirst),
-              child: const Text('Back home'),
-            ),
-          ],
-        ),
+            icon: const Icon(Icons.track_changes),
+            label: const Text('Track order'),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(context).popUntil((route) => route.isFirst),
+            child: const Text('Back home'),
+          ),
+        ],
       ),
     );
   }
@@ -1371,14 +2925,14 @@ class OrderHistoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.read<AppState>();
-    return Scaffold(
-      appBar: AppBar(title: const Text('Order history')),
+    return _CustomerScaffold(
+      title: 'Order history',
       body: StreamBuilder<List<OrderModel>>(
         stream:
             appState.firestoreService.watchOrdersForUser(appState.profile!.uid),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const LoadingView();
+            return const _ListSkeleton();
           }
           final orders = snapshot.data ?? const <OrderModel>[];
           if (orders.isEmpty) {
@@ -1388,14 +2942,20 @@ class OrderHistoryScreen extends StatelessWidget {
               message: 'Your order history will appear here.',
             );
           }
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: orders.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final order = orders[index];
-              return OrderTile(order: order);
-            },
+          return _CustomerScrollView(
+            children: [
+              const _CustomerSectionHeader(
+                title: 'Recent orders',
+                subtitle: 'Track progress and review previous baskets',
+              ),
+              for (var index = 0; index < orders.length; index++) ...[
+                _FadeSlideIn(
+                  index: index,
+                  child: OrderTile(order: orders[index]),
+                ),
+                if (index != orders.length - 1) const SizedBox(height: 12),
+              ],
+            ],
           );
         },
       ),
@@ -1410,19 +2970,58 @@ class OrderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        title: Text('Order ${order.orderId.substring(0, 8)}'),
-        subtitle: Text(
-          '${DateFormat.yMMMd().add_jm().format(order.createdAt)}\n${order.totalAmount.money}',
+    final color = _statusAccent(order.orderStatus);
+    return _CustomerCard(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => OrderTrackingScreen(orderId: order.orderId),
         ),
-        isThreeLine: true,
-        trailing: StatusChip(status: order.orderStatus),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => OrderTrackingScreen(orderId: order.orderId),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(Icons.receipt_long_outlined, color: color),
           ),
-        ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Order ${order.orderId.substring(0, 8)}',
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  DateFormat.yMMMd().add_jm().format(order.createdAt),
+                  style: const TextStyle(
+                    color: _customerMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  order.totalAmount.money,
+                  style: const TextStyle(
+                    color: _customerPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          StatusChip(status: order.orderStatus),
+        ],
       ),
     );
   }
@@ -1436,13 +3035,13 @@ class OrderTrackingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.read<AppState>();
-    return Scaffold(
-      appBar: AppBar(title: const Text('Order tracking')),
+    return _CustomerScaffold(
+      title: 'Order tracking',
       body: StreamBuilder<OrderModel?>(
         stream: appState.firestoreService.watchOrder(orderId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const LoadingView();
+            return const _ListSkeleton(itemCount: 3);
           }
           final order = snapshot.data;
           if (order == null) {
@@ -1452,69 +3051,93 @@ class OrderTrackingScreen extends StatelessWidget {
               message: 'This order may have been removed.',
             );
           }
-          return ListView(
-            padding: const EdgeInsets.all(16),
+          return _CustomerScrollView(
             children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Order ${order.orderId.substring(0, 8)}',
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w900),
+              _CustomerCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Order ${order.orderId.substring(0, 8)}',
+                            style: const TextStyle(
+                              color: _customerInk,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 18,
                             ),
                           ),
-                          StatusChip(status: order.orderStatus),
+                        ),
+                        StatusChip(status: order.orderStatus),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _AmountRow('Total', order.totalAmount.money,
+                        isStrong: true),
+                    _AmountRow(
+                      'Payment',
+                      '${order.paymentMethod} (${order.paymentStatus})',
+                    ),
+                    if (order.adminNotes.isNotEmpty) ...[
+                      const Divider(height: 24),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.sticky_note_2_outlined,
+                            color: _customerAccent,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              order.adminNotes,
+                              style: const TextStyle(
+                                color: _customerMuted,
+                                fontWeight: FontWeight.w700,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 10),
-                      Text('Total: ${order.totalAmount.money}'),
-                      Text(
-                          'Payment: ${order.paymentMethod} (${order.paymentStatus})'),
-                      if (order.adminNotes.isNotEmpty) ...[
-                        const Divider(height: 24),
-                        Text('Admin notes: ${order.adminNotes}'),
-                      ],
                     ],
-                  ),
+                  ],
                 ),
               ),
               const SizedBox(height: 16),
               _TrackingSteps(status: order.orderStatus),
               const SizedBox(height: 16),
               if (order.items.isNotEmpty) ...[
-                const SectionTitle(title: 'Items'),
-                for (final item in order.items)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(item.name),
-                    subtitle: Text(
-                        '${item.quantity} x ${item.price.money} / ${item.unit}'),
-                    trailing: Text(item.lineTotal.money),
-                  ),
+                const _CustomerSectionHeader(title: 'Items'),
+                for (final item in order.items) _OrderItemRow(item: item),
               ],
               if (order.hasUpload) ...[
                 const SizedBox(height: 12),
-                const SectionTitle(title: 'Uploaded list'),
+                const _CustomerSectionHeader(title: 'Uploaded list'),
                 const _AttachedListPriceNotice(),
                 const SizedBox(height: 10),
-                AspectRatio(
-                  aspectRatio: 1.4,
-                  child: ProductImage(url: order.uploadedImageUrl),
+                _CustomerCard(
+                  padding: EdgeInsets.zero,
+                  child: AspectRatio(
+                    aspectRatio: 1.4,
+                    child: ProductImage(url: order.uploadedImageUrl, radius: 8),
+                  ),
                 ),
               ],
               if (order.hasPaymentReceipt) ...[
                 const SizedBox(height: 12),
-                const SectionTitle(title: 'Payment receipt'),
-                AspectRatio(
-                  aspectRatio: 1.4,
-                  child: ProductImage(url: order.paymentReceiptImageUrl),
+                const _CustomerSectionHeader(title: 'Payment receipt'),
+                _CustomerCard(
+                  padding: EdgeInsets.zero,
+                  child: AspectRatio(
+                    aspectRatio: 1.4,
+                    child: ProductImage(
+                      url: order.paymentReceiptImageUrl,
+                      radius: 8,
+                    ),
+                  ),
                 ),
               ],
               const SizedBox(height: 18),
@@ -1537,6 +3160,72 @@ class OrderTrackingScreen extends StatelessWidget {
   }
 }
 
+class _OrderItemRow extends StatelessWidget {
+  const _OrderItemRow({required this.item});
+
+  final OrderItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerCard(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: item.isAvailable
+                  ? _customerPrimaryLight
+                  : _customerDanger.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              item.isAvailable ? Icons.shopping_basket_outlined : Icons.block,
+              color: item.isAvailable ? _customerPrimary : _customerDanger,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${item.quantity} x ${item.price.money} / ${item.unit}',
+                  style: const TextStyle(
+                    color: _customerMuted,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            item.lineTotal.money,
+            style: const TextStyle(
+              color: _customerPrimary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TrackingSteps extends StatelessWidget {
   const _TrackingSteps({required this.status});
 
@@ -1549,9 +3238,9 @@ class _TrackingSteps extends StatelessWidget {
     final effectiveIndex = currentIndex < 0 ? 0 : currentIndex;
     final isTerminalStatus = status == 'Cancelled' || status == 'Rejected';
     final primaryColor = Theme.of(context).colorScheme.primary;
-    return Card(
+    return _CustomerCard(
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: EdgeInsets.zero,
         child: Column(
           children: [
             for (var i = 0; i < statuses.length; i++)
@@ -1564,42 +3253,51 @@ class _TrackingSteps extends StatelessWidget {
                   final stepColor = isCurrent
                       ? _currentStepColor(status, primaryColor)
                       : primaryColor;
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Column(
-                        children: [
-                          Icon(
-                            isComplete
-                                ? Icons.check_circle
-                                : Icons.radio_button_unchecked,
-                            color: isComplete
-                                ? stepColor
-                                : const Color(0xFFB8C2BB),
-                          ),
-                          if (i != statuses.length - 1)
-                            Container(
-                              height: 28,
-                              width: 2,
-                              color: !isTerminalStatus && i < effectiveIndex
-                                  ? primaryColor
-                                  : const Color(0xFFDDE5DD),
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      bottom: i == statuses.length - 1 ? 0 : 4,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Column(
+                          children: [
+                            Icon(
+                              isComplete
+                                  ? Icons.check_circle
+                                  : Icons.radio_button_unchecked,
+                              color: isComplete
+                                  ? stepColor
+                                  : const Color(0xFFB8C2BB),
                             ),
-                        ],
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            statuses[i],
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
+                            if (i != statuses.length - 1)
+                              Container(
+                                height: 30,
+                                width: 2,
+                                color: !isTerminalStatus && i < effectiveIndex
+                                    ? primaryColor
+                                    : const Color(0xFFDDE5DD),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              statuses[i],
+                              style: TextStyle(
+                                color:
+                                    isCurrent ? _customerInk : _customerMuted,
+                                fontWeight: isCurrent
+                                    ? FontWeight.w900
+                                    : FontWeight.w700,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   );
                 },
               ),
@@ -1631,8 +3329,8 @@ class NotificationsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final appState = context.read<AppState>();
     final profile = appState.profile!;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
+    return _CustomerScaffold(
+      title: 'Notifications',
       body: StreamBuilder<List<AppNotification>>(
         stream: appState.firestoreService.watchNotifications(
           userId: profile.uid,
@@ -1640,7 +3338,7 @@ class NotificationsScreen extends StatelessWidget {
         ),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const LoadingView();
+            return const _ListSkeleton();
           }
           final notifications = snapshot.data ?? const <AppNotification>[];
           if (notifications.isEmpty) {
@@ -1650,20 +3348,63 @@ class NotificationsScreen extends StatelessWidget {
               message: 'Order and support updates will appear here.',
             );
           }
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: notifications.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final notification = notifications[index];
-              return Card(
-                child: ListTile(
-                  leading: const Icon(Icons.notifications_outlined),
-                  title: Text(notification.title),
-                  subtitle: Text(notification.body),
+          return _CustomerScrollView(
+            children: [
+              const _CustomerSectionHeader(
+                title: 'Updates',
+                subtitle: 'Order and support activity',
+              ),
+              for (var index = 0; index < notifications.length; index++) ...[
+                _FadeSlideIn(
+                  index: index,
+                  child: _CustomerCard(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: _customerPrimaryLight,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.notifications_outlined,
+                            color: _customerPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                notifications[index].title,
+                                style: const TextStyle(
+                                  color: _customerInk,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                notifications[index].body,
+                                style: const TextStyle(
+                                  color: _customerMuted,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              );
-            },
+                if (index != notifications.length - 1)
+                  const SizedBox(height: 12),
+              ],
+            ],
           );
         },
       ),
@@ -1702,48 +3443,50 @@ class _SupportScreenState extends State<SupportScreen> {
   Widget build(BuildContext context) {
     final appState = context.read<AppState>();
     final profile = appState.profile!;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Support')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+    return _CustomerScaffold(
+      title: 'Support',
+      body: _CustomerScrollView(
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                children: [
-                  AppTextField(
-                    controller: _subject,
-                    label: 'Subject',
-                    prefixIcon: Icons.subject,
-                  ),
-                  const SizedBox(height: 10),
-                  AppTextField(
-                    controller: _message,
-                    label: 'Message',
-                    maxLines: 3,
-                    prefixIcon: Icons.message,
-                  ),
-                  const SizedBox(height: 12),
-                  PrimaryActionButton(
-                    label: 'Create ticket',
-                    icon: Icons.add_comment,
-                    isLoading: _isCreating,
-                    onPressed: _createTicket,
-                  ),
-                ],
-              ),
+          _CustomerCard(
+            child: Column(
+              children: [
+                AppTextField(
+                  controller: _subject,
+                  label: 'Subject',
+                  prefixIcon: Icons.subject,
+                ),
+                const SizedBox(height: 10),
+                AppTextField(
+                  controller: _message,
+                  label: 'Message',
+                  maxLines: 3,
+                  prefixIcon: Icons.message,
+                ),
+                const SizedBox(height: 12),
+                PrimaryActionButton(
+                  label: 'Create ticket',
+                  icon: Icons.add_comment,
+                  isLoading: _isCreating,
+                  onPressed: _createTicket,
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 16),
-          const SectionTitle(title: 'Your tickets'),
+          const _CustomerSectionHeader(
+            title: 'Your tickets',
+            subtitle: 'Continue a previous conversation',
+          ),
           StreamBuilder<List<SupportTicket>>(
             stream: appState.firestoreService.watchTickets(userId: profile.uid),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Center(child: CircularProgressIndicator()),
+                return const Column(
+                  children: [
+                    _ShimmerBox(width: double.infinity, height: 86),
+                    SizedBox(height: 12),
+                    _ShimmerBox(width: double.infinity, height: 86),
+                  ],
                 );
               }
               final tickets = snapshot.data ?? const <SupportTicket>[];
@@ -1756,19 +3499,66 @@ class _SupportScreenState extends State<SupportScreen> {
               }
               return Column(
                 children: [
-                  for (final ticket in tickets)
-                    Card(
-                      child: ListTile(
-                        title: Text(ticket.subject),
-                        subtitle: Text(ticket.status),
-                        trailing: const Icon(Icons.chevron_right),
+                  for (var index = 0; index < tickets.length; index++) ...[
+                    _FadeSlideIn(
+                      index: index,
+                      child: _CustomerCard(
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => SupportThreadScreen(ticket: ticket),
+                            builder: (_) =>
+                                SupportThreadScreen(ticket: tickets[index]),
                           ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 46,
+                              height: 46,
+                              decoration: BoxDecoration(
+                                color: _statusAccent(tickets[index].status)
+                                    .withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.support_agent,
+                                color: _statusAccent(tickets[index].status),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    tickets[index].subject,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: _customerInk,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    tickets[index].status,
+                                    style: const TextStyle(
+                                      color: _customerMuted,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(
+                              Icons.chevron_right,
+                              color: _customerMuted,
+                            ),
+                          ],
                         ),
                       ),
                     ),
+                    if (index != tickets.length - 1) const SizedBox(height: 12),
+                  ],
                 ],
               );
             },
@@ -1833,12 +3623,14 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
     final appState = context.read<AppState>();
     final profile = appState.profile!;
     return Scaffold(
+      backgroundColor: _customerBackground,
       appBar: AppBar(
         title: Text(widget.ticket.subject),
         actions: [
           if (profile.isAdmin && widget.ticket.status != 'closed')
-            IconButton(
+            _CustomerIconButton(
               tooltip: 'Close ticket',
+              icon: Icons.check_circle_outline,
               onPressed: () async {
                 await appState.firestoreService
                     .closeTicket(widget.ticket.ticketId);
@@ -1846,99 +3638,195 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
                   showSnack(context, 'Ticket closed.');
                 }
               },
-              icon: const Icon(Icons.check_circle_outline),
             ),
         ],
+        backgroundColor: _customerBackground.withOpacity(0.96),
+        foregroundColor: _customerInk,
+        shape: const Border(bottom: BorderSide(color: _customerLine)),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: StreamBuilder<List<SupportMessage>>(
-              stream: appState.firestoreService.watchSupportMessages(
-                widget.ticket.ticketId,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFFBFDF9),
+              Color(0xFFEFF7F2),
+              Color(0xFFFFF8F3),
+            ],
+          ),
+        ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              bottom: 92,
+              child: SafeArea(
+                top: false,
+                bottom: false,
+                child: _buildMessageList(appState, profile),
               ),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const LoadingView();
-                }
-                final messages = snapshot.data ?? const <SupportMessage>[];
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final message = messages[index];
-                    final isMine = message.senderId == profile.uid;
-                    return Align(
-                      alignment:
-                          isMine ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 310),
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isMine
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              message.message,
-                              style: TextStyle(
-                                color: isMine ? Colors.white : Colors.black87,
-                              ),
-                            ),
-                            if (message.imageUrl.isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              SizedBox(
-                                height: 140,
-                                child: ProductImage(url: message.imageUrl),
-                              ),
-                            ],
-                          ],
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _buildComposer(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageList(AppState appState, UserProfile profile) {
+    return StreamBuilder<List<SupportMessage>>(
+      stream: appState.firestoreService.watchSupportMessages(
+        widget.ticket.ticketId,
+      ),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _ListSkeleton(itemCount: 3);
+        }
+        if (snapshot.hasError) {
+          return const EmptyState(
+            icon: Icons.sms_failed_outlined,
+            title: 'Messages unavailable',
+            message: 'Please go back and open this ticket again.',
+          );
+        }
+        final messages = snapshot.data ?? const <SupportMessage>[];
+        if (messages.isEmpty) {
+          return const EmptyState(
+            icon: Icons.forum_outlined,
+            title: 'No messages yet',
+            message: 'Send a message to continue this support ticket.',
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          itemCount: messages.length,
+          itemBuilder: (context, index) {
+            final message = messages[index];
+            final isMine = message.senderId == profile.uid;
+            return _FadeSlideIn(
+              index: index,
+              child: Align(
+                alignment:
+                    isMine ? Alignment.centerRight : Alignment.centerLeft,
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 310),
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isMine ? _customerPrimary : Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isMine ? _customerPrimary : _customerLine,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF163526).withOpacity(0.06),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        message.message,
+                        style: TextStyle(
+                          color: isMine ? Colors.white : _customerInk,
+                          fontWeight: FontWeight.w600,
+                          height: 1.35,
                         ),
                       ),
-                    );
-                  },
-                );
-              },
+                      if (message.imageUrl.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          height: 140,
+                          child: ProductImage(url: message.imageUrl),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildComposer() {
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return Container(
+      height: 88 + bottomInset,
+      padding: EdgeInsets.fromLTRB(12, 8, 12, 12 + bottomInset),
+      color: _customerPrimaryLight,
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Attach image',
+            onPressed: _isSending ? null : _chooseSupportImage,
+            icon: Icon(
+              _imagePath == null ? Icons.image_outlined : Icons.image,
+              color: _customerInk,
             ),
           ),
-          SafeArea(
-            minimum: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: 'Attach image',
-                  onPressed: _isSending ? null : _chooseSupportImage,
-                  icon: Icon(
-                    _imagePath == null ? Icons.image_outlined : Icons.image,
+          Expanded(
+            child: Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: _customerLine),
+              ),
+              child: Center(
+                child: TextField(
+                  controller: _message,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: const InputDecoration(
+                    hintText: 'Type a message',
+                    hintStyle: TextStyle(color: _customerMuted),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    isDense: true,
+                    filled: false,
                   ),
                 ),
-                Expanded(
-                  child: TextField(
-                    controller: _message,
-                    minLines: 1,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      hintText: 'Type a message',
-                    ),
-                  ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 54,
+            height: 52,
+            child: FilledButton(
+              onPressed: _isSending ? null : _sendMessage,
+              style: FilledButton.styleFrom(
+                backgroundColor: _customerPrimary,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _isSending ? null : _sendMessage,
-                  child: _isSending
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.send),
-                ),
-              ],
+              ),
+              child: _isSending
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send),
             ),
           ),
         ],
@@ -2050,59 +3938,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final profile = appState.profile!;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Card(
-                child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.person)),
-                  title: Text(profile.fullName),
-                  subtitle: Text('${profile.phone}\n${profile.role}'),
-                  isThreeLine: true,
-                ),
+    return _CustomerScaffold(
+      title: 'Profile',
+      body: Form(
+        key: _formKey,
+        child: _CustomerScrollView(
+          children: [
+            _ProfileHeader(profile: profile),
+            const SizedBox(height: 16),
+            _CustomerCard(
+              child: Column(
+                children: [
+                  AppTextField(
+                    controller: _name,
+                    label: 'Full name',
+                    validator: (value) =>
+                        Validators.requiredText(value, 'Full name'),
+                    prefixIcon: Icons.person,
+                  ),
+                  const SizedBox(height: 12),
+                  AppTextField(
+                    controller: _address,
+                    label: 'Delivery address',
+                    validator: (value) =>
+                        Validators.requiredText(value, 'Delivery address'),
+                    maxLines: 3,
+                    prefixIcon: Icons.home,
+                  ),
+                ],
               ),
-              const SizedBox(height: 14),
-              AppTextField(
-                controller: _name,
-                label: 'Full name',
-                validator: (value) =>
-                    Validators.requiredText(value, 'Full name'),
-                prefixIcon: Icons.person,
-              ),
-              const SizedBox(height: 12),
-              AppTextField(
-                controller: _address,
-                label: 'Delivery address',
-                validator: (value) =>
-                    Validators.requiredText(value, 'Delivery address'),
-                maxLines: 3,
-                prefixIcon: Icons.home,
-              ),
-              const SizedBox(height: 18),
-              PrimaryActionButton(
-                label: 'Save profile',
-                icon: Icons.save,
-                isLoading: _isSaving,
-                onPressed: _save,
-              ),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  await appState.logout();
-                  if (context.mounted) {
-                    Navigator.of(context).popUntil((route) => route.isFirst);
-                  }
-                },
-                icon: const Icon(Icons.logout),
-                label: const Text('Logout'),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 18),
+            PrimaryActionButton(
+              label: 'Save profile',
+              icon: Icons.save,
+              isLoading: _isSaving,
+              onPressed: _save,
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () async {
+                await appState.logout();
+                if (context.mounted) {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                }
+              },
+              icon: const Icon(Icons.logout),
+              label: const Text('Logout'),
+            ),
+          ],
         ),
       ),
     );
@@ -2130,5 +4014,102 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() => _isSaving = false);
       }
     }
+  }
+}
+
+class _ProfileHeader extends StatelessWidget {
+  const _ProfileHeader({required this.profile});
+
+  final UserProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final initials = profile.fullName.trim().isEmpty
+        ? 'IG'
+        : profile.fullName
+            .trim()
+            .split(RegExp(r'\s+'))
+            .take(2)
+            .map((part) => part.substring(0, 1).toUpperCase())
+            .join();
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF163D2C),
+            Color(0xFF176B45),
+            Color(0xFFE86F4A),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _customerPrimary.withOpacity(0.2),
+            blurRadius: 28,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 68,
+            height: 68,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.16),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withOpacity(0.22)),
+            ),
+            child: Center(
+              child: Text(
+                initials,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  profile.fullName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
+                      ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  profile.phone,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.84),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  profile.role,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.72),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
