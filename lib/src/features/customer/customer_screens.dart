@@ -535,8 +535,8 @@ class CustomerHomeScreen extends StatelessWidget {
                 Expanded(
                   child: _HomeActionTile(
                     icon: Icons.storefront,
-                    title: 'Partner shops',
-                    subtitle: 'Pick your favorite local store',
+                    title: 'Items',
+                    subtitle: 'Pick the items you need.',
                     accent: _customerPrimary,
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const ShopListScreen()),
@@ -1020,7 +1020,7 @@ class ShopListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = context.read<AppState>().firestoreService;
     return _CustomerScaffold(
-      title: 'Partner shops',
+      title: 'Items',
       body: StreamBuilder<List<Shop>>(
         stream: store.watchShops(),
         builder: (context, snapshot) {
@@ -1046,7 +1046,7 @@ class ShopListScreen extends StatelessWidget {
             children: [
               const _CustomerSectionHeader(
                 title: 'Choose your store',
-                subtitle: 'Browse active partners near you',
+                subtitle: 'Browse needed items near you',
               ),
               for (var index = 0; index < shops.length; index++) ...[
                 _FadeSlideIn(
