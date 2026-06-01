@@ -1608,7 +1608,7 @@ class _AdminAccountsManagementScreenState
             _AdminFilterBar(
               filters: _filters,
               selected: _filter,
-              onSelected: (filter) => setState(() => _filter = filter),
+              onSelected: _selectFilter,
             ),
             if (_filter == 'Custom')
               _AccountDateControls(
@@ -1652,61 +1652,22 @@ class _AdminAccountsManagementScreenState
                             record.needsManualSalesAmount,
                       )
                       .toList();
-                  final allSummary = _AccountsSummary(records);
                   final filteredSummary = _AccountsSummary(filteredRecords);
-                  final todaySummary =
-                      _AccountsSummary(_recordsForToday(records));
-                  final monthSummary =
-                      _AccountsSummary(_recordsForThisMonth(records));
 
                   return ListView(
                     physics: appRefreshScrollPhysics,
                     padding: const EdgeInsets.fromLTRB(0, 14, 0, 28),
                     children: [
-                      _AdminStatsGrid(
-                        children: [
-                          _AdminMetricCard(
-                            label: 'Total sales',
-                            value: allSummary.totalSales.money,
-                            icon: Icons.payments_outlined,
-                            color: _adminPrimary,
-                          ),
-                          _AdminMetricCard(
-                            label: 'Daily sales',
-                            value: todaySummary.totalSales.money,
-                            icon: Icons.today_outlined,
-                            color: _adminBlue,
-                          ),
-                          _AdminMetricCard(
-                            label: 'Monthly sales',
-                            value: monthSummary.totalSales.money,
-                            icon: Icons.calendar_month_outlined,
-                            color: _adminAccent,
-                          ),
-                          _AdminMetricCard(
-                            label: 'Delivered revenue',
-                            value: filteredSummary.totalSales.money,
-                            icon: Icons.verified_outlined,
-                            color: _adminViolet,
-                          ),
-                          _AdminMetricCard(
-                            label: 'Manual sales entries',
-                            value: filteredSummary.manualSales.money,
-                            icon: Icons.edit_note,
-                            color: _adminWarning,
-                          ),
-                          _AdminMetricCard(
-                            label: 'Profit / loss',
-                            value: filteredSummary.profitOrLoss.money,
-                            icon: filteredSummary.profitOrLoss < 0
-                                ? Icons.trending_down
-                                : Icons.trending_up,
-                            color: filteredSummary.profitOrLoss < 0
-                                ? const Color(0xFFC83A2B)
-                                : _adminPrimary,
-                          ),
-                        ],
+                      _AdminReveal(
+                        child: _AccountSummaryPanel(
+                          summary: filteredSummary,
+                          rangeLabel: _rangeLabel,
+                          visibleCount: filteredRecords.length,
+                          totalCount: records.length,
+                        ),
                       ),
+                      const SizedBox(height: 12),
+                      _AccountKpiGrid(summary: filteredSummary),
                       const SizedBox(height: 18),
                       _AdminReveal(
                         child: _AccountReportCard(
@@ -1780,6 +1741,17 @@ class _AdminAccountsManagementScreenState
         ),
       ),
     );
+  }
+
+  void _selectFilter(String filter) {
+    setState(() {
+      _filter = filter;
+      if (filter == 'Custom' && _customStart == null && _customEnd == null) {
+        final today = _dateOnly(DateTime.now());
+        _customStart = today;
+        _customEnd = today;
+      }
+    });
   }
 
   List<AccountSaleRecord> _filteredRecords(List<AccountSaleRecord> records) {
@@ -1955,6 +1927,330 @@ class _AccountDateControls extends StatelessWidget {
   }
 }
 
+class _AccountSummaryPanel extends StatelessWidget {
+  const _AccountSummaryPanel({
+    required this.summary,
+    required this.rangeLabel,
+    required this.visibleCount,
+    required this.totalCount,
+  });
+
+  final _AccountsSummary summary;
+  final String rangeLabel;
+  final int visibleCount;
+  final int totalCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final profitColor =
+        summary.profitOrLoss < 0 ? const Color(0xFFC83A2B) : _adminPrimary;
+    return _AdminCard(
+      padding: EdgeInsets.zero,
+      borderColor: const Color(0xFFCFE1D5),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFFFFFFF),
+              Color(0xFFF2F8F4),
+            ],
+          ),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 620;
+            final headline = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const _AdminIconBadge(
+                      icon: Icons.account_balance_wallet_outlined,
+                      color: _adminPrimary,
+                      size: 42,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        rangeLabel,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _adminInk,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  summary.totalSales.money,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _adminInk,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 28,
+                    letterSpacing: 0,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                const Text(
+                  'Delivered revenue',
+                  style: TextStyle(
+                    color: _adminMuted,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _AdminPill(
+                      label: '$visibleCount of $totalCount records',
+                      color: _adminBlue,
+                      icon: Icons.filter_alt_outlined,
+                    ),
+                    _AdminPill(
+                      label: '${summary.pendingManualCount} pending manual',
+                      color: summary.pendingManualCount > 0
+                          ? _adminWarning
+                          : _adminPrimary,
+                      icon: summary.pendingManualCount > 0
+                          ? Icons.edit_note
+                          : Icons.check_circle_outline,
+                    ),
+                  ],
+                ),
+              ],
+            );
+
+            final finance = Column(
+              children: [
+                _AccountMiniMetric(
+                  label: 'Manual sales',
+                  value: summary.manualSales.money,
+                  color: _adminWarning,
+                ),
+                const SizedBox(height: 10),
+                _AccountMiniMetric(
+                  label: 'Profit / loss',
+                  value: summary.profitOrLoss.money,
+                  color: profitColor,
+                ),
+                const SizedBox(height: 10),
+                _AccountMiniMetric(
+                  label: 'Costs/expenses',
+                  value: summary.costs.money,
+                  color: _adminMuted,
+                ),
+              ],
+            );
+
+            if (compact) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  headline,
+                  const SizedBox(height: 16),
+                  finance,
+                ],
+              );
+            }
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: headline),
+                const SizedBox(width: 20),
+                SizedBox(width: 260, child: finance),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountMiniMetric extends StatelessWidget {
+  const _AccountMiniMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.74),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _adminLine),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _adminMuted,
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            value,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountKpiGrid extends StatelessWidget {
+  const _AccountKpiGrid({required this.summary});
+
+  final _AccountsSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final profitColor =
+        summary.profitOrLoss < 0 ? const Color(0xFFC83A2B) : _adminPrimary;
+    final metrics = [
+      _AccountKpiTile(
+        label: 'Orders',
+        value: summary.orderCount.toString(),
+        icon: Icons.verified_outlined,
+        color: _adminBlue,
+      ),
+      _AccountKpiTile(
+        label: 'Cart sales',
+        value: summary.cartSales.money,
+        icon: Icons.shopping_cart_checkout,
+        color: _adminPrimary,
+      ),
+      _AccountKpiTile(
+        label: 'List/manual',
+        value: summary.manualSales.money,
+        icon: Icons.edit_note,
+        color: _adminWarning,
+      ),
+      _AccountKpiTile(
+        label: 'Delivery/service',
+        value: summary.charges.money,
+        icon: Icons.local_shipping_outlined,
+        color: _adminViolet,
+      ),
+      _AccountKpiTile(
+        label: 'Costs',
+        value: summary.costs.money,
+        icon: Icons.receipt_long_outlined,
+        color: _adminMuted,
+      ),
+      _AccountKpiTile(
+        label: 'Profit / loss',
+        value: summary.profitOrLoss.money,
+        icon:
+            summary.profitOrLoss < 0 ? Icons.trending_down : Icons.trending_up,
+        color: profitColor,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final count = constraints.maxWidth >= 900
+            ? 6
+            : constraints.maxWidth >= 680
+                ? 3
+                : 2;
+        return GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: count,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: count == 2 ? 1.55 : 1.75,
+          children: metrics,
+        );
+      },
+    );
+  }
+}
+
+class _AccountKpiTile extends StatelessWidget {
+  const _AccountKpiTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return _AdminCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _AdminIconBadge(icon: icon, color: color, size: 34),
+              const Spacer(),
+            ],
+          ),
+          const Spacer(),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: _adminInk,
+              fontWeight: FontWeight.w900,
+              fontSize: 17,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: _adminMuted,
+              fontWeight: FontWeight.w800,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AccountsSummary {
   const _AccountsSummary(this.records);
 
@@ -2115,91 +2411,102 @@ class _AccountSaleTile extends StatelessWidget {
         record.profitOrLoss < 0 ? const Color(0xFFC83A2B) : _adminPrimary;
     return _AdminCard(
       onTap: onTap,
+      padding: const EdgeInsets.all(12),
       borderColor: record.needsManualSalesAmount
           ? _adminWarning.withOpacity(0.45)
           : _adminLine,
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _AdminIconBadge(
-            icon: record.needsManualSalesAmount
-                ? Icons.edit_note
-                : Icons.account_balance_wallet_outlined,
-            color: statusColor,
-            size: 48,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${record.customerName} - ${_shortId(record.orderId)}',
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _adminInk,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  DateFormat.yMMMd().add_jm().format(record.deliveredAt),
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _adminMuted,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _AdminIconBadge(
+                icon: record.needsManualSalesAmount
+                    ? Icons.edit_note
+                    : Icons.receipt_long,
+                color: statusColor,
+                size: 38,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _AdminPill(
-                      label: record.orderMethod,
-                      color: _adminBlue,
-                      icon: Icons.shopping_cart_checkout,
-                    ),
-                    if (record.needsManualSalesAmount)
-                      const _AdminPill(
-                        label: 'Manual amount pending',
-                        color: _adminWarning,
-                        icon: Icons.edit_note,
-                      )
-                    else if (record.hasShoppingList || record.hasManualSales)
-                      _AdminPill(
-                        label: 'Manual ${record.manualSalesAmount.money}',
-                        color: _adminWarning,
-                        icon: Icons.edit_note,
+                    Text(
+                      record.customerName,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _adminInk,
+                        fontWeight: FontWeight.w900,
                       ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${_shortId(record.orderId)} - ${DateFormat.MMMd().add_jm().format(record.deliveredAt)}',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _adminMuted,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    record.totalSalesAmount.money,
+                    style: const TextStyle(
+                      color: _adminInk,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'P/L ${record.profitOrLoss.money}',
+                    style: TextStyle(
+                      color: profitColor,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right, color: _adminMuted, size: 20),
+            ],
           ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
             children: [
-              Text(
-                record.totalSalesAmount.money,
-                style: const TextStyle(
-                  color: _adminInk,
-                  fontWeight: FontWeight.w900,
-                ),
+              _AdminPill(
+                label: record.orderMethod,
+                color: _adminBlue,
+                icon: Icons.shopping_cart_checkout,
               ),
-              const SizedBox(height: 5),
-              Text(
-                'P/L ${record.profitOrLoss.money}',
-                style: TextStyle(
-                  color: profitColor,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                ),
+              _AdminPill(
+                label: 'Cart ${record.cartSalesAmount.money}',
+                color: _adminPrimary,
+                icon: Icons.shopping_basket_outlined,
               ),
-              const SizedBox(height: 5),
-              const Icon(Icons.chevron_right, color: _adminMuted),
+              if (record.needsManualSalesAmount)
+                const _AdminPill(
+                  label: 'Manual pending',
+                  color: _adminWarning,
+                  icon: Icons.edit_note,
+                )
+              else if (record.hasShoppingList || record.hasManualSales)
+                _AdminPill(
+                  label: 'Manual ${record.manualSalesAmount.money}',
+                  color: _adminWarning,
+                  icon: Icons.edit_note,
+                ),
             ],
           ),
         ],
