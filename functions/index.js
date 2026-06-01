@@ -357,17 +357,17 @@ async function requireAdmin(request) {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Admin login is required.");
   }
-  const email = `${request.auth.token.email || ""}`.toLowerCase();
-  if (email === "94768976111@app.local") {
-    return request.auth.uid;
-  }
 
   const adminDoc = await admin
     .firestore()
     .collection("users")
     .doc(request.auth.uid)
     .get();
-  if (!adminDoc.exists || adminDoc.get("role") !== "admin") {
+  if (
+    !adminDoc.exists ||
+    adminDoc.get("role") !== "admin" ||
+    adminDoc.get("isBlocked") === true
+  ) {
     throw new HttpsError(
       "permission-denied",
       "Only admins can approve password reset requests.",

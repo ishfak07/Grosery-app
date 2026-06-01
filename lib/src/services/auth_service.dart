@@ -84,6 +84,9 @@ class AuthService {
   }
 
   bool isBootstrapAdminLogin(String phone, String password) {
+    if (kReleaseMode) {
+      return false;
+    }
     return PhoneUtils.normalizeSriLankanPhone(phone) ==
             AppConstants.bootstrapAdminPhone &&
         password == AppConstants.bootstrapAdminPassword;
@@ -191,6 +194,12 @@ class AuthService {
   }
 
   Future<UserProfile> _loginBootstrapAdmin() async {
+    if (kReleaseMode) {
+      throw const AuthServiceException(
+        'Bootstrap admin login is disabled in release builds.',
+      );
+    }
+
     late final UserCredential credential;
     try {
       credential = await _auth.signInWithEmailAndPassword(

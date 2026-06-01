@@ -4,6 +4,13 @@ This README is for administrators who manage Ishi Grocery Delivery operations fr
 
 ## Admin Login
 
+Production note: the built-in bootstrap admin login is disabled in release
+builds. Before publishing, create a real Firebase Authentication user for the
+admin phone number and make sure the matching Firestore `users/{uid}` document
+has `role: "admin"` and `isBlocked: false`.
+
+For local/debug builds:
+
 1. Open Ishi Grocery Delivery.
 2. Wait for the splash screen to finish.
 3. On the login screen, enter the admin phone number.
@@ -382,7 +389,9 @@ Admin replies are saved in the ticket and record a support notification.
 
 ### Admin Dashboard Does Not Open
 
-Use an account with admin access. The built-in admin login uses phone `+94768976111` and password `admin123`.
+Use an account with admin access. In local/debug builds, the bootstrap admin
+login uses phone `+94768976111` and password `admin123`. In release builds, use
+the production Firebase admin account instead.
 
 ### Firebase Setup Banner Appears
 
