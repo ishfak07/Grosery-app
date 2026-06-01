@@ -69,6 +69,10 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    match /account_sales/{recordId} {
+      allow read, write: if isAdmin();
+    }
+
     match /support_tickets/{ticketId} {
       allow create: if notBlocked() &&
         request.resource.data.userId == request.auth.uid;

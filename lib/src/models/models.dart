@@ -526,6 +526,250 @@ class OrderModel {
   }
 }
 
+class AccountSaleRecord {
+  const AccountSaleRecord({
+    required this.recordId,
+    required this.orderId,
+    required this.userId,
+    required this.customerName,
+    required this.customerPhone,
+    required this.customerAddress,
+    required this.orderMethod,
+    required this.hasCartItems,
+    required this.hasShoppingList,
+    required this.itemCount,
+    required this.cartSalesAmount,
+    required this.manualSalesAmount,
+    required this.manualSalesReviewed,
+    required this.deliveryCharge,
+    required this.serviceCharge,
+    required this.costAmount,
+    required this.expenseAmount,
+    required this.paymentMethod,
+    required this.paymentStatus,
+    required this.orderStatus,
+    required this.adminNotes,
+    required this.accountNotes,
+    required this.orderCreatedAt,
+    required this.deliveredAt,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String recordId;
+  final String orderId;
+  final String userId;
+  final String customerName;
+  final String customerPhone;
+  final String customerAddress;
+  final String orderMethod;
+  final bool hasCartItems;
+  final bool hasShoppingList;
+  final int itemCount;
+  final double cartSalesAmount;
+  final double manualSalesAmount;
+  final bool manualSalesReviewed;
+  final double deliveryCharge;
+  final double serviceCharge;
+  final double costAmount;
+  final double expenseAmount;
+  final String paymentMethod;
+  final String paymentStatus;
+  final String orderStatus;
+  final String adminNotes;
+  final String accountNotes;
+  final DateTime orderCreatedAt;
+  final DateTime deliveredAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  double get itemSalesAmount => cartSalesAmount + manualSalesAmount;
+  double get chargeAmount => deliveryCharge + serviceCharge;
+  double get totalSalesAmount => itemSalesAmount + chargeAmount;
+  double get totalCostAmount => costAmount + expenseAmount;
+  double get profitOrLoss => totalSalesAmount - totalCostAmount;
+  bool get hasManualSales => manualSalesAmount > 0;
+  bool get needsManualSalesAmount => hasShoppingList && !manualSalesReviewed;
+  bool get hasProfitInputs => costAmount > 0 || expenseAmount > 0;
+
+  AccountSaleRecord copyWith({
+    double? manualSalesAmount,
+    bool? manualSalesReviewed,
+    double? costAmount,
+    double? expenseAmount,
+    String? accountNotes,
+    String? paymentStatus,
+    String? orderStatus,
+    DateTime? updatedAt,
+  }) {
+    return AccountSaleRecord(
+      recordId: recordId,
+      orderId: orderId,
+      userId: userId,
+      customerName: customerName,
+      customerPhone: customerPhone,
+      customerAddress: customerAddress,
+      orderMethod: orderMethod,
+      hasCartItems: hasCartItems,
+      hasShoppingList: hasShoppingList,
+      itemCount: itemCount,
+      cartSalesAmount: cartSalesAmount,
+      manualSalesAmount: manualSalesAmount ?? this.manualSalesAmount,
+      manualSalesReviewed: manualSalesReviewed ?? this.manualSalesReviewed,
+      deliveryCharge: deliveryCharge,
+      serviceCharge: serviceCharge,
+      costAmount: costAmount ?? this.costAmount,
+      expenseAmount: expenseAmount ?? this.expenseAmount,
+      paymentMethod: paymentMethod,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
+      orderStatus: orderStatus ?? this.orderStatus,
+      adminNotes: adminNotes,
+      accountNotes: accountNotes ?? this.accountNotes,
+      orderCreatedAt: orderCreatedAt,
+      deliveredAt: deliveredAt,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'recordId': recordId,
+      'orderId': orderId,
+      'userId': userId,
+      'customerName': customerName,
+      'customerPhone': customerPhone,
+      'customerAddress': customerAddress,
+      'orderMethod': orderMethod,
+      'hasCartItems': hasCartItems,
+      'hasShoppingList': hasShoppingList,
+      'itemCount': itemCount,
+      'cartSalesAmount': cartSalesAmount,
+      'manualSalesAmount': manualSalesAmount,
+      'manualSalesReviewed': manualSalesReviewed,
+      'deliveryCharge': deliveryCharge,
+      'serviceCharge': serviceCharge,
+      'itemSalesAmount': itemSalesAmount,
+      'chargeAmount': chargeAmount,
+      'totalSalesAmount': totalSalesAmount,
+      'costAmount': costAmount,
+      'expenseAmount': expenseAmount,
+      'totalCostAmount': totalCostAmount,
+      'profitOrLoss': profitOrLoss,
+      'paymentMethod': paymentMethod,
+      'paymentStatus': paymentStatus,
+      'orderStatus': orderStatus,
+      'adminNotes': adminNotes,
+      'accountNotes': accountNotes,
+      'orderCreatedAt': _writeDate(orderCreatedAt),
+      'deliveredAt': _writeDate(deliveredAt),
+      'createdAt': _writeDate(createdAt),
+      'updatedAt': _writeDate(updatedAt),
+    };
+  }
+
+  factory AccountSaleRecord.fromOrder(
+    OrderModel order, {
+    AccountSaleRecord? existing,
+    required DateTime deliveredAt,
+    required DateTime now,
+    bool preserveManualSalesAmount = false,
+  }) {
+    final hasCartItems = order.items.isNotEmpty;
+    final hasShoppingList = order.hasUpload;
+    final cartSalesAmount = order.items.fold<double>(
+      0,
+      (total, item) => total + item.lineTotal,
+    );
+    final derivedManualSalesAmount =
+        order.subtotal > cartSalesAmount ? order.subtotal - cartSalesAmount : 0;
+    final manualSalesAmount = preserveManualSalesAmount && existing != null
+        ? existing.manualSalesAmount
+        : derivedManualSalesAmount.toDouble();
+    final manualSalesReviewed =
+        existing?.manualSalesReviewed == true || manualSalesAmount > 0;
+
+    return AccountSaleRecord(
+      recordId: order.orderId,
+      orderId: order.orderId,
+      userId: order.userId,
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      customerAddress: order.customerAddress,
+      orderMethod: orderMethodLabel(
+        hasCartItems: hasCartItems,
+        hasShoppingList: hasShoppingList,
+      ),
+      hasCartItems: hasCartItems,
+      hasShoppingList: hasShoppingList,
+      itemCount:
+          order.items.fold<int>(0, (total, item) => total + item.quantity),
+      cartSalesAmount: cartSalesAmount,
+      manualSalesAmount: manualSalesAmount,
+      manualSalesReviewed: !hasShoppingList || manualSalesReviewed,
+      deliveryCharge: order.deliveryCharge,
+      serviceCharge: order.serviceCharge,
+      costAmount: existing?.costAmount ?? 0,
+      expenseAmount: existing?.expenseAmount ?? 0,
+      paymentMethod: order.paymentMethod,
+      paymentStatus: order.paymentStatus,
+      orderStatus: order.orderStatus,
+      adminNotes: order.adminNotes,
+      accountNotes: existing?.accountNotes ?? '',
+      orderCreatedAt: order.createdAt,
+      deliveredAt: existing?.deliveredAt ?? deliveredAt,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    );
+  }
+
+  factory AccountSaleRecord.fromMap(Map<String, dynamic> map, String id) {
+    return AccountSaleRecord(
+      recordId: map['recordId'] as String? ?? id,
+      orderId: map['orderId'] as String? ?? id,
+      userId: map['userId'] as String? ?? '',
+      customerName: map['customerName'] as String? ?? '',
+      customerPhone: map['customerPhone'] as String? ?? '',
+      customerAddress: map['customerAddress'] as String? ?? '',
+      orderMethod: map['orderMethod'] as String? ?? 'Cart checkout',
+      hasCartItems: map['hasCartItems'] as bool? ?? true,
+      hasShoppingList: map['hasShoppingList'] as bool? ?? false,
+      itemCount: (map['itemCount'] as num?)?.toInt() ?? 0,
+      cartSalesAmount: (map['cartSalesAmount'] as num?)?.toDouble() ?? 0,
+      manualSalesAmount: (map['manualSalesAmount'] as num?)?.toDouble() ?? 0,
+      manualSalesReviewed: map['manualSalesReviewed'] as bool? ??
+          (map['hasShoppingList'] != true ||
+              ((map['manualSalesAmount'] as num?)?.toDouble() ?? 0) > 0),
+      deliveryCharge: (map['deliveryCharge'] as num?)?.toDouble() ?? 0,
+      serviceCharge: (map['serviceCharge'] as num?)?.toDouble() ?? 0,
+      costAmount: (map['costAmount'] as num?)?.toDouble() ?? 0,
+      expenseAmount: (map['expenseAmount'] as num?)?.toDouble() ?? 0,
+      paymentMethod: map['paymentMethod'] as String? ?? 'COD',
+      paymentStatus: map['paymentStatus'] as String? ?? 'pending',
+      orderStatus: map['orderStatus'] as String? ?? 'Delivered',
+      adminNotes: map['adminNotes'] as String? ?? '',
+      accountNotes: map['accountNotes'] as String? ?? '',
+      orderCreatedAt: _readDate(map['orderCreatedAt']),
+      deliveredAt: _readDate(map['deliveredAt']),
+      createdAt: _readDate(map['createdAt']),
+      updatedAt: _readDate(map['updatedAt']),
+    );
+  }
+
+  static String orderMethodLabel({
+    required bool hasCartItems,
+    required bool hasShoppingList,
+  }) {
+    if (hasCartItems && hasShoppingList) {
+      return 'Cart + Shopping List Photo';
+    }
+    if (hasShoppingList) {
+      return 'Shopping List Photo';
+    }
+    return 'Cart Checkout';
+  }
+}
+
 class SupportTicket {
   const SupportTicket({
     required this.ticketId,

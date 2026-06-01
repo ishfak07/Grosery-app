@@ -28,6 +28,8 @@ class FirestoreService {
       _db.collection('products');
   CollectionReference<Map<String, dynamic>> get _orders =>
       _db.collection('orders');
+  CollectionReference<Map<String, dynamic>> get _accountSales =>
+      _db.collection('account_sales');
   CollectionReference<Map<String, dynamic>> get _tickets =>
       _db.collection('support_tickets');
   CollectionReference<Map<String, dynamic>> get _messages =>
@@ -141,6 +143,7 @@ class FirestoreService {
       _fromServer(_shops.get(const GetOptions(source: Source.server))),
       _fromServer(_products.get(const GetOptions(source: Source.server))),
       _fromServer(_orders.get(const GetOptions(source: Source.server))),
+      _fromServer(_accountSales.get(const GetOptions(source: Source.server))),
       _fromServer(_tickets.get(const GetOptions(source: Source.server))),
       _fromServer(_passwordResetRequests.get(
         const GetOptions(source: Source.server),
@@ -284,6 +287,22 @@ class FirestoreService {
     });
   }
 
+  Stream<List<AccountSaleRecord>> watchAccountSales() {
+    if (!_firebaseAvailable) {
+      return Stream<List<AccountSaleRecord>>.value(
+        const <AccountSaleRecord>[],
+      );
+    }
+    return _accountSales.snapshots().map((snapshot) {
+      final records = snapshot.docs
+          .map((doc) => AccountSaleRecord.fromMap(doc.data(), doc.id))
+          .where((record) => record.orderStatus == 'Delivered')
+          .toList()
+        ..sort((a, b) => b.deliveredAt.compareTo(a.deliveredAt));
+      return records;
+    });
+  }
+
   Stream<OrderModel?> watchOrder(String orderId) {
     if (!_firebaseAvailable) {
       return Stream<OrderModel?>.value(null);
@@ -303,9 +322,25 @@ class FirestoreService {
     String? adminNotes,
     String? assignedDeliveryPerson,
   }) async {
-    if (status == 'Delivered' && order.orderStatus != 'Out for Delivery') {
+    if (status == 'Delivered' &&
+        order.orderStatus != 'Out for Delivery' &&
+        order.orderStatus != 'Delivered') {
       throw StateError('Order must be out for delivery before delivered.');
     }
+
+    final now = DateTime.now();
+    final updatedOrder = order.copyWith(
+      orderStatus: status,
+      adminNotes: adminNotes,
+      assignedDeliveryPerson: assignedDeliveryPerson,
+    );
+    final accountRecord = status == 'Delivered'
+        ? await _accountSaleRecordForOrder(
+            updatedOrder,
+            now: now,
+            preserveManualSalesAmount: true,
+          )
+        : null;
 
     final batch = _db.batch();
     batch.update(_orders.doc(order.orderId), {
@@ -315,6 +350,15 @@ class FirestoreService {
         'assignedDeliveryPerson': assignedDeliveryPerson,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    if (accountRecord != null) {
+      batch.set(
+        _accountSales.doc(order.orderId),
+        accountRecord.toMap(),
+        SetOptions(merge: true),
+      );
+    } else if (order.orderStatus == 'Delivered' && status != 'Delivered') {
+      batch.delete(_accountSales.doc(order.orderId));
+    }
 
     final notificationId = _uuid.v4();
     batch.set(
@@ -342,7 +386,22 @@ class FirestoreService {
     required String paymentStatus,
   }) async {
     final total = subtotal + deliveryCharge + serviceCharge;
-    await _orders.doc(order.orderId).update({
+    final updatedOrder = order.copyWith(
+      subtotal: subtotal,
+      deliveryCharge: deliveryCharge,
+      serviceCharge: serviceCharge,
+      totalAmount: total,
+      paymentStatus: paymentStatus,
+    );
+    final accountRecord = order.orderStatus == 'Delivered'
+        ? await _accountSaleRecordForOrder(
+            updatedOrder,
+            now: DateTime.now(),
+          )
+        : null;
+
+    final batch = _db.batch();
+    batch.update(_orders.doc(order.orderId), {
       'subtotal': subtotal,
       'deliveryCharge': deliveryCharge,
       'serviceCharge': serviceCharge,
@@ -352,6 +411,14 @@ class FirestoreService {
           order.orderStatus == 'Pending' ? 'Bill Updated' : order.orderStatus,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    if (accountRecord != null) {
+      batch.set(
+        _accountSales.doc(order.orderId),
+        accountRecord.toMap(),
+        SetOptions(merge: true),
+      );
+    }
+    await batch.commit();
     await notifyUser(
       userId: order.userId,
       title: 'Final bill updated',
@@ -359,6 +426,75 @@ class FirestoreService {
       relatedId: order.orderId,
       type: 'order',
     );
+  }
+
+  Future<void> updateAccountSaleManuals({
+    required AccountSaleRecord record,
+    required double manualSalesAmount,
+    required double costAmount,
+    required double expenseAmount,
+    required String accountNotes,
+  }) async {
+    final normalizedManual = _nonNegative(manualSalesAmount);
+    final normalizedCost = _nonNegative(costAmount);
+    final normalizedExpense = _nonNegative(expenseAmount);
+    final updatedRecord = record.copyWith(
+      manualSalesAmount: normalizedManual,
+      manualSalesReviewed: true,
+      costAmount: normalizedCost,
+      expenseAmount: normalizedExpense,
+      accountNotes: accountNotes.trim(),
+      updatedAt: DateTime.now(),
+    );
+    final orderSubtotal = record.cartSalesAmount + normalizedManual;
+    final orderTotal =
+        orderSubtotal + record.deliveryCharge + record.serviceCharge;
+
+    final batch = _db.batch();
+    batch.set(
+      _accountSales.doc(record.recordId),
+      updatedRecord.toMap(),
+      SetOptions(merge: true),
+    );
+    if (record.orderId.isNotEmpty) {
+      batch.update(_orders.doc(record.orderId), {
+        'subtotal': orderSubtotal,
+        'totalAmount': orderTotal,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+
+  Future<AccountSaleRecord?> _existingAccountSaleRecord(String orderId) async {
+    final doc = await _accountSales.doc(orderId).get();
+    final data = doc.data();
+    if (!doc.exists || data == null) {
+      return null;
+    }
+    return AccountSaleRecord.fromMap(data, doc.id);
+  }
+
+  Future<AccountSaleRecord> _accountSaleRecordForOrder(
+    OrderModel order, {
+    required DateTime now,
+    bool preserveManualSalesAmount = false,
+  }) async {
+    final existing = await _existingAccountSaleRecord(order.orderId);
+    return AccountSaleRecord.fromOrder(
+      order,
+      existing: existing,
+      deliveredAt: now,
+      now: now,
+      preserveManualSalesAmount: preserveManualSalesAmount,
+    );
+  }
+
+  double _nonNegative(double value) {
+    if (value.isNaN || value.isNegative) {
+      return 0;
+    }
+    return value;
   }
 
   Future<SupportTicket> createSupportTicket({

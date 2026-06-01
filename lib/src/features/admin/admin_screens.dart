@@ -600,6 +600,17 @@ class AdminDashboardScreen extends StatelessWidget {
                   ),
                 ),
                 _AdminTile(
+                  icon: Icons.account_balance_wallet_outlined,
+                  title: 'Accounts',
+                  subtitle: 'Sales and reports',
+                  accent: _adminAccent,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AdminAccountsManagementScreen(),
+                    ),
+                  ),
+                ),
+                _AdminTile(
                   icon: Icons.inventory_2_outlined,
                   title: 'Products',
                   subtitle: 'Add, edit, disable',
@@ -1568,6 +1579,829 @@ class _OrderInfoRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class AdminAccountsManagementScreen extends StatefulWidget {
+  const AdminAccountsManagementScreen({super.key});
+
+  @override
+  State<AdminAccountsManagementScreen> createState() =>
+      _AdminAccountsManagementScreenState();
+}
+
+class _AdminAccountsManagementScreenState
+    extends State<AdminAccountsManagementScreen> {
+  static const _filters = ['All', 'Today', 'This month', 'Custom'];
+
+  var _filter = 'This month';
+  DateTime? _customStart;
+  DateTime? _customEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.read<AppState>();
+    return _AdminScaffold(
+      title: 'Accounts',
+      body: _AdminPage(
+        child: Column(
+          children: [
+            _AdminFilterBar(
+              filters: _filters,
+              selected: _filter,
+              onSelected: (filter) => setState(() => _filter = filter),
+            ),
+            if (_filter == 'Custom')
+              _AccountDateControls(
+                startDate: _customStart,
+                endDate: _customEnd,
+                onStartTap: () => _pickCustomDate(isStart: true),
+                onEndTap: () => _pickCustomDate(isStart: false),
+                onClear: () => setState(() {
+                  _customStart = null;
+                  _customEnd = null;
+                }),
+              ),
+            Expanded(
+              child: StreamBuilder<List<AccountSaleRecord>>(
+                stream: appState.firestoreService.watchAccountSales(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const RefreshableCenteredContent(
+                      child: LoadingView(),
+                    );
+                  }
+
+                  final records = snapshot.data ?? const <AccountSaleRecord>[];
+                  if (records.isEmpty) {
+                    return const RefreshableCenteredContent(
+                      child: EmptyState(
+                        icon: Icons.account_balance_wallet_outlined,
+                        title: 'No account records',
+                        message:
+                            'Delivered order sales will appear here automatically.',
+                      ),
+                    );
+                  }
+
+                  final filteredRecords = _filteredRecords(records);
+                  final manualRecords = filteredRecords
+                      .where(
+                        (record) =>
+                            record.hasShoppingList ||
+                            record.hasManualSales ||
+                            record.needsManualSalesAmount,
+                      )
+                      .toList();
+                  final allSummary = _AccountsSummary(records);
+                  final filteredSummary = _AccountsSummary(filteredRecords);
+                  final todaySummary =
+                      _AccountsSummary(_recordsForToday(records));
+                  final monthSummary =
+                      _AccountsSummary(_recordsForThisMonth(records));
+
+                  return ListView(
+                    physics: appRefreshScrollPhysics,
+                    padding: const EdgeInsets.fromLTRB(0, 14, 0, 28),
+                    children: [
+                      _AdminStatsGrid(
+                        children: [
+                          _AdminMetricCard(
+                            label: 'Total sales',
+                            value: allSummary.totalSales.money,
+                            icon: Icons.payments_outlined,
+                            color: _adminPrimary,
+                          ),
+                          _AdminMetricCard(
+                            label: 'Daily sales',
+                            value: todaySummary.totalSales.money,
+                            icon: Icons.today_outlined,
+                            color: _adminBlue,
+                          ),
+                          _AdminMetricCard(
+                            label: 'Monthly sales',
+                            value: monthSummary.totalSales.money,
+                            icon: Icons.calendar_month_outlined,
+                            color: _adminAccent,
+                          ),
+                          _AdminMetricCard(
+                            label: 'Delivered revenue',
+                            value: filteredSummary.totalSales.money,
+                            icon: Icons.verified_outlined,
+                            color: _adminViolet,
+                          ),
+                          _AdminMetricCard(
+                            label: 'Manual sales entries',
+                            value: filteredSummary.manualSales.money,
+                            icon: Icons.edit_note,
+                            color: _adminWarning,
+                          ),
+                          _AdminMetricCard(
+                            label: 'Profit / loss',
+                            value: filteredSummary.profitOrLoss.money,
+                            icon: filteredSummary.profitOrLoss < 0
+                                ? Icons.trending_down
+                                : Icons.trending_up,
+                            color: filteredSummary.profitOrLoss < 0
+                                ? const Color(0xFFC83A2B)
+                                : _adminPrimary,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      _AdminReveal(
+                        child: _AccountReportCard(
+                          summary: filteredSummary,
+                          rangeLabel: _rangeLabel,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      const _AdminSectionHeader(
+                        title: 'Manual sales entries',
+                        icon: Icons.edit_note,
+                      ),
+                      if (manualRecords.isEmpty)
+                        const _AdminCard(
+                          child: Text(
+                            'No manual sales entries in this date range.',
+                            style: TextStyle(
+                              color: _adminMuted,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        )
+                      else
+                        for (var index = 0;
+                            index < manualRecords.length;
+                            index++) ...[
+                          _AdminReveal(
+                            index: index,
+                            child: _AccountSaleTile(
+                              record: manualRecords[index],
+                              onTap: () =>
+                                  _showAccountEntryDialog(manualRecords[index]),
+                            ),
+                          ),
+                          if (index != manualRecords.length - 1)
+                            const SizedBox(height: 10),
+                        ],
+                      const SizedBox(height: 18),
+                      const _AdminSectionHeader(
+                        title: 'Sales history',
+                        icon: Icons.history,
+                      ),
+                      if (filteredRecords.isEmpty)
+                        const EmptyState(
+                          icon: Icons.history,
+                          title: 'No sales in this range',
+                          message: 'Try a different date range.',
+                        )
+                      else
+                        for (var index = 0;
+                            index < filteredRecords.length;
+                            index++) ...[
+                          _AdminReveal(
+                            index: index,
+                            child: _AccountSaleTile(
+                              record: filteredRecords[index],
+                              onTap: () => _showAccountEntryDialog(
+                                filteredRecords[index],
+                              ),
+                            ),
+                          ),
+                          if (index != filteredRecords.length - 1)
+                            const SizedBox(height: 10),
+                        ],
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<AccountSaleRecord> _filteredRecords(List<AccountSaleRecord> records) {
+    switch (_filter) {
+      case 'Today':
+        return _recordsForToday(records);
+      case 'This month':
+        return _recordsForThisMonth(records);
+      case 'Custom':
+        final start = _customStart == null ? null : _dateOnly(_customStart!);
+        final end = _customEnd == null ? null : _endOfDay(_customEnd!);
+        return records.where((record) {
+          final deliveredAt = record.deliveredAt;
+          final isAfterStart = start == null || !deliveredAt.isBefore(start);
+          final isBeforeEnd = end == null || !deliveredAt.isAfter(end);
+          return isAfterStart && isBeforeEnd;
+        }).toList();
+      default:
+        return records;
+    }
+  }
+
+  List<AccountSaleRecord> _recordsForToday(List<AccountSaleRecord> records) {
+    final now = DateTime.now();
+    return records
+        .where((record) => _isSameDate(record.deliveredAt, now))
+        .toList();
+  }
+
+  List<AccountSaleRecord> _recordsForThisMonth(
+    List<AccountSaleRecord> records,
+  ) {
+    final now = DateTime.now();
+    return records
+        .where(
+          (record) =>
+              record.deliveredAt.year == now.year &&
+              record.deliveredAt.month == now.month,
+        )
+        .toList();
+  }
+
+  String get _rangeLabel {
+    if (_filter != 'Custom') {
+      return _filter;
+    }
+    final formatter = DateFormat.yMMMd();
+    final start =
+        _customStart == null ? 'Start' : formatter.format(_customStart!);
+    final end = _customEnd == null ? 'End' : formatter.format(_customEnd!);
+    return '$start to $end';
+  }
+
+  Future<void> _pickCustomDate({required bool isStart}) async {
+    final now = DateTime.now();
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: isStart ? (_customStart ?? now) : (_customEnd ?? now),
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 1),
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+    setState(() {
+      if (isStart) {
+        _customStart = _dateOnly(selected);
+        if (_customEnd != null && _customEnd!.isBefore(_customStart!)) {
+          _customEnd = _customStart;
+        }
+      } else {
+        _customEnd = _dateOnly(selected);
+        if (_customStart != null && _customStart!.isAfter(_customEnd!)) {
+          _customStart = _customEnd;
+        }
+      }
+    });
+  }
+
+  Future<void> _showAccountEntryDialog(AccountSaleRecord record) async {
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (_) => _AccountSaleEditorDialog(record: record),
+    );
+    if (mounted && saved == true) {
+      showSnack(context, 'Account entry updated.');
+    }
+  }
+
+  DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  DateTime _endOfDay(DateTime value) {
+    return DateTime(value.year, value.month, value.day, 23, 59, 59, 999);
+  }
+
+  bool _isSameDate(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+}
+
+class _AccountDateControls extends StatelessWidget {
+  const _AccountDateControls({
+    required this.startDate,
+    required this.endDate,
+    required this.onStartTap,
+    required this.onEndTap,
+    required this.onClear,
+  });
+
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final VoidCallback onStartTap;
+  final VoidCallback onEndTap;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final formatter = DateFormat.yMMMd();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 620;
+          final controls = [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onStartTap,
+                icon: const Icon(Icons.event),
+                label: Text(
+                  startDate == null
+                      ? 'Start date'
+                      : formatter.format(startDate!),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10, height: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onEndTap,
+                icon: const Icon(Icons.event_available),
+                label: Text(
+                  endDate == null ? 'End date' : formatter.format(endDate!),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10, height: 10),
+            IconButton.filledTonal(
+              tooltip: 'Clear dates',
+              onPressed: onClear,
+              icon: const Icon(Icons.close),
+            ),
+          ];
+
+          if (compact) {
+            return Column(
+              children: [
+                Row(children: controls.take(3).toList()),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: controls.last,
+                ),
+              ],
+            );
+          }
+
+          return Row(children: controls);
+        },
+      ),
+    );
+  }
+}
+
+class _AccountsSummary {
+  const _AccountsSummary(this.records);
+
+  final List<AccountSaleRecord> records;
+
+  int get orderCount => records.length;
+  int get manualEntryCount => records
+      .where(
+        (record) =>
+            record.hasShoppingList ||
+            record.hasManualSales ||
+            record.needsManualSalesAmount,
+      )
+      .length;
+  int get pendingManualCount =>
+      records.where((record) => record.needsManualSalesAmount).length;
+  double get cartSales => records.fold<double>(
+        0,
+        (sum, record) => sum + record.cartSalesAmount,
+      );
+  double get manualSales => records.fold<double>(
+        0,
+        (sum, record) => sum + record.manualSalesAmount,
+      );
+  double get charges => records.fold<double>(
+        0,
+        (sum, record) => sum + record.chargeAmount,
+      );
+  double get totalSales => records.fold<double>(
+        0,
+        (sum, record) => sum + record.totalSalesAmount,
+      );
+  double get costs => records.fold<double>(
+        0,
+        (sum, record) => sum + record.totalCostAmount,
+      );
+  double get profitOrLoss => records.fold<double>(
+        0,
+        (sum, record) => sum + record.profitOrLoss,
+      );
+}
+
+class _AccountReportCard extends StatelessWidget {
+  const _AccountReportCard({
+    required this.summary,
+    required this.rangeLabel,
+  });
+
+  final _AccountsSummary summary;
+  final String rangeLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final profitColor =
+        summary.profitOrLoss < 0 ? const Color(0xFFC83A2B) : _adminPrimary;
+    return _AdminCard(
+      child: Column(
+        children: [
+          const _AdminSectionHeader(
+            title: 'Date-wise report',
+            icon: Icons.summarize_outlined,
+          ),
+          _AccountReportRow(label: 'Range', value: rangeLabel),
+          _AccountReportRow(
+            label: 'Delivered orders',
+            value: summary.orderCount.toString(),
+          ),
+          _AccountReportRow(
+            label: 'Cart item sales',
+            value: summary.cartSales.money,
+          ),
+          _AccountReportRow(
+            label: 'Manual sales',
+            value: summary.manualSales.money,
+          ),
+          _AccountReportRow(
+            label: 'Delivery/service',
+            value: summary.charges.money,
+          ),
+          _AccountReportRow(
+            label: 'Costs/expenses',
+            value: summary.costs.money,
+          ),
+          _AccountReportRow(
+            label: 'Pending manual',
+            value: summary.pendingManualCount.toString(),
+          ),
+          const Divider(height: 22),
+          _AccountReportRow(
+            label: 'Profit / loss',
+            value: summary.profitOrLoss.money,
+            valueColor: profitColor,
+            isStrong: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountReportRow extends StatelessWidget {
+  const _AccountReportRow({
+    required this.label,
+    required this.value,
+    this.valueColor = _adminInk,
+    this.isStrong = false,
+  });
+
+  final String label;
+  final String value;
+  final Color valueColor;
+  final bool isStrong;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: _adminMuted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            value,
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              color: valueColor,
+              fontWeight: isStrong ? FontWeight.w900 : FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountSaleTile extends StatelessWidget {
+  const _AccountSaleTile({
+    required this.record,
+    required this.onTap,
+  });
+
+  final AccountSaleRecord record;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor =
+        record.needsManualSalesAmount ? _adminWarning : _adminPrimary;
+    final profitColor =
+        record.profitOrLoss < 0 ? const Color(0xFFC83A2B) : _adminPrimary;
+    return _AdminCard(
+      onTap: onTap,
+      borderColor: record.needsManualSalesAmount
+          ? _adminWarning.withOpacity(0.45)
+          : _adminLine,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _AdminIconBadge(
+            icon: record.needsManualSalesAmount
+                ? Icons.edit_note
+                : Icons.account_balance_wallet_outlined,
+            color: statusColor,
+            size: 48,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${record.customerName} - ${_shortId(record.orderId)}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _adminInk,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  DateFormat.yMMMd().add_jm().format(record.deliveredAt),
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _adminMuted,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    _AdminPill(
+                      label: record.orderMethod,
+                      color: _adminBlue,
+                      icon: Icons.shopping_cart_checkout,
+                    ),
+                    if (record.needsManualSalesAmount)
+                      const _AdminPill(
+                        label: 'Manual amount pending',
+                        color: _adminWarning,
+                        icon: Icons.edit_note,
+                      )
+                    else if (record.hasShoppingList || record.hasManualSales)
+                      _AdminPill(
+                        label: 'Manual ${record.manualSalesAmount.money}',
+                        color: _adminWarning,
+                        icon: Icons.edit_note,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                record.totalSalesAmount.money,
+                style: const TextStyle(
+                  color: _adminInk,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'P/L ${record.profitOrLoss.money}',
+                style: TextStyle(
+                  color: profitColor,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 5),
+              const Icon(Icons.chevron_right, color: _adminMuted),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountSaleEditorDialog extends StatefulWidget {
+  const _AccountSaleEditorDialog({required this.record});
+
+  final AccountSaleRecord record;
+
+  @override
+  State<_AccountSaleEditorDialog> createState() =>
+      _AccountSaleEditorDialogState();
+}
+
+class _AccountSaleEditorDialogState extends State<_AccountSaleEditorDialog> {
+  late final TextEditingController _manualSales;
+  late final TextEditingController _cost;
+  late final TextEditingController _expense;
+  late final TextEditingController _notes;
+  var _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _manualSales = TextEditingController(
+      text: widget.record.manualSalesAmount.toStringAsFixed(2),
+    );
+    _cost = TextEditingController(
+      text: widget.record.costAmount.toStringAsFixed(2),
+    );
+    _expense = TextEditingController(
+      text: widget.record.expenseAmount.toStringAsFixed(2),
+    );
+    _notes = TextEditingController(text: widget.record.accountNotes);
+  }
+
+  @override
+  void dispose() {
+    _manualSales.dispose();
+    _cost.dispose();
+    _expense.dispose();
+    _notes.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final projectedManual = _amountFrom(_manualSales.text);
+    final projectedCost = _amountFrom(_cost.text);
+    final projectedExpense = _amountFrom(_expense.text);
+    final projectedSales = widget.record.cartSalesAmount +
+        projectedManual +
+        widget.record.deliveryCharge +
+        widget.record.serviceCharge;
+    final projectedProfit = projectedSales - projectedCost - projectedExpense;
+
+    return AlertDialog(
+      backgroundColor: _adminSurface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      title: Row(
+        children: [
+          const _AdminIconBadge(
+            icon: Icons.account_balance_wallet_outlined,
+            color: _adminPrimary,
+            size: 38,
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text('Account ${_shortId(widget.record.orderId)}')),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _OrderInfoRow('Customer', widget.record.customerName),
+              _OrderInfoRow('Method', widget.record.orderMethod),
+              _OrderInfoRow('Cart sales', widget.record.cartSalesAmount.money),
+              _OrderInfoRow(
+                  'Delivery/service', widget.record.chargeAmount.money),
+              const Divider(height: 22),
+              TextField(
+                controller: _manualSales,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Shopping list/manual sales',
+                  prefixIcon: Icon(Icons.edit_note),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _cost,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Cost amount',
+                  prefixIcon: Icon(Icons.inventory_outlined),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _expense,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Other expenses',
+                  prefixIcon: Icon(Icons.receipt_outlined),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _notes,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Accounts notes',
+                  prefixIcon: Icon(Icons.notes_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _AdminCard(
+                padding: const EdgeInsets.all(12),
+                borderColor: _adminLine,
+                child: Column(
+                  children: [
+                    _AccountReportRow(
+                      label: 'Projected sales',
+                      value: projectedSales.money,
+                    ),
+                    _AccountReportRow(
+                      label: 'Projected P/L',
+                      value: projectedProfit.money,
+                      valueColor: projectedProfit < 0
+                          ? const Color(0xFFC83A2B)
+                          : _adminPrimary,
+                      isStrong: true,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: _isSaving ? null : _save,
+          icon: _isSaving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.save),
+          label: Text(_isSaving ? 'Saving' : 'Save'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _save() async {
+    setState(() => _isSaving = true);
+    try {
+      await context.read<AppState>().firestoreService.updateAccountSaleManuals(
+            record: widget.record,
+            manualSalesAmount: _amountFrom(_manualSales.text),
+            costAmount: _amountFrom(_cost.text),
+            expenseAmount: _amountFrom(_expense.text),
+            accountNotes: _notes.text,
+          );
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  double _amountFrom(String raw) {
+    return double.tryParse(raw.trim()) ?? 0;
+  }
+}
+
+String _shortId(String value) {
+  if (value.length <= 8) {
+    return value;
+  }
+  return value.substring(0, 8);
 }
 
 class AdminProductManagementScreen extends StatelessWidget {
