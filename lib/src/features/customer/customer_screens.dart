@@ -75,7 +75,9 @@ class _CustomerScaffold extends StatelessWidget {
         foregroundColor: _customerInk,
         shape: const Border(bottom: BorderSide(color: _customerLine)),
       ),
-      body: _CustomerBackdrop(child: body),
+      body: _CustomerBackdrop(
+        child: AppRefreshIndicator(child: body),
+      ),
       bottomNavigationBar: bottomNavigationBar,
     );
   }
@@ -100,6 +102,7 @@ class _CustomerScrollView extends StatelessWidget {
         builder: (context, constraints) {
           final horizontal = constraints.maxWidth >= 720 ? 24.0 : 16.0;
           return ListView(
+            physics: appRefreshScrollPhysics,
             padding: EdgeInsets.zero,
             children: [
               Padding(
@@ -444,6 +447,7 @@ class _ListSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
+      physics: appRefreshScrollPhysics,
       padding: const EdgeInsets.all(16),
       itemCount: itemCount,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
@@ -512,63 +516,66 @@ class CustomerHomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: _customerBackground,
       body: _CustomerBackdrop(
-        child: _CustomerScrollView(
-          padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
-          safeAreaTop: true,
-          children: [
-            FirebaseSetupBanner(appState: appState),
-            _HomeHeader(
-              profile: profile,
-              cartCount: appState.cartCount,
-            ),
-            const SizedBox(height: 16),
-            _HomeSearchCallout(
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ProductListScreen()),
+        child: AppRefreshIndicator(
+          child: _CustomerScrollView(
+            padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
+            safeAreaTop: true,
+            children: [
+              FirebaseSetupBanner(appState: appState),
+              _HomeHeader(
+                profile: profile,
+                cartCount: appState.cartCount,
               ),
-            ),
-            const SizedBox(height: 14),
-            const _HomePromoBanner(),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _HomeActionTile(
-                    icon: Icons.storefront,
-                    title: 'Items',
-                    subtitle: 'Pick the items you need.',
-                    accent: _customerPrimary,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ShopListScreen()),
+              const SizedBox(height: 16),
+              _HomeSearchCallout(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ProductListScreen()),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const _HomePromoBanner(),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _HomeActionTile(
+                      icon: Icons.storefront,
+                      title: 'Items',
+                      subtitle: 'Pick the items you need.',
+                      accent: _customerPrimary,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const ShopListScreen()),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _HomeActionTile(
-                    icon: Icons.receipt_long,
-                    title: 'Photo list',
-                    subtitle: 'Send any grocery list',
-                    accent: _customerAccent,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (_) => const UploadBillScreen()),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _HomeActionTile(
+                      icon: Icons.receipt_long,
+                      title: 'Photo list',
+                      subtitle: 'Send any grocery list',
+                      accent: _customerAccent,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const UploadBillScreen()),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 22),
-            _CustomerSectionHeader(
-              title: 'Fresh picks',
-              subtitle: 'Recently added to the catalog',
-              actionLabel: 'View all',
-              onAction: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ProductListScreen()),
+                ],
               ),
-            ),
-            const _RecentProductsGrid(),
-          ],
+              const SizedBox(height: 22),
+              _CustomerSectionHeader(
+                title: 'Fresh picks',
+                subtitle: 'Recently added to the catalog',
+                actionLabel: 'View all',
+                onAction: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ProductListScreen()),
+                ),
+              ),
+              const _RecentProductsGrid(),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: const _CustomerBottomNavigation(selectedIndex: 0),
@@ -1029,16 +1036,19 @@ class ShopListScreen extends StatelessWidget {
           }
           final shops = snapshot.data ?? const <Shop>[];
           if (shops.isEmpty) {
-            return EmptyState(
-              icon: Icons.store_mall_directory_outlined,
-              title: 'No active shops',
-              message: 'Products can still be browsed from the full catalog.',
-              action: ElevatedButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ProductListScreen()),
+            return RefreshableCenteredContent(
+              child: EmptyState(
+                icon: Icons.store_mall_directory_outlined,
+                title: 'No active shops',
+                message: 'Products can still be browsed from the full catalog.',
+                action: ElevatedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) => const ProductListScreen()),
+                  ),
+                  icon: const Icon(Icons.search),
+                  label: const Text('Browse catalog'),
                 ),
-                icon: const Icon(Icons.search),
-                label: const Text('Browse catalog'),
               ),
             );
           }
@@ -1222,14 +1232,18 @@ class _ProductListScreenState extends State<ProductListScreen> {
               stream: _productsStream,
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return _DataErrorState(
-                    message: _friendlyDataError(snapshot.error),
+                  return RefreshableCenteredContent(
+                    child: _DataErrorState(
+                      message: _friendlyDataError(snapshot.error),
+                    ),
                   );
                 }
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: _ProductGridSkeleton(),
+                  return const RefreshableCenteredContent(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: _ProductGridSkeleton(),
+                    ),
                   );
                 }
                 final query = _search.text.trim().toLowerCase();
@@ -1242,16 +1256,19 @@ class _ProductListScreenState extends State<ProductListScreen> {
                     )
                     .toList();
                 if (products.isEmpty) {
-                  return const EmptyState(
-                    icon: Icons.search_off,
-                    title: 'No products found',
-                    message: 'Try a different product name or shop.',
+                  return const RefreshableCenteredContent(
+                    child: EmptyState(
+                      icon: Icons.search_off,
+                      title: 'No products found',
+                      message: 'Try a different product name or shop.',
+                    ),
                   );
                 }
                 return LayoutBuilder(
                   builder: (context, constraints) {
                     final count = constraints.maxWidth >= 720 ? 3 : 2;
                     return GridView.builder(
+                      physics: appRefreshScrollPhysics,
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
                       itemCount: products.length,
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -1668,16 +1685,20 @@ class CartScreen extends StatelessWidget {
     return _CustomerScaffold(
       title: 'Cart',
       body: items.isEmpty && !appState.hasBillImage
-          ? EmptyState(
-              icon: Icons.shopping_cart_outlined,
-              title: 'Your cart is empty',
-              message: 'Add catalog products or upload a shopping list photo.',
-              action: ElevatedButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ProductListScreen()),
+          ? RefreshableCenteredContent(
+              child: EmptyState(
+                icon: Icons.shopping_cart_outlined,
+                title: 'Your cart is empty',
+                message:
+                    'Add catalog products or upload a shopping list photo.',
+                action: ElevatedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) => const ProductListScreen()),
+                  ),
+                  icon: const Icon(Icons.search),
+                  label: const Text('Browse products'),
                 ),
-                icon: const Icon(Icons.search),
-                label: const Text('Browse products'),
               ),
             )
           : _CustomerScrollView(
@@ -2763,10 +2784,12 @@ class OrderHistoryScreen extends StatelessWidget {
           }
           final orders = snapshot.data ?? const <OrderModel>[];
           if (orders.isEmpty) {
-            return const EmptyState(
-              icon: Icons.history,
-              title: 'No orders yet',
-              message: 'Your order history will appear here.',
+            return const RefreshableCenteredContent(
+              child: EmptyState(
+                icon: Icons.history,
+                title: 'No orders yet',
+                message: 'Your order history will appear here.',
+              ),
             );
           }
           return _CustomerScrollView(
@@ -2872,10 +2895,12 @@ class OrderTrackingScreen extends StatelessWidget {
           }
           final order = snapshot.data;
           if (order == null) {
-            return const EmptyState(
-              icon: Icons.receipt_long,
-              title: 'Order not found',
-              message: 'This order may have been removed.',
+            return const RefreshableCenteredContent(
+              child: EmptyState(
+                icon: Icons.receipt_long,
+                title: 'Order not found',
+                message: 'This order may have been removed.',
+              ),
             );
           }
           return _CustomerScrollView(
@@ -3169,10 +3194,12 @@ class NotificationsScreen extends StatelessWidget {
           }
           final notifications = snapshot.data ?? const <AppNotification>[];
           if (notifications.isEmpty) {
-            return const EmptyState(
-              icon: Icons.notifications_none,
-              title: 'No notifications',
-              message: 'Order and support updates will appear here.',
+            return const RefreshableCenteredContent(
+              child: EmptyState(
+                icon: Icons.notifications_none,
+                title: 'No notifications',
+                message: 'Order and support updates will appear here.',
+              ),
             );
           }
           return _CustomerScrollView(
@@ -3506,84 +3533,94 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
   }
 
   Widget _buildMessageList(AppState appState, UserProfile profile) {
-    return StreamBuilder<List<SupportMessage>>(
-      stream: appState.firestoreService.watchSupportMessages(
+    return AppRefreshIndicator(
+      onRefresh: () => appState.firestoreService.refreshSupportMessages(
         widget.ticket.ticketId,
       ),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const _ListSkeleton(itemCount: 3);
-        }
-        if (snapshot.hasError) {
-          return const EmptyState(
-            icon: Icons.sms_failed_outlined,
-            title: 'Messages unavailable',
-            message: 'Please go back and open this ticket again.',
-          );
-        }
-        final messages = snapshot.data ?? const <SupportMessage>[];
-        if (messages.isEmpty) {
-          return const EmptyState(
-            icon: Icons.forum_outlined,
-            title: 'No messages yet',
-            message: 'Send a message to continue this support ticket.',
-          );
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          itemCount: messages.length,
-          itemBuilder: (context, index) {
-            final message = messages[index];
-            final isMine = message.senderId == profile.uid;
-            return _FadeSlideIn(
-              index: index,
-              child: Align(
-                alignment:
-                    isMine ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 310),
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isMine ? _customerPrimary : Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isMine ? _customerPrimary : _customerLine,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF163526).withOpacity(0.06),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        message.message,
-                        style: TextStyle(
-                          color: isMine ? Colors.white : _customerInk,
-                          fontWeight: FontWeight.w600,
-                          height: 1.35,
-                        ),
-                      ),
-                      if (message.imageUrl.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          height: 140,
-                          child: ProductImage(url: message.imageUrl),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+      child: StreamBuilder<List<SupportMessage>>(
+        stream: appState.firestoreService.watchSupportMessages(
+          widget.ticket.ticketId,
+        ),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const _ListSkeleton(itemCount: 3);
+          }
+          if (snapshot.hasError) {
+            return const RefreshableCenteredContent(
+              child: EmptyState(
+                icon: Icons.sms_failed_outlined,
+                title: 'Messages unavailable',
+                message: 'Please go back and open this ticket again.',
               ),
             );
-          },
-        );
-      },
+          }
+          final messages = snapshot.data ?? const <SupportMessage>[];
+          if (messages.isEmpty) {
+            return const RefreshableCenteredContent(
+              child: EmptyState(
+                icon: Icons.forum_outlined,
+                title: 'No messages yet',
+                message: 'Send a message to continue this support ticket.',
+              ),
+            );
+          }
+          return ListView.builder(
+            physics: appRefreshScrollPhysics,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            itemCount: messages.length,
+            itemBuilder: (context, index) {
+              final message = messages[index];
+              final isMine = message.senderId == profile.uid;
+              return _FadeSlideIn(
+                index: index,
+                child: Align(
+                  alignment:
+                      isMine ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 310),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isMine ? _customerPrimary : Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isMine ? _customerPrimary : _customerLine,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF163526).withOpacity(0.06),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          message.message,
+                          style: TextStyle(
+                            color: isMine ? Colors.white : _customerInk,
+                            fontWeight: FontWeight.w600,
+                            height: 1.35,
+                          ),
+                        ),
+                        if (message.imageUrl.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            height: 140,
+                            child: ProductImage(url: message.imageUrl),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 

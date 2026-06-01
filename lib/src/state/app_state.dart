@@ -125,8 +125,25 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (authService.isBootstrapAdminUser(user)) {
+      _profile = authService.bootstrapAdminProfile(user.uid);
+      notifyListeners();
+      return;
+    }
     _profile = await firestoreService.fetchUserProfile(user.uid);
     notifyListeners();
+  }
+
+  Future<void> refreshVisibleData() async {
+    if (!firebaseAvailable) {
+      return;
+    }
+    await refreshProfile();
+    final current = _profile;
+    if (current == null) {
+      return;
+    }
+    await firestoreService.refreshForProfile(current);
   }
 
   Future<UserProfile> login({

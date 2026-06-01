@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../constants/app_constants.dart';
 import '../utils/phone_utils.dart';
 import '../utils/validators.dart';
 import '../../state/app_state.dart';
+
+const appRefreshScrollPhysics = AlwaysScrollableScrollPhysics(
+  parent: ClampingScrollPhysics(),
+);
+const _appRefreshMinimumDuration = Duration(milliseconds: 650);
 
 class FirebaseSetupBanner extends StatelessWidget {
   const FirebaseSetupBanner({super.key, required this.appState});
@@ -168,6 +174,80 @@ class LoadingView extends StatelessWidget {
       ),
     );
   }
+}
+
+class AppRefreshIndicator extends StatelessWidget {
+  const AppRefreshIndicator({
+    super.key,
+    required this.child,
+    this.onRefresh,
+  });
+
+  final Widget child;
+  final Future<void> Function()? onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator.adaptive(
+      color: Theme.of(context).colorScheme.primary,
+      backgroundColor: Colors.white,
+      displacement: 48,
+      notificationPredicate: (notification) =>
+          notification.depth == 0 && notification.metrics.axis == Axis.vertical,
+      onRefresh: () async {
+        try {
+          await Future.wait([
+            onRefresh == null ? performAppRefresh(context) : onRefresh!(),
+            Future<void>.delayed(_appRefreshMinimumDuration),
+          ]);
+        } catch (error) {
+          if (context.mounted) {
+            showSnack(context, 'Refresh failed: $error');
+          }
+        }
+      },
+      child: child,
+    );
+  }
+}
+
+class RefreshableCenteredContent extends StatelessWidget {
+  const RefreshableCenteredContent({
+    super.key,
+    required this.child,
+    this.padding = EdgeInsets.zero,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final fallbackHeight = MediaQuery.sizeOf(context).height;
+        final height = constraints.hasBoundedHeight &&
+                constraints.maxHeight.isFinite &&
+                constraints.maxHeight > 0
+            ? constraints.maxHeight
+            : fallbackHeight;
+        return ListView(
+          physics: appRefreshScrollPhysics,
+          padding: padding,
+          children: [
+            SizedBox(
+              height: height,
+              child: child,
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+Future<void> performAppRefresh(BuildContext context) {
+  return context.read<AppState>().refreshVisibleData();
 }
 
 class StatusChip extends StatelessWidget {

@@ -113,6 +113,80 @@ class FirestoreService {
     });
   }
 
+  Future<void> refreshForProfile(UserProfile profile) async {
+    if (!_firebaseAvailable) {
+      return;
+    }
+    if (profile.isAdmin) {
+      await _refreshAdminData();
+      return;
+    }
+    await _refreshCustomerData(profile.uid);
+  }
+
+  Future<void> refreshSupportMessages(String ticketId) async {
+    if (!_firebaseAvailable) {
+      return;
+    }
+    await _fromServer(
+      _messages.where('ticketId', isEqualTo: ticketId).get(
+            const GetOptions(source: Source.server),
+          ),
+    );
+  }
+
+  Future<void> _refreshAdminData() async {
+    await Future.wait([
+      _fromServer(_users.get(const GetOptions(source: Source.server))),
+      _fromServer(_shops.get(const GetOptions(source: Source.server))),
+      _fromServer(_products.get(const GetOptions(source: Source.server))),
+      _fromServer(_orders.get(const GetOptions(source: Source.server))),
+      _fromServer(_tickets.get(const GetOptions(source: Source.server))),
+      _fromServer(_passwordResetRequests.get(
+        const GetOptions(source: Source.server),
+      )),
+      _fromServer(
+        _notifications
+            .where('recipientRole', isEqualTo: 'admin')
+            .get(const GetOptions(source: Source.server)),
+      ),
+    ]);
+  }
+
+  Future<void> _refreshCustomerData(String userId) async {
+    await Future.wait([
+      _fromServer(_users.doc(userId).get(
+            const GetOptions(source: Source.server),
+          )),
+      _fromServer(
+        _shops
+            .where('isActive', isEqualTo: true)
+            .get(const GetOptions(source: Source.server)),
+      ),
+      _fromServer(_products.get(const GetOptions(source: Source.server))),
+      _fromServer(
+        _orders
+            .where('userId', isEqualTo: userId)
+            .get(const GetOptions(source: Source.server)),
+      ),
+      _fromServer(
+        _tickets
+            .where('userId', isEqualTo: userId)
+            .get(const GetOptions(source: Source.server)),
+      ),
+      _fromServer(
+        _notifications
+            .where('recipientRole', isEqualTo: 'user')
+            .where('userId', isEqualTo: userId)
+            .get(const GetOptions(source: Source.server)),
+      ),
+    ]);
+  }
+
+  Future<void> _fromServer(Future<Object?> request) async {
+    await request;
+  }
+
   Future<void> saveShop(Shop shop) {
     return _shops.doc(shop.shopId).set(shop.toMap(), SetOptions(merge: true));
   }

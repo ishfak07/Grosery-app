@@ -56,14 +56,18 @@ class BlockedAccountScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text(AppConstants.appName)),
-      body: EmptyState(
-        icon: Icons.block,
-        title: 'Account blocked',
-        message: 'Please contact support before placing new orders.',
-        action: ElevatedButton.icon(
-          onPressed: () => onLogout(),
-          icon: const Icon(Icons.logout),
-          label: const Text('Logout'),
+      body: AppRefreshIndicator(
+        child: RefreshableCenteredContent(
+          child: EmptyState(
+            icon: Icons.block,
+            title: 'Account blocked',
+            message: 'Please contact support before placing new orders.',
+            action: ElevatedButton.icon(
+              onPressed: () => onLogout(),
+              icon: const Icon(Icons.logout),
+              label: const Text('Logout'),
+            ),
+          ),
         ),
       ),
     );

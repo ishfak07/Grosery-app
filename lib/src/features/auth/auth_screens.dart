@@ -64,45 +64,48 @@ class _AuthScaffold extends StatelessWidget {
               shape: const Border(bottom: BorderSide(color: _authLine)),
             ),
       body: _AuthBackdrop(
-        child: SafeArea(
-          top: appBarTitle == null,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final horizontal = constraints.maxWidth >= 720 ? 24.0 : 16.0;
-              return ListView(
-                padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 24),
-                children: [
-                  Align(
-                    alignment: Alignment.topCenter,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 520),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (appBarTitle == null) ...[
-                            const _AuthBrandMark(),
-                            const SizedBox(height: 20),
+        child: AppRefreshIndicator(
+          child: SafeArea(
+            top: appBarTitle == null,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final horizontal = constraints.maxWidth >= 720 ? 24.0 : 16.0;
+                return ListView(
+                  physics: appRefreshScrollPhysics,
+                  padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 24),
+                  children: [
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 520),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (appBarTitle == null) ...[
+                              const _AuthBrandMark(),
+                              const SizedBox(height: 20),
+                            ],
+                            Text(
+                              title,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineSmall
+                                  ?.copyWith(
+                                    color: _authInk,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0,
+                                  ),
+                            ),
+                            const SizedBox(height: 14),
+                            ...children,
                           ],
-                          Text(
-                            title,
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
-                                ?.copyWith(
-                                  color: _authInk,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0,
-                                ),
-                          ),
-                          const SizedBox(height: 14),
-                          ...children,
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),

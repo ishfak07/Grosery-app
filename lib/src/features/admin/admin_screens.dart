@@ -94,7 +94,9 @@ class _AdminScaffold extends StatelessWidget {
         shape: const Border(bottom: BorderSide(color: _adminLine)),
       ),
       floatingActionButton: floatingActionButton,
-      body: _AdminBackdrop(child: body),
+      body: _AdminBackdrop(
+        child: AppRefreshIndicator(child: body),
+      ),
     );
   }
 }
@@ -578,6 +580,7 @@ class AdminDashboardScreen extends StatelessWidget {
       ],
       body: _AdminPage(
         child: ListView(
+          physics: appRefreshScrollPhysics,
           padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
           children: [
             FirebaseSetupBanner(appState: appState),
@@ -897,7 +900,9 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
                 stream: appState.firestoreService.watchAllOrders(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const LoadingView();
+                    return const RefreshableCenteredContent(
+                      child: LoadingView(),
+                    );
                   }
                   final orders = (snapshot.data ?? const <OrderModel>[])
                       .where(
@@ -906,13 +911,17 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
                       )
                       .toList();
                   if (orders.isEmpty) {
-                    return const EmptyState(
-                      icon: Icons.receipt_long,
-                      title: 'No orders',
-                      message: 'Orders matching this filter will appear here.',
+                    return const RefreshableCenteredContent(
+                      child: EmptyState(
+                        icon: Icons.receipt_long,
+                        title: 'No orders',
+                        message:
+                            'Orders matching this filter will appear here.',
+                      ),
                     );
                   }
                   return ListView.separated(
+                    physics: appRefreshScrollPhysics,
                     padding: const EdgeInsets.fromLTRB(0, 14, 0, 28),
                     itemCount: orders.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -1104,18 +1113,23 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
           stream: appState.firestoreService.watchOrder(widget.orderId),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const LoadingView();
+              return const RefreshableCenteredContent(
+                child: LoadingView(),
+              );
             }
             final order = snapshot.data;
             if (order == null) {
-              return const EmptyState(
-                icon: Icons.receipt_long,
-                title: 'Order not found',
-                message: 'This order is no longer available.',
+              return const RefreshableCenteredContent(
+                child: EmptyState(
+                  icon: Icons.receipt_long,
+                  title: 'Order not found',
+                  message: 'This order is no longer available.',
+                ),
               );
             }
             _syncControllers(order);
             return ListView(
+              physics: appRefreshScrollPhysics,
               padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
               children: [
                 _AdminReveal(
@@ -1578,24 +1592,31 @@ class AdminProductManagementScreen extends StatelessWidget {
           stream: appState.firestoreService.watchProducts(activeOnly: false),
           builder: (context, snapshot) {
             if (snapshot.hasError) {
-              return EmptyState(
-                icon: Icons.error_outline,
-                title: 'Could not load products',
-                message: snapshot.error.toString(),
+              return RefreshableCenteredContent(
+                child: EmptyState(
+                  icon: Icons.error_outline,
+                  title: 'Could not load products',
+                  message: snapshot.error.toString(),
+                ),
               );
             }
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const LoadingView();
+              return const RefreshableCenteredContent(
+                child: LoadingView(),
+              );
             }
             final products = snapshot.data ?? const <Product>[];
             if (products.isEmpty) {
-              return const EmptyState(
-                icon: Icons.inventory_2_outlined,
-                title: 'No products',
-                message: 'Add catalog products for customers to order.',
+              return const RefreshableCenteredContent(
+                child: EmptyState(
+                  icon: Icons.inventory_2_outlined,
+                  title: 'No products',
+                  message: 'Add catalog products for customers to order.',
+                ),
               );
             }
             return ListView.separated(
+              physics: appRefreshScrollPhysics,
               padding: const EdgeInsets.fromLTRB(0, 16, 0, 96),
               itemCount: products.length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -1777,6 +1798,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
             return Form(
               key: _formKey,
               child: ListView(
+                physics: appRefreshScrollPhysics,
                 padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
                 children: [
                   if (shops.isEmpty)
@@ -2072,17 +2094,22 @@ class AdminShopManagementScreen extends StatelessWidget {
           stream: appState.firestoreService.watchShops(activeOnly: false),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const LoadingView();
+              return const RefreshableCenteredContent(
+                child: LoadingView(),
+              );
             }
             final shops = snapshot.data ?? const <Shop>[];
             if (shops.isEmpty) {
-              return const EmptyState(
-                icon: Icons.storefront,
-                title: 'No shops',
-                message: 'Add partner shops before adding products.',
+              return const RefreshableCenteredContent(
+                child: EmptyState(
+                  icon: Icons.storefront,
+                  title: 'No shops',
+                  message: 'Add partner shops before adding products.',
+                ),
               );
             }
             return ListView.separated(
+              physics: appRefreshScrollPhysics,
               padding: const EdgeInsets.fromLTRB(0, 16, 0, 96),
               itemCount: shops.length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -2294,17 +2321,22 @@ class AdminSupportScreen extends StatelessWidget {
           stream: appState.firestoreService.watchTickets(allTickets: true),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const LoadingView();
+              return const RefreshableCenteredContent(
+                child: LoadingView(),
+              );
             }
             final tickets = snapshot.data ?? const <SupportTicket>[];
             if (tickets.isEmpty) {
-              return const EmptyState(
-                icon: Icons.support_agent,
-                title: 'No support tickets',
-                message: 'Customer messages will appear here.',
+              return const RefreshableCenteredContent(
+                child: EmptyState(
+                  icon: Icons.support_agent,
+                  title: 'No support tickets',
+                  message: 'Customer messages will appear here.',
+                ),
               );
             }
             return ListView.separated(
+              physics: appRefreshScrollPhysics,
               padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
               itemCount: tickets.length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -2404,17 +2436,22 @@ class AdminCustomerManagementScreen extends StatelessWidget {
           stream: appState.firestoreService.watchUsers(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const LoadingView();
+              return const RefreshableCenteredContent(
+                child: LoadingView(),
+              );
             }
             final users = snapshot.data ?? const <UserProfile>[];
             if (users.isEmpty) {
-              return const EmptyState(
-                icon: Icons.people_outline,
-                title: 'No customers',
-                message: 'Registered users will appear here.',
+              return const RefreshableCenteredContent(
+                child: EmptyState(
+                  icon: Icons.people_outline,
+                  title: 'No customers',
+                  message: 'Registered users will appear here.',
+                ),
               );
             }
             return ListView.separated(
+              physics: appRefreshScrollPhysics,
               padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
               itemCount: users.length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -2462,17 +2499,22 @@ class _AdminPasswordResetScreenState extends State<AdminPasswordResetScreen> {
           stream: appState.firestoreService.watchPasswordResetRequests(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const LoadingView();
+              return const RefreshableCenteredContent(
+                child: LoadingView(),
+              );
             }
             final requests = snapshot.data ?? const <PasswordResetRequest>[];
             if (requests.isEmpty) {
-              return const EmptyState(
-                icon: Icons.lock_reset,
-                title: 'No reset requests',
-                message: 'Customer password reset requests will appear here.',
+              return const RefreshableCenteredContent(
+                child: EmptyState(
+                  icon: Icons.lock_reset,
+                  title: 'No reset requests',
+                  message: 'Customer password reset requests will appear here.',
+                ),
               );
             }
             return ListView.separated(
+              physics: appRefreshScrollPhysics,
               padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
               itemCount: requests.length,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
