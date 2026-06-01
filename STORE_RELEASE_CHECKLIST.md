@@ -58,3 +58,28 @@ Notes:
 - Change any Firebase admin account that was created with the old debug password.
 - Review the Cloudinary unsigned upload preset and restrict it as much as possible, or move uploads behind a signed backend endpoint.
 - Deploy Firestore rules and Cloud Functions before store review.
+
+## Firebase API Key Troubleshooting
+
+If Android logs show:
+
+```text
+Requests to this API securetoken.googleapis.com method google.identity.securetoken.v1.SecureToken.GrantToken are blocked
+```
+
+the Firebase API key is blocked by Google Cloud API restrictions.
+
+For the Android key used by `com.ishi.grocerydelivery`, open Google Cloud Console > APIs & Services > Credentials, edit the Android API key, and make sure API restrictions include:
+
+- Identity Toolkit API: `identitytoolkit.googleapis.com`
+- Token Service API: `securetoken.googleapis.com`
+- Firebase Installations API: `firebaseinstallations.googleapis.com`
+
+For local debug/emulator builds, the debug certificate fingerprint is:
+
+```text
+SHA-1:   0B:78:BE:68:E6:42:A1:FF:E4:6A:7E:4A:63:5F:5E:78:CB:31:5A:65
+SHA-256: 19:D7:E8:42:F7:DC:29:35:96:76:BF:56:A9:04:E1:92:2D:93:2E:E4:F3:9A:1B:CC:C8:83:00:8E:B2:AE:38:2C
+```
+
+After changing Firebase Android app SHA certificates, download the fresh `google-services.json` from Firebase Console and replace `android/app/google-services.json`.
