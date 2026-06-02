@@ -6,11 +6,16 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 const _notificationChannelId = 'puttalam_drop_alerts';
+const _notificationChannelName = 'Puttalam Drop Alerts';
+const _notificationChannelDescription = 'Order, support, and account updates.';
 const _notificationChannel = AndroidNotificationChannel(
   _notificationChannelId,
-  'Puttalam Drop Alerts',
-  description: 'Order, support, and account updates.',
+  _notificationChannelName,
+  description: _notificationChannelDescription,
   importance: Importance.max,
+  playSound: true,
+  enableVibration: true,
+  audioAttributesUsage: AudioAttributesUsage.notification,
 );
 
 class NotificationService {
@@ -121,10 +126,15 @@ class NotificationService {
       const NotificationDetails(
         android: AndroidNotificationDetails(
           _notificationChannelId,
-          'Puttalam Drop Alerts',
-          channelDescription: 'Order, support, and account updates.',
+          _notificationChannelName,
+          channelDescription: _notificationChannelDescription,
           importance: Importance.max,
-          priority: Priority.high,
+          priority: Priority.max,
+          playSound: true,
+          enableVibration: true,
+          visibility: NotificationVisibility.public,
+          category: AndroidNotificationCategory.message,
+          audioAttributesUsage: AudioAttributesUsage.notification,
         ),
         iOS: DarwinNotificationDetails(
           presentAlert: true,

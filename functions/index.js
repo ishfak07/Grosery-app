@@ -4,6 +4,8 @@ const {HttpsError, onCall} = require("firebase-functions/v2/https");
 
 admin.initializeApp();
 
+const notificationChannelId = "puttalam_drop_alerts";
+
 exports.sendPushForNotification = onDocumentCreated(
   "notifications/{notificationId}",
   async (event) => {
@@ -13,6 +15,8 @@ exports.sendPushForNotification = onDocumentCreated(
     }
 
     const notification = snapshot.data();
+    const title = notification.title || "Puttalam Drop";
+    const body = notification.body || "You have a new update.";
     const tokens = await resolveTokens(notification);
     if (tokens.length === 0) {
       return;
@@ -21,19 +25,29 @@ exports.sendPushForNotification = onDocumentCreated(
     const response = await admin.messaging().sendEachForMulticast({
       tokens,
       notification: {
-        title: notification.title || "Ishi Grocery",
-        body: notification.body || "You have a new update.",
+        title,
+        body,
       },
       android: {
         priority: "high",
         notification: {
-          channelId: "ishi_grocery_alerts",
-          sound: "default",
+          channelId: notificationChannelId,
+          defaultSound: true,
+          priority: "max",
+          visibility: "public",
         },
       },
       apns: {
+        headers: {
+          "apns-priority": "10",
+          "apns-push-type": "alert",
+        },
         payload: {
           aps: {
+            alert: {
+              title,
+              body,
+            },
             sound: "default",
           },
         },
