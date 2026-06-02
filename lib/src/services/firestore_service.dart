@@ -248,6 +248,10 @@ class FirestoreService {
     });
   }
 
+  Future<void> deleteProduct(String productId) {
+    return _products.doc(productId).delete();
+  }
+
   Future<void> createOrder(OrderModel order) async {
     final batch = _db.batch();
     batch.set(_orders.doc(order.orderId), order.toMap());

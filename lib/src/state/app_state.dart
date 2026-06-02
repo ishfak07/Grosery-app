@@ -265,7 +265,8 @@ class AppState extends ChangeNotifier {
     );
     if (index >= 0) {
       final updated = [..._cartItems];
-      updated[index] = updated[index].copyWith(
+      updated[index] = CartItem.fromProduct(
+        product,
         quantity: updated[index].quantity + 1,
       );
       _cartItems = updated;

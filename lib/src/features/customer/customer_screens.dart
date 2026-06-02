@@ -753,7 +753,7 @@ class _HomePromoBanner extends StatelessWidget {
                   ),
                   child: Text(
                     context.t('Fast local delivery'),
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12,
                       fontWeight: FontWeight.w900,
@@ -765,7 +765,7 @@ class _HomePromoBanner extends StatelessWidget {
                   context.t(
                     'Fresh groceries, photo lists, and COD in one smooth order.',
                   ),
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
@@ -1253,14 +1253,18 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   );
                 }
                 final query = _search.text.trim().toLowerCase();
-                final products = (snapshot.data ?? const <Product>[])
-                    .where(
-                      (product) =>
-                          query.isEmpty ||
-                          product.name.toLowerCase().contains(query) ||
-                          product.shopName.toLowerCase().contains(query),
-                    )
-                    .toList();
+                final languageCode = appState.effectiveLanguageCode;
+                final products = (snapshot.data ?? const <Product>[]).where(
+                  (product) {
+                    final displayName =
+                        product.localizedName(languageCode).toLowerCase();
+                    return query.isEmpty ||
+                        displayName.contains(query) ||
+                        product.name.toLowerCase().contains(query) ||
+                        product.nameTamil.toLowerCase().contains(query) ||
+                        product.shopName.toLowerCase().contains(query);
+                  },
+                ).toList();
                 if (products.isEmpty) {
                   return const RefreshableCenteredContent(
                     child: EmptyState(
@@ -1337,7 +1341,9 @@ class ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final appState = context.read<AppState>();
+    final appState = context.watch<AppState>();
+    final languageCode = appState.effectiveLanguageCode;
+    final productName = product.localizedName(languageCode);
     return _CustomerCard(
       padding: EdgeInsets.zero,
       onTap: () => Navigator.of(context).push(
@@ -1383,7 +1389,7 @@ class ProductCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  product.name,
+                  productName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -1542,8 +1548,11 @@ class ProductDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final languageCode = context.watch<AppState>().effectiveLanguageCode;
+    final productName = product.localizedName(languageCode);
+    final productDescription = product.localizedDescription(languageCode);
     return _CustomerScaffold(
-      title: product.name,
+      title: productName,
       body: _CustomerScrollView(
         children: [
           _CustomerCard(
@@ -1570,7 +1579,7 @@ class ProductDetailsScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  product.name,
+                  productName,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         color: _customerInk,
                         fontWeight: FontWeight.w900,
@@ -1652,11 +1661,11 @@ class ProductDetailsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  product.description.isEmpty
+                  productDescription.isEmpty
                       ? context.t(
                           'No description added yet. You can still add it to your cart and confirm details at checkout.',
                         )
-                      : product.description,
+                      : productDescription,
                   style: const TextStyle(
                     color: _customerMuted,
                     fontWeight: FontWeight.w600,
@@ -1880,7 +1889,8 @@ class _CartItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final appState = context.read<AppState>();
+    final appState = context.watch<AppState>();
+    final itemName = item.localizedName(appState.effectiveLanguageCode);
     return _CustomerCard(
       padding: const EdgeInsets.all(10),
       child: Row(
@@ -1896,7 +1906,7 @@ class _CartItemTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.name,
+                  itemName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -2570,7 +2580,8 @@ class _BankTransferDetails extends StatelessWidget {
           const _BankDetailRow('Name', AppConstants.bankAccountName),
           const _BankDetailRow('Bank', AppConstants.bankName),
           const _BankDetailRow('Branch', AppConstants.bankBranch),
-          const _BankDetailRow('Account number', AppConstants.bankAccountNumber),
+          const _BankDetailRow(
+              'Account number', AppConstants.bankAccountNumber),
         ],
       ),
     );
@@ -3057,6 +3068,7 @@ class _OrderItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final languageCode = context.watch<AppState>().effectiveLanguageCode;
     return _CustomerCard(
       padding: const EdgeInsets.all(12),
       child: Row(
@@ -3082,7 +3094,7 @@ class _OrderItemRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.name,
+                  item.localizedName(languageCode),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

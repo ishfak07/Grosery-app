@@ -162,8 +162,10 @@ class Product {
     required this.shopId,
     required this.shopName,
     required this.name,
+    required this.nameTamil,
     required this.category,
     required this.description,
+    required this.descriptionTamil,
     required this.price,
     required this.imageUrl,
     required this.unit,
@@ -177,8 +179,10 @@ class Product {
   final String shopId;
   final String shopName;
   final String name;
+  final String nameTamil;
   final String category;
   final String description;
+  final String descriptionTamil;
   final double price;
   final String imageUrl;
   final String unit;
@@ -189,12 +193,30 @@ class Product {
 
   bool get isAvailable => isActive && stockStatus == 'available';
 
+  String localizedName(String languageCode) {
+    if (AppLanguageCodes.normalize(languageCode) == AppLanguageCodes.tamil &&
+        nameTamil.trim().isNotEmpty) {
+      return nameTamil;
+    }
+    return name;
+  }
+
+  String localizedDescription(String languageCode) {
+    if (AppLanguageCodes.normalize(languageCode) == AppLanguageCodes.tamil &&
+        descriptionTamil.trim().isNotEmpty) {
+      return descriptionTamil;
+    }
+    return description;
+  }
+
   Product copyWith({
     String? shopId,
     String? shopName,
     String? name,
+    String? nameTamil,
     String? category,
     String? description,
+    String? descriptionTamil,
     double? price,
     String? imageUrl,
     String? unit,
@@ -206,8 +228,10 @@ class Product {
       shopId: shopId ?? this.shopId,
       shopName: shopName ?? this.shopName,
       name: name ?? this.name,
+      nameTamil: nameTamil ?? this.nameTamil,
       category: category ?? this.category,
       description: description ?? this.description,
+      descriptionTamil: descriptionTamil ?? this.descriptionTamil,
       price: price ?? this.price,
       imageUrl: imageUrl ?? this.imageUrl,
       unit: unit ?? this.unit,
@@ -224,8 +248,10 @@ class Product {
       'shopId': shopId,
       'shopName': shopName,
       'name': name,
+      'nameTamil': nameTamil,
       'category': category,
       'description': description,
+      'descriptionTamil': descriptionTamil,
       'price': price,
       'imageUrl': imageUrl,
       'unit': unit,
@@ -242,8 +268,10 @@ class Product {
       shopId: map['shopId'] as String? ?? '',
       shopName: map['shopName'] as String? ?? '',
       name: map['name'] as String? ?? '',
+      nameTamil: map['nameTamil'] as String? ?? '',
       category: map['category'] as String? ?? 'Other',
       description: map['description'] as String? ?? '',
+      descriptionTamil: map['descriptionTamil'] as String? ?? '',
       price: (map['price'] as num?)?.toDouble() ?? 0,
       imageUrl: map['imageUrl'] as String? ?? '',
       unit: map['unit'] as String? ?? 'piece',
@@ -264,6 +292,7 @@ class CartItem {
     required this.price,
     required this.unit,
     required this.quantity,
+    this.nameTamil = '',
     this.imageUrl = '',
   });
 
@@ -271,6 +300,7 @@ class CartItem {
   final String shopId;
   final String shopName;
   final String name;
+  final String nameTamil;
   final double price;
   final String unit;
   final int quantity;
@@ -278,12 +308,21 @@ class CartItem {
 
   double get lineTotal => price * quantity;
 
+  String localizedName(String languageCode) {
+    if (AppLanguageCodes.normalize(languageCode) == AppLanguageCodes.tamil &&
+        nameTamil.trim().isNotEmpty) {
+      return nameTamil;
+    }
+    return name;
+  }
+
   CartItem copyWith({int? quantity}) {
     return CartItem(
       productId: productId,
       shopId: shopId,
       shopName: shopName,
       name: name,
+      nameTamil: nameTamil,
       price: price,
       unit: unit,
       quantity: quantity ?? this.quantity,
@@ -297,6 +336,7 @@ class CartItem {
       'shopId': shopId,
       'shopName': shopName,
       'name': name,
+      'nameTamil': nameTamil,
       'price': price,
       'unit': unit,
       'quantity': quantity,
@@ -310,6 +350,7 @@ class CartItem {
       shopId: product.shopId,
       shopName: product.shopName,
       name: product.name,
+      nameTamil: product.nameTamil,
       price: product.price,
       unit: product.unit,
       quantity: quantity,
@@ -323,6 +364,7 @@ class CartItem {
       shopId: map['shopId'] as String? ?? '',
       shopName: map['shopName'] as String? ?? '',
       name: map['name'] as String? ?? '',
+      nameTamil: map['nameTamil'] as String? ?? '',
       price: (map['price'] as num?)?.toDouble() ?? 0,
       unit: map['unit'] as String? ?? 'piece',
       quantity: (map['quantity'] as num?)?.toInt() ?? 1,
@@ -341,6 +383,7 @@ class OrderItem {
   const OrderItem({
     required this.productId,
     required this.name,
+    required this.nameTamil,
     required this.shopId,
     required this.shopName,
     required this.unit,
@@ -351,6 +394,7 @@ class OrderItem {
 
   final String productId;
   final String name;
+  final String nameTamil;
   final String shopId;
   final String shopName;
   final String unit;
@@ -360,10 +404,19 @@ class OrderItem {
 
   double get lineTotal => price * quantity;
 
+  String localizedName(String languageCode) {
+    if (AppLanguageCodes.normalize(languageCode) == AppLanguageCodes.tamil &&
+        nameTamil.trim().isNotEmpty) {
+      return nameTamil;
+    }
+    return name;
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'productId': productId,
       'name': name,
+      'nameTamil': nameTamil,
       'shopId': shopId,
       'shopName': shopName,
       'unit': unit,
@@ -377,6 +430,7 @@ class OrderItem {
     return OrderItem(
       productId: item.productId,
       name: item.name,
+      nameTamil: item.nameTamil,
       shopId: item.shopId,
       shopName: item.shopName,
       unit: item.unit,
@@ -389,6 +443,7 @@ class OrderItem {
     return OrderItem(
       productId: map['productId'] as String? ?? '',
       name: map['name'] as String? ?? '',
+      nameTamil: map['nameTamil'] as String? ?? '',
       shopId: map['shopId'] as String? ?? '',
       shopName: map['shopName'] as String? ?? '',
       unit: map['unit'] as String? ?? 'piece',

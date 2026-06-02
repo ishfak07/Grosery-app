@@ -346,7 +346,7 @@ class SplashScreen extends StatelessWidget {
                         'Local groceries, lists, pickup, and COD delivery.',
                       ),
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: _authMuted,
                         fontWeight: FontWeight.w600,
                         height: 1.35,

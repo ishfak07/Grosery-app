@@ -2769,6 +2769,7 @@ class AdminProductManagementScreen extends StatelessWidget {
                     product: product,
                     onActiveChanged: (value) => appState.firestoreService
                         .disableProduct(product.productId, value),
+                    onDelete: () => _confirmDeleteProduct(context, product),
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => AdminProductFormScreen(
@@ -2785,6 +2786,54 @@ class AdminProductManagementScreen extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _confirmDeleteProduct(
+    BuildContext context,
+    Product product,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Remove product?'),
+          content: Text(
+            'This will permanently remove "${product.name}" from the product catalog.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFC83A2B),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Remove'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    try {
+      await context.read<AppState>().firestoreService.deleteProduct(
+            product.productId,
+          );
+      if (context.mounted) {
+        showSnack(context, 'Product removed.');
+      }
+    } catch (error) {
+      if (context.mounted) {
+        showSnack(context, error.toString());
+      }
+    }
+  }
 }
 
 class _AdminProductTile extends StatelessWidget {
@@ -2792,11 +2841,13 @@ class _AdminProductTile extends StatelessWidget {
     required this.product,
     required this.onTap,
     required this.onActiveChanged,
+    required this.onDelete,
   });
 
   final Product product;
   final VoidCallback onTap;
   final ValueChanged<bool> onActiveChanged;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -2823,6 +2874,18 @@ class _AdminProductTile extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                   ),
                 ),
+                if (product.nameTamil.trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    product.nameTamil,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _adminMuted,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 4),
                 Text(
                   product.shopName,
@@ -2869,6 +2932,12 @@ class _AdminProductTile extends StatelessWidget {
                   fontSize: 11,
                 ),
               ),
+              IconButton(
+                tooltip: 'Remove product',
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline),
+                color: const Color(0xFFC83A2B),
+              ),
             ],
           ),
           const Icon(Icons.chevron_right, color: _adminMuted),
@@ -2890,7 +2959,9 @@ class AdminProductFormScreen extends StatefulWidget {
 class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
+  final _nameTamil = TextEditingController();
   final _description = TextEditingController();
+  final _descriptionTamil = TextEditingController();
   final _price = TextEditingController();
   String _unit = AppConstants.productUnits.first;
   String _stockStatus = 'available';
@@ -2904,7 +2975,9 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     final product = widget.product;
     if (product != null) {
       _name.text = product.name;
+      _nameTamil.text = product.nameTamil;
       _description.text = product.description;
+      _descriptionTamil.text = product.descriptionTamil;
       _price.text = product.price.toStringAsFixed(2);
       _unit = product.unit;
       _stockStatus = product.stockStatus;
@@ -2915,7 +2988,9 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   @override
   void dispose() {
     _name.dispose();
+    _nameTamil.dispose();
     _description.dispose();
+    _descriptionTamil.dispose();
     _price.dispose();
     super.dispose();
   }
@@ -2925,6 +3000,15 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     final appState = context.read<AppState>();
     return _AdminScaffold(
       title: widget.product == null ? 'Add product' : 'Edit product',
+      actions: widget.product == null
+          ? null
+          : [
+              _AdminAppBarButton(
+                tooltip: 'Remove product',
+                icon: Icons.delete_outline,
+                onPressed: _isSaving ? () {} : _confirmDeleteProduct,
+              ),
+            ],
       body: _AdminPage(
         maxWidth: 760,
         child: StreamBuilder<List<Shop>>(
@@ -2966,6 +3050,16 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                             prefixIcon: Icons.inventory_2_outlined,
                           ),
                           const SizedBox(height: 10),
+                          AppTextField(
+                            controller: _nameTamil,
+                            label: 'Tamil product name',
+                            validator: (value) => Validators.requiredText(
+                              value,
+                              'Tamil product name',
+                            ),
+                            prefixIcon: Icons.translate,
+                          ),
+                          const SizedBox(height: 10),
                           DropdownButtonFormField<String>(
                             value: _selectedShopId,
                             decoration: const InputDecoration(
@@ -2992,6 +3086,17 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                             label: 'Description',
                             maxLines: 3,
                             prefixIcon: Icons.notes,
+                          ),
+                          const SizedBox(height: 10),
+                          AppTextField(
+                            controller: _descriptionTamil,
+                            label: 'Tamil description',
+                            validator: (value) => Validators.requiredText(
+                              value,
+                              'Tamil description',
+                            ),
+                            maxLines: 3,
+                            prefixIcon: Icons.translate,
                           ),
                         ],
                       ),
@@ -3160,8 +3265,10 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         shopId: selectedShop.shopId,
         shopName: selectedShop.shopName,
         name: _name.text.trim(),
+        nameTamil: _nameTamil.text.trim(),
         category: widget.product?.category ?? 'Other',
         description: _description.text.trim(),
+        descriptionTamil: _descriptionTamil.text.trim(),
         price: double.parse(_price.text.trim()),
         imageUrl: imageUrl,
         unit: _unit,
@@ -3172,6 +3279,63 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       );
       await appState.firestoreService.saveProduct(product);
       if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteProduct() async {
+    if (_isSaving) {
+      return;
+    }
+    final product = widget.product;
+    if (product == null) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Remove product?'),
+          content: Text(
+            'This will permanently remove "${product.name}" from the product catalog.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFC83A2B),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Remove'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      await context.read<AppState>().firestoreService.deleteProduct(
+            product.productId,
+          );
+      if (mounted) {
+        showSnack(context, 'Product removed.');
         Navigator.of(context).pop();
       }
     } catch (error) {
