@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/constants/app_constants.dart';
+import 'core/i18n/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/common_widgets.dart';
 import 'features/admin/admin_screens.dart';
@@ -65,7 +66,7 @@ class BlockedAccountScreen extends StatelessWidget {
             action: ElevatedButton.icon(
               onPressed: () => onLogout(),
               icon: const Icon(Icons.logout),
-              label: const Text('Logout'),
+              label: Text(context.t('Logout')),
             ),
           ),
         ),

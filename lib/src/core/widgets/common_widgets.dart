@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/app_constants.dart';
+import '../i18n/app_localizations.dart';
 import '../utils/phone_utils.dart';
 import '../utils/validators.dart';
 import '../../state/app_state.dart';
@@ -41,7 +42,9 @@ class FirebaseSetupBanner extends StatelessWidget {
       ),
       child: Text(
         appState.firebaseError ??
-            'Firebase is not configured. Login, database, functions, and FCM need real Firebase config files.',
+            context.t(
+              'Firebase is not configured. Login, database, functions, and FCM need real Firebase config files.',
+            ),
         style: Theme.of(context).textTheme.bodySmall,
       ),
     );
@@ -105,7 +108,7 @@ class EmptyState extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    title,
+                    context.t(title),
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w900,
@@ -113,7 +116,7 @@ class EmptyState extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    message,
+                    context.t(message),
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: const Color(0xFF66736B),
@@ -166,7 +169,7 @@ class LoadingView extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              message,
+              context.t(message),
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ],
@@ -202,7 +205,10 @@ class AppRefreshIndicator extends StatelessWidget {
           ]);
         } catch (error) {
           if (context.mounted) {
-            showSnack(context, 'Refresh failed: $error');
+            showSnack(
+              context,
+              context.tNow('Refresh failed: {error}', values: {'error': error}),
+            );
           }
         }
       },
@@ -266,7 +272,7 @@ class StatusChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        status,
+        context.t(status),
         style: TextStyle(
           color: color,
           fontWeight: FontWeight.w700,
@@ -312,7 +318,7 @@ class SectionTitle extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            title,
+            context.t(title),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w900,
                   letterSpacing: 0,
@@ -322,7 +328,7 @@ class SectionTitle extends StatelessWidget {
         if (actionLabel != null)
           TextButton(
             onPressed: onAction,
-            child: Text(actionLabel!),
+            child: Text(context.t(actionLabel!)),
           ),
       ],
     );
@@ -374,16 +380,21 @@ class _AppTextFieldState extends State<AppTextField> {
   Widget build(BuildContext context) {
     return TextFormField(
       controller: widget.controller,
-      validator: widget.validator,
+      validator: (value) {
+        final error = widget.validator?.call(value);
+        return error == null ? null : context.tNow(error);
+      },
       keyboardType: widget.keyboardType,
       obscureText: _obscureText,
       maxLines: widget.obscureText ? 1 : widget.maxLines,
       decoration: InputDecoration(
-        labelText: widget.label,
+        labelText: context.t(widget.label),
         prefixIcon: widget.prefixIcon == null ? null : Icon(widget.prefixIcon),
         suffixIcon: widget.obscureText
             ? IconButton(
-                tooltip: _obscureText ? 'Show password' : 'Hide password',
+                tooltip: context.t(
+                  _obscureText ? 'Show password' : 'Hide password',
+                ),
                 onPressed: () => setState(() {
                   _obscureText = !_obscureText;
                 }),
@@ -419,13 +430,16 @@ class AppPhoneField extends StatelessWidget {
     return TextFormField(
       controller: controller,
       enabled: enabled,
-      validator: Validators.phone,
+      validator: (value) {
+        final error = Validators.phone(value);
+        return error == null ? null : context.tNow(error);
+      },
       keyboardType: TextInputType.phone,
       autofillHints: const [AutofillHints.telephoneNumberNational],
       maxLength: 9,
       inputFormatters: const [_SriLankanPhoneInputFormatter()],
       decoration: InputDecoration(
-        labelText: label,
+        labelText: context.t(label),
         prefixIcon: Padding(
           padding: const EdgeInsetsDirectional.only(start: 12, end: 10),
           child: Row(
@@ -552,7 +566,12 @@ class PrimaryActionButton extends StatelessWidget {
                 Icon(icon, size: 19),
                 const SizedBox(width: 8),
               ],
-              Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+              Flexible(
+                child: Text(
+                  context.t(label),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           );
 
@@ -571,7 +590,10 @@ class PrimaryActionButton extends StatelessWidget {
 }
 
 void showSnack(BuildContext context, String message) {
+  final friendlyMessage = message.startsWith('Bad state: ')
+      ? message.substring('Bad state: '.length)
+      : message;
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
+    ..showSnackBar(SnackBar(content: Text(context.tNow(friendlyMessage))));
 }

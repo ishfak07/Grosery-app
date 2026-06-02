@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import '../../../services/cloudinary_service.dart';
 import '../../../services/image_picker_helper.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/i18n/app_localizations.dart';
+import '../../core/i18n/language_codes.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/phone_utils.dart';
 import '../../core/utils/validators.dart';
@@ -69,7 +71,7 @@ class _CustomerScaffold extends StatelessWidget {
     return Scaffold(
       backgroundColor: _customerBackground,
       appBar: AppBar(
-        title: Text(title),
+        title: Text(context.t(title)),
         actions: actions,
         backgroundColor: _customerBackground.withOpacity(0.96),
         foregroundColor: _customerInk,
@@ -266,7 +268,7 @@ class _CustomerIconButton extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: IconButton.filledTonal(
-        tooltip: tooltip,
+        tooltip: context.t(tooltip),
         onPressed: onPressed,
         style: IconButton.styleFrom(
           backgroundColor: Colors.white,
@@ -305,7 +307,7 @@ class _CustomerSectionHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  context.t(title),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: _customerInk,
                         fontWeight: FontWeight.w900,
@@ -315,7 +317,7 @@ class _CustomerSectionHeader extends StatelessWidget {
                 if (subtitle != null) ...[
                   const SizedBox(height: 3),
                   Text(
-                    subtitle!,
+                    context.t(subtitle!),
                     style: const TextStyle(
                       color: _customerMuted,
                       fontWeight: FontWeight.w600,
@@ -329,7 +331,7 @@ class _CustomerSectionHeader extends StatelessWidget {
           if (actionLabel != null)
             TextButton(
               onPressed: onAction,
-              child: Text(actionLabel!),
+              child: Text(context.t(actionLabel!)),
             ),
         ],
       ),
@@ -595,7 +597,7 @@ class _HomeHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final firstName = profile.fullName.trim().isEmpty
-        ? 'there'
+        ? context.t('there')
         : profile.fullName.trim().split(' ').first;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -621,7 +623,7 @@ class _HomeHeader extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Hi $firstName',
+                      context.t('Hi {name}', values: {'name': firstName}),
                       style:
                           Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 color: _customerInk,
@@ -689,20 +691,20 @@ class _HomeSearchCallout extends StatelessWidget {
     return _CustomerCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       onTap: onTap,
-      child: const Row(
+      child: Row(
         children: [
-          Icon(Icons.search, color: _customerPrimary),
-          SizedBox(width: 12),
+          const Icon(Icons.search, color: _customerPrimary),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Search groceries and shops',
-              style: TextStyle(
+              context.t('Search groceries and shops'),
+              style: const TextStyle(
                 color: _customerMuted,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
-          Icon(Icons.tune, color: _customerMuted, size: 20),
+          const Icon(Icons.tune, color: _customerMuted, size: 20),
         ],
       ),
     );
@@ -749,8 +751,8 @@ class _HomePromoBanner extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: Colors.white.withOpacity(0.18)),
                   ),
-                  child: const Text(
-                    'Fast local delivery',
+                  child: Text(
+                    context.t('Fast local delivery'),
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 12,
@@ -759,8 +761,10 @@ class _HomePromoBanner extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 14),
-                const Text(
-                  'Fresh groceries, photo lists, and COD in one smooth order.',
+                Text(
+                  context.t(
+                    'Fresh groceries, photo lists, and COD in one smooth order.',
+                  ),
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 20,
@@ -771,7 +775,9 @@ class _HomePromoBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'We shop from trusted partners and keep you updated.',
+                  context.t(
+                    'We shop from trusted partners and keep you updated.',
+                  ),
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.84),
                     fontWeight: FontWeight.w600,
@@ -865,26 +871,26 @@ class _CustomerBottomNavigation extends StatelessWidget {
                   .push(MaterialPageRoute(builder: (_) => route));
             }
           },
-          destinations: const [
+          destinations: [
             NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home),
-              label: 'Home',
+              icon: const Icon(Icons.home_outlined),
+              selectedIcon: const Icon(Icons.home),
+              label: context.t('Home'),
             ),
             NavigationDestination(
-              icon: Icon(Icons.receipt_long_outlined),
-              selectedIcon: Icon(Icons.receipt_long),
-              label: 'Orders',
+              icon: const Icon(Icons.receipt_long_outlined),
+              selectedIcon: const Icon(Icons.receipt_long),
+              label: context.t('Orders'),
             ),
             NavigationDestination(
-              icon: Icon(Icons.support_agent_outlined),
-              selectedIcon: Icon(Icons.support_agent),
-              label: 'Support',
+              icon: const Icon(Icons.support_agent_outlined),
+              selectedIcon: const Icon(Icons.support_agent),
+              label: context.t('Support'),
             ),
             NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person),
-              label: 'Profile',
+              icon: const Icon(Icons.person_outline),
+              selectedIcon: const Icon(Icons.person),
+              label: context.t('Profile'),
             ),
           ],
         ),
@@ -993,7 +999,7 @@ class _HomeActionTile extends StatelessWidget {
             ),
             const Spacer(),
             Text(
-              title,
+              context.t(title),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -1003,7 +1009,7 @@ class _HomeActionTile extends StatelessWidget {
             ),
             const SizedBox(height: 5),
             Text(
-              subtitle,
+              context.t(subtitle),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -1047,7 +1053,7 @@ class ShopListScreen extends StatelessWidget {
                         builder: (_) => const ProductListScreen()),
                   ),
                   icon: const Icon(Icons.search),
-                  label: const Text('Browse catalog'),
+                  label: Text(context.t('Browse catalog')),
                 ),
               ),
             );
@@ -1210,12 +1216,12 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   controller: _search,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    hintText: 'Search products',
+                    hintText: context.t('Search products'),
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: _search.text.isEmpty
                         ? const Icon(Icons.tune)
                         : IconButton(
-                            tooltip: 'Clear search',
+                            tooltip: context.t('Clear search'),
                             onPressed: () {
                               _search.clear();
                               setState(() {});
@@ -1411,7 +1417,7 @@ class ProductCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '/ ${product.unit}',
+                      '/ ${context.t(product.unit)}',
                       style: const TextStyle(
                         color: _customerMuted,
                         fontSize: 11,
@@ -1439,7 +1445,9 @@ class ProductCard extends StatelessWidget {
                           : Icons.block,
                       size: 17,
                     ),
-                    label: Text(product.isAvailable ? 'Add' : 'Unavailable'),
+                    label: Text(
+                      context.t(product.isAvailable ? 'Add' : 'Unavailable'),
+                    ),
                   ),
                 ),
               ],
@@ -1614,7 +1622,10 @@ class ProductDetailsScreen extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'per ${product.unit}',
+                        context.t(
+                          'per {unit}',
+                          values: {'unit': context.t(product.unit)},
+                        ),
                         style: const TextStyle(
                           color: _customerMuted,
                           fontWeight: FontWeight.w800,
@@ -1631,9 +1642,9 @@ class ProductDetailsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'About this item',
-                  style: TextStyle(
+                Text(
+                  context.t('About this item'),
+                  style: const TextStyle(
                     color: _customerInk,
                     fontWeight: FontWeight.w900,
                     fontSize: 16,
@@ -1642,7 +1653,9 @@ class ProductDetailsScreen extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   product.description.isEmpty
-                      ? 'No description added yet. You can still add it to your cart and confirm details at checkout.'
+                      ? context.t(
+                          'No description added yet. You can still add it to your cart and confirm details at checkout.',
+                        )
                       : product.description,
                   style: const TextStyle(
                     color: _customerMuted,
@@ -1697,7 +1710,7 @@ class CartScreen extends StatelessWidget {
                         builder: (_) => const ProductListScreen()),
                   ),
                   icon: const Icon(Icons.search),
-                  label: const Text('Browse products'),
+                  label: Text(context.t('Browse products')),
                 ),
               ),
             )
@@ -1745,8 +1758,8 @@ class CartScreen extends StatelessWidget {
               ),
               icon: const Icon(Icons.upload_file),
               label: Text(appState.hasBillImage
-                  ? 'Change bill/list photo'
-                  : 'Upload bill/list photo'),
+                  ? context.t('Change bill/list photo')
+                  : context.t('Upload bill/list photo')),
             ),
             const SizedBox(height: 10),
             PrimaryActionButton(
@@ -1808,8 +1821,11 @@ class _CartSummaryPanel extends StatelessWidget {
               children: [
                 Text(
                   itemCount == 1
-                      ? '1 catalog item'
-                      : '$itemCount catalog items',
+                      ? context.t('1 catalog item')
+                      : context.t(
+                          '{count} catalog items',
+                          values: {'count': itemCount},
+                        ),
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.82),
                     fontWeight: FontWeight.w800,
@@ -1827,8 +1843,8 @@ class _CartSummaryPanel extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   hasBillImage
-                      ? 'Photo list attached for admin pricing'
-                      : 'Catalog subtotal before delivery',
+                      ? context.t('Photo list attached for admin pricing')
+                      : context.t('Catalog subtotal before delivery'),
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.8),
                     fontWeight: FontWeight.w600,
@@ -1890,7 +1906,7 @@ class _CartItemTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${item.price.money} / ${item.unit}',
+                  '${item.price.money} / ${context.t(item.unit)}',
                   style: const TextStyle(
                     color: _customerMuted,
                     fontWeight: FontWeight.w600,
@@ -1919,7 +1935,7 @@ class _CartItemTile extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  tooltip: 'Decrease',
+                  tooltip: context.t('Decrease'),
                   visualDensity: VisualDensity.compact,
                   onPressed: () => appState.updateCartQuantity(
                     item.productId,
@@ -1939,7 +1955,7 @@ class _CartItemTile extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Increase',
+                  tooltip: context.t('Increase'),
                   visualDensity: VisualDensity.compact,
                   onPressed: () => appState.updateCartQuantity(
                     item.productId,
@@ -1979,19 +1995,19 @@ class _UploadPlaceholder extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          const Text(
-            'No list photo selected',
-            style: TextStyle(
+          Text(
+            context.t('No list photo selected'),
+            style: const TextStyle(
               color: _customerInk,
               fontWeight: FontWeight.w900,
               fontSize: 16,
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Use gallery or camera to attach your list.',
+          Text(
+            context.t('Use gallery or camera to attach your list.'),
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               color: _customerMuted,
               fontWeight: FontWeight.w600,
             ),
@@ -2028,10 +2044,12 @@ class UploadBillScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Upload a clear handwritten, printed, or shop list photo. Admin will review it and update your final bill.',
-                    style: TextStyle(
+                    context.t(
+                      'Upload a clear handwritten, printed, or shop list photo. Admin will review it and update your final bill.',
+                    ),
+                    style: const TextStyle(
                       color: _customerMuted,
                       fontWeight: FontWeight.w700,
                       height: 1.35,
@@ -2079,7 +2097,9 @@ class UploadBillScreen extends StatelessWidget {
                     await appState.setBillImagePath(imageFile.path);
                   },
                   icon: const Icon(Icons.photo_camera),
-                  label: Text(appState.hasBillImage ? 'Retake' : 'Camera'),
+                  label: Text(
+                    context.t(appState.hasBillImage ? 'Retake' : 'Camera'),
+                  ),
                 ),
               ),
             ],
@@ -2089,7 +2109,7 @@ class UploadBillScreen extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: () => appState.setBillImagePath(null),
               icon: const Icon(Icons.delete_outline),
-              label: const Text('Remove photo'),
+              label: Text(context.t('Remove photo')),
             ),
             const SizedBox(height: 10),
             ElevatedButton.icon(
@@ -2097,7 +2117,7 @@ class UploadBillScreen extends StatelessWidget {
                 MaterialPageRoute(builder: (_) => const CheckoutScreen()),
               ),
               icon: const Icon(Icons.payments),
-              label: const Text('Continue to checkout'),
+              label: Text(context.t('Continue to checkout')),
             ),
           ],
         ],
@@ -2147,10 +2167,10 @@ class _BillImagePreview extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Shopping list image ready for upload.',
-                    style: TextStyle(
+                    context.t('Shopping list image ready for upload.'),
+                    style: const TextStyle(
                       color: _customerInk,
                       fontWeight: FontWeight.w800,
                     ),
@@ -2222,9 +2242,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Payment method',
-                    style: TextStyle(fontWeight: FontWeight.w900),
+                  Text(
+                    context.t('Payment method'),
+                    style: const TextStyle(fontWeight: FontWeight.w900),
                   ),
                   RadioListTile<String>(
                     contentPadding: EdgeInsets.zero,
@@ -2235,9 +2255,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         setState(() => _paymentMethod = value);
                       }
                     },
-                    title: const Text('Cash on Delivery'),
-                    subtitle: const Text(
-                      'Pay by cash when your order is delivered.',
+                    title: Text(context.t('Cash on Delivery')),
+                    subtitle: Text(
+                      context.t(
+                        'Pay by cash when your order is delivered.',
+                      ),
                     ),
                   ),
                   RadioListTile<String>(
@@ -2249,9 +2271,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         setState(() => _paymentMethod = value);
                       }
                     },
-                    title: const Text('Bank transfer'),
-                    subtitle: const Text(
-                      'Transfer to the store account and upload your receipt.',
+                    title: Text(context.t('Bank transfer')),
+                    subtitle: Text(
+                      context.t(
+                        'Transfer to the store account and upload your receipt.',
+                      ),
                     ),
                   ),
                   if (isBankTransfer) ...[
@@ -2415,7 +2439,7 @@ class _CheckoutSummary extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Estimated total',
+                  context.t('Estimated total'),
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.82),
                     fontWeight: FontWeight.w800,
@@ -2432,7 +2456,7 @@ class _CheckoutSummary extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Review payment and delivery details',
+                  context.t('Review payment and delivery details'),
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.8),
                     fontWeight: FontWeight.w600,
@@ -2478,7 +2502,7 @@ class _AmountRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          Expanded(child: Text(label, style: style)),
+          Expanded(child: Text(context.t(label), style: style)),
           Text(value, style: style),
         ],
       ),
@@ -2500,15 +2524,17 @@ class _AttachedListPriceNotice extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFFF0B1A8)),
       ),
-      child: const Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline, color: danger, size: 20),
-          SizedBox(width: 10),
+          const Icon(Icons.info_outline, color: danger, size: 20),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'The prices of attached list items are not calculated in this estimate. Admin will review the photo and update the final bill.',
-              style: TextStyle(
+              context.t(
+                'The prices of attached list items are not calculated in this estimate. Admin will review the photo and update the final bill.',
+              ),
+              style: const TextStyle(
                 color: danger,
                 fontWeight: FontWeight.w700,
               ),
@@ -2533,18 +2559,18 @@ class _BankTransferDetails extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFFDDE5DD)),
       ),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Transfer account',
-            style: TextStyle(fontWeight: FontWeight.w900),
+            context.t('Transfer account'),
+            style: const TextStyle(fontWeight: FontWeight.w900),
           ),
-          SizedBox(height: 8),
-          _BankDetailRow('Name', AppConstants.bankAccountName),
-          _BankDetailRow('Bank', AppConstants.bankName),
-          _BankDetailRow('Branch', AppConstants.bankBranch),
-          _BankDetailRow('Account number', AppConstants.bankAccountNumber),
+          const SizedBox(height: 8),
+          const _BankDetailRow('Name', AppConstants.bankAccountName),
+          const _BankDetailRow('Bank', AppConstants.bankName),
+          const _BankDetailRow('Branch', AppConstants.bankBranch),
+          const _BankDetailRow('Account number', AppConstants.bankAccountNumber),
         ],
       ),
     );
@@ -2567,7 +2593,7 @@ class _BankDetailRow extends StatelessWidget {
           SizedBox(
             width: 112,
             child: Text(
-              label,
+              context.t(label),
               style: const TextStyle(
                 color: Color(0xFF66736B),
                 fontWeight: FontWeight.w600,
@@ -2605,9 +2631,9 @@ class _ReceiptUploadSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Payment receipt',
-          style: TextStyle(fontWeight: FontWeight.w900),
+        Text(
+          context.t('Payment receipt'),
+          style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 8),
         if (hasImage)
@@ -2634,9 +2660,11 @@ class _ReceiptUploadSection extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: const Color(0xFFDDE5DD)),
             ),
-            child: const Text(
-              'Upload the bank slip or transfer screenshot before placing the order.',
-              style: TextStyle(color: Color(0xFF66736B)),
+            child: Text(
+              context.t(
+                'Upload the bank slip or transfer screenshot before placing the order.',
+              ),
+              style: const TextStyle(color: Color(0xFF66736B)),
             ),
           ),
         const SizedBox(height: 10),
@@ -2646,7 +2674,7 @@ class _ReceiptUploadSection extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: onGallery,
                 icon: const Icon(Icons.photo_library),
-                label: Text(hasImage ? 'Change' : 'Gallery'),
+                label: Text(context.t(hasImage ? 'Change' : 'Gallery')),
               ),
             ),
             const SizedBox(width: 10),
@@ -2654,7 +2682,7 @@ class _ReceiptUploadSection extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: onCamera,
                 icon: const Icon(Icons.photo_camera),
-                label: Text(hasImage ? 'Retake' : 'Camera'),
+                label: Text(context.t(hasImage ? 'Retake' : 'Camera')),
               ),
             ),
           ],
@@ -2664,7 +2692,7 @@ class _ReceiptUploadSection extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: onRemove,
             icon: const Icon(Icons.delete_outline),
-            label: const Text('Remove receipt'),
+            label: Text(context.t('Remove receipt')),
           ),
         ],
       ],
@@ -2712,7 +2740,7 @@ class OrderSuccessScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  'Order received',
+                  context.t('Order received'),
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         color: _customerInk,
@@ -2723,8 +2751,10 @@ class OrderSuccessScreen extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   isBankTransfer
-                      ? 'Your bank transfer order is pending admin receipt review.'
-                      : 'Your COD order is pending admin review.',
+                      ? context.t(
+                          'Your bank transfer order is pending admin receipt review.',
+                        )
+                      : context.t('Your COD order is pending admin review.'),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: _customerMuted,
@@ -2741,7 +2771,7 @@ class OrderSuccessScreen extends StatelessWidget {
               children: [
                 _AmountRow('Order', '#${order.orderId.substring(0, 8)}'),
                 _AmountRow('Total', order.totalAmount.money, isStrong: true),
-                _AmountRow('Payment', order.paymentMethod),
+                _AmountRow('Payment', context.t(order.paymentMethod)),
               ],
             ),
           ),
@@ -2753,13 +2783,13 @@ class OrderSuccessScreen extends StatelessWidget {
               ),
             ),
             icon: const Icon(Icons.track_changes),
-            label: const Text('Track order'),
+            label: Text(context.t('Track order')),
           ),
           const SizedBox(height: 8),
           TextButton(
             onPressed: () =>
                 Navigator.of(context).popUntil((route) => route.isFirst),
-            child: const Text('Back home'),
+            child: Text(context.t('Back home')),
           ),
         ],
       ),
@@ -2844,7 +2874,10 @@ class OrderTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Order ${order.orderId.substring(0, 8)}',
+                  context.t(
+                    'Order {id}',
+                    values: {'id': order.orderId.substring(0, 8)},
+                  ),
                   style: const TextStyle(
                     color: _customerInk,
                     fontWeight: FontWeight.w900,
@@ -2913,7 +2946,12 @@ class OrderTrackingScreen extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            'Order ${order.orderId.substring(0, 8)}',
+                            context.t(
+                              'Order {id}',
+                              values: {
+                                'id': order.orderId.substring(0, 8),
+                              },
+                            ),
                             style: const TextStyle(
                               color: _customerInk,
                               fontWeight: FontWeight.w900,
@@ -2929,7 +2967,7 @@ class OrderTrackingScreen extends StatelessWidget {
                         isStrong: true),
                     _AmountRow(
                       'Payment',
-                      '${order.paymentMethod} (${order.paymentStatus})',
+                      '${context.t(order.paymentMethod)} (${context.t(order.paymentStatus)})',
                     ),
                     if (order.adminNotes.isNotEmpty) ...[
                       const Divider(height: 24),
@@ -3002,7 +3040,7 @@ class OrderTrackingScreen extends StatelessWidget {
                   ),
                 ),
                 icon: const Icon(Icons.support_agent),
-                label: const Text('Contact admin'),
+                label: Text(context.t('Contact admin')),
               ),
             ],
           );
@@ -3054,7 +3092,7 @@ class _OrderItemRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${item.quantity} x ${item.price.money} / ${item.unit}',
+                  '${item.quantity} x ${item.price.money} / ${context.t(item.unit)}',
                   style: const TextStyle(
                     color: _customerMuted,
                     fontWeight: FontWeight.w600,
@@ -3137,7 +3175,7 @@ class _TrackingSteps extends StatelessWidget {
                           child: Padding(
                             padding: const EdgeInsets.only(top: 2),
                             child: Text(
-                              statuses[i],
+                              context.t(statuses[i]),
                               style: TextStyle(
                                 color:
                                     isCurrent ? _customerInk : _customerMuted,
@@ -3233,7 +3271,7 @@ class NotificationsScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                notifications[index].title,
+                                context.serverT(notifications[index].title),
                                 style: const TextStyle(
                                   color: _customerInk,
                                   fontWeight: FontWeight.w900,
@@ -3241,7 +3279,7 @@ class NotificationsScreen extends StatelessWidget {
                               ),
                               const SizedBox(height: 5),
                               Text(
-                                notifications[index].body,
+                                context.serverT(notifications[index].body),
                                 style: const TextStyle(
                                   color: _customerMuted,
                                   fontWeight: FontWeight.w600,
@@ -3394,7 +3432,7 @@ class _SupportScreenState extends State<SupportScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    tickets[index].status,
+                                    context.t(tickets[index].status),
                                     style: const TextStyle(
                                       color: _customerMuted,
                                       fontWeight: FontWeight.w700,
@@ -3598,7 +3636,7 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          message.message,
+                          context.serverT(message.message),
                           style: TextStyle(
                             color: isMine ? Colors.white : _customerInk,
                             fontWeight: FontWeight.w600,
@@ -3633,7 +3671,7 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
       child: Row(
         children: [
           IconButton(
-            tooltip: 'Attach image',
+            tooltip: context.t('Attach image'),
             onPressed: _isSending ? null : _chooseSupportImage,
             icon: Icon(
               _imagePath == null ? Icons.image_outlined : Icons.image,
@@ -3657,9 +3695,9 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
                     color: _customerInk,
                     fontWeight: FontWeight.w600,
                   ),
-                  decoration: const InputDecoration(
-                    hintText: 'Type a message',
-                    hintStyle: TextStyle(color: _customerMuted),
+                  decoration: InputDecoration(
+                    hintText: context.t('Type a message'),
+                    hintStyle: const TextStyle(color: _customerMuted),
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
                     focusedBorder: InputBorder.none,
@@ -3744,12 +3782,12 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.photo_library),
-                title: const Text('Gallery'),
+                title: Text(context.t('Gallery')),
                 onTap: () => Navigator.of(context).pop(false),
               ),
               ListTile(
                 leading: const Icon(Icons.photo_camera),
-                title: const Text('Camera'),
+                title: Text(context.t('Camera')),
                 onTap: () => Navigator.of(context).pop(true),
               ),
             ],
@@ -3782,6 +3820,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late final TextEditingController _name;
   late final TextEditingController _address;
   var _isSaving = false;
+  var _isChangingLanguage = false;
 
   @override
   void initState() {
@@ -3809,6 +3848,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: _CustomerScrollView(
           children: [
             _ProfileHeader(profile: profile),
+            const SizedBox(height: 16),
+            _LanguageSettingsCard(
+              languageCode: appState.effectiveLanguageCode,
+              isSaving: _isChangingLanguage,
+              onToggle: _toggleLanguage,
+            ),
             const SizedBox(height: 16),
             _CustomerCard(
               child: Column(
@@ -3848,7 +3893,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 }
               },
               icon: const Icon(Icons.logout),
-              label: const Text('Logout'),
+              label: Text(context.t('Logout')),
             ),
           ],
         ),
@@ -3878,6 +3923,107 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() => _isSaving = false);
       }
     }
+  }
+
+  Future<void> _toggleLanguage() async {
+    if (_isChangingLanguage) {
+      return;
+    }
+    final appState = context.read<AppState>();
+    final nextLanguage =
+        appState.effectiveLanguageCode == AppLanguageCodes.tamil
+            ? AppLanguageCodes.english
+            : AppLanguageCodes.tamil;
+    setState(() => _isChangingLanguage = true);
+    try {
+      await appState.updatePreferredLanguage(nextLanguage);
+      if (mounted) {
+        showSnack(context, 'Language updated.');
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isChangingLanguage = false);
+      }
+    }
+  }
+}
+
+class _LanguageSettingsCard extends StatelessWidget {
+  const _LanguageSettingsCard({
+    required this.languageCode,
+    required this.isSaving,
+    required this.onToggle,
+  });
+
+  final String languageCode;
+  final bool isSaving;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = AppLanguageCodes.normalize(languageCode);
+    final isTamil = normalized == AppLanguageCodes.tamil;
+    return _CustomerCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: _customerPrimaryLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.translate, color: _customerPrimary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.t('Language / Translate'),
+                      style: const TextStyle(
+                        color: _customerInk,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${context.t('Current language')}: ${AppLanguageCodes.nativeName(normalized)}',
+                      style: const TextStyle(
+                        color: _customerMuted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: isSaving ? null : onToggle,
+            icon: isSaving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.swap_horiz),
+            label: Text(
+              context.t(isTamil ? 'Switch to English' : 'Switch to Tamil'),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -3963,7 +4109,7 @@ class _ProfileHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  profile.role,
+                  context.t(profile.role),
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.72),
                     fontWeight: FontWeight.w700,

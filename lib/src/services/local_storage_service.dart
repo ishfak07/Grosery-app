@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/i18n/language_codes.dart';
 import '../models/models.dart';
 
 class LocalStorageService {
@@ -7,6 +8,7 @@ class LocalStorageService {
   static const _billImageKey = 'bill_image_path';
   static const _onboardingKey = 'has_seen_onboarding';
   static const _addressDraftKey = 'address_draft';
+  static const _preferredLanguageKey = 'preferred_language_code';
 
   Future<List<CartItem>> loadCart() async {
     final prefs = await SharedPreferences.getInstance();
@@ -55,5 +57,18 @@ class LocalStorageService {
   Future<String?> loadAddressDraft() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_addressDraftKey);
+  }
+
+  Future<String> loadPreferredLanguageCode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return AppLanguageCodes.normalize(prefs.getString(_preferredLanguageKey));
+  }
+
+  Future<void> savePreferredLanguageCode(String languageCode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _preferredLanguageKey,
+      AppLanguageCodes.normalize(languageCode),
+    );
   }
 }

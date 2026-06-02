@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../core/i18n/language_codes.dart';
+
 DateTime _readDate(dynamic value) {
   if (value is Timestamp) {
     return value.toDate();
@@ -29,6 +31,7 @@ class UserProfile {
     required this.updatedAt,
     required this.isPhoneVerified,
     required this.isBlocked,
+    this.preferredLanguageCode = AppLanguageCodes.english,
     this.fcmTokens = const <String>[],
   });
 
@@ -42,6 +45,7 @@ class UserProfile {
   final DateTime updatedAt;
   final bool isPhoneVerified;
   final bool isBlocked;
+  final String preferredLanguageCode;
   final List<String> fcmTokens;
 
   bool get isAdmin => role == 'admin';
@@ -51,6 +55,7 @@ class UserProfile {
     String? address,
     String? role,
     bool? isBlocked,
+    String? preferredLanguageCode,
     List<String>? fcmTokens,
   }) {
     return UserProfile(
@@ -64,6 +69,9 @@ class UserProfile {
       updatedAt: DateTime.now(),
       isPhoneVerified: isPhoneVerified,
       isBlocked: isBlocked ?? this.isBlocked,
+      preferredLanguageCode: AppLanguageCodes.normalize(
+        preferredLanguageCode ?? this.preferredLanguageCode,
+      ),
       fcmTokens: fcmTokens ?? this.fcmTokens,
     );
   }
@@ -80,6 +88,8 @@ class UserProfile {
       'updatedAt': _writeDate(updatedAt),
       'isPhoneVerified': isPhoneVerified,
       'isBlocked': isBlocked,
+      'preferredLanguageCode':
+          AppLanguageCodes.normalize(preferredLanguageCode),
       'fcmTokens': fcmTokens,
     };
   }
@@ -96,6 +106,9 @@ class UserProfile {
       updatedAt: _readDate(map['updatedAt']),
       isPhoneVerified: map['isPhoneVerified'] as bool? ?? false,
       isBlocked: map['isBlocked'] as bool? ?? false,
+      preferredLanguageCode: AppLanguageCodes.normalize(
+        map['preferredLanguageCode'] as String?,
+      ),
       fcmTokens: (map['fcmTokens'] as List<dynamic>? ?? const <dynamic>[])
           .map((token) => token.toString())
           .toList(),

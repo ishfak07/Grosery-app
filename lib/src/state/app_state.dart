@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../services/cloudinary_service.dart';
 import '../core/constants/app_constants.dart';
+import '../core/i18n/language_codes.dart';
 import '../core/utils/phone_utils.dart';
 import '../models/models.dart';
 import '../services/auth_service.dart';
@@ -46,12 +47,16 @@ class AppState extends ChangeNotifier {
   List<CartItem> _cartItems = const <CartItem>[];
   String? _billImagePath;
   String? _notificationsConfiguredForUid;
+  String _preferredLanguageCode = AppLanguageCodes.english;
 
   bool get isInitializing => _isInitializing;
   bool get hasSeenOnboarding => _hasSeenOnboarding;
   UserProfile? get profile => _profile;
   bool get isLoggedIn => _profile != null;
   bool get isAdmin => _profile?.isAdmin ?? false;
+  String get preferredLanguageCode => _preferredLanguageCode;
+  String get effectiveLanguageCode =>
+      isAdmin ? AppLanguageCodes.english : _preferredLanguageCode;
   List<CartItem> get cartItems => List.unmodifiable(_cartItems);
   String? get billImagePath => _billImagePath;
   bool get hasBillImage => _billImagePath != null && _billImagePath!.isNotEmpty;
@@ -64,6 +69,8 @@ class AppState extends ChangeNotifier {
     _cartItems = await localStorageService.loadCart();
     _billImagePath = await localStorageService.loadBillImagePath();
     _hasSeenOnboarding = await localStorageService.hasSeenOnboarding();
+    _preferredLanguageCode =
+        await localStorageService.loadPreferredLanguageCode();
 
     if (firebaseAvailable) {
       _authSubscription =
@@ -95,6 +102,7 @@ class AppState extends ChangeNotifier {
     _profileSubscription = firestoreService.watchUserProfile(user.uid).listen(
       (profile) async {
         _profile = profile;
+        await _applyProfileLanguage(profile);
         _isInitializing = false;
         notifyListeners();
         await _configureNotificationsForProfile(profile);
@@ -107,6 +115,19 @@ class AppState extends ChangeNotifier {
       _notificationsConfiguredForUid = profile.uid;
       await notificationService.configureForUser(profile.uid);
     }
+  }
+
+  Future<void> _applyProfileLanguage(UserProfile? profile) async {
+    if (profile == null || profile.isAdmin) {
+      return;
+    }
+    final languageCode =
+        AppLanguageCodes.normalize(profile.preferredLanguageCode);
+    if (_preferredLanguageCode == languageCode) {
+      return;
+    }
+    _preferredLanguageCode = languageCode;
+    await localStorageService.savePreferredLanguageCode(languageCode);
   }
 
   Future<void> markOnboardingComplete() async {
@@ -131,6 +152,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     _profile = await firestoreService.fetchUserProfile(user.uid);
+    await _applyProfileLanguage(_profile);
     notifyListeners();
   }
 
@@ -155,6 +177,7 @@ class AppState extends ChangeNotifier {
       password: password,
     );
     _profile = user;
+    await _applyProfileLanguage(user);
     notifyListeners();
     await _configureNotificationsForProfile(user);
     return user;
@@ -171,13 +194,18 @@ class AppState extends ChangeNotifier {
     required String phone,
     required String address,
     required String password,
+    required String preferredLanguageCode,
   }) async {
+    final languageCode = AppLanguageCodes.normalize(preferredLanguageCode);
     _profile = await authService.completeRegistration(
       fullName: fullName,
       phone: phone,
       address: address,
       password: password,
+      preferredLanguageCode: languageCode,
     );
+    _preferredLanguageCode = languageCode;
+    await localStorageService.savePreferredLanguageCode(languageCode);
     notifyListeners();
     await _configureNotificationsForProfile(_profile);
   }
@@ -197,6 +225,38 @@ class AppState extends ChangeNotifier {
     );
     _profile = current.copyWith(fullName: fullName, address: address);
     notifyListeners();
+  }
+
+  Future<void> updatePreferredLanguage(String preferredLanguageCode) async {
+    final languageCode = AppLanguageCodes.normalize(preferredLanguageCode);
+    final previousLanguageCode = _preferredLanguageCode;
+    final previousProfile = _profile;
+    if (_preferredLanguageCode != languageCode) {
+      _preferredLanguageCode = languageCode;
+      notifyListeners();
+    }
+    await localStorageService.savePreferredLanguageCode(languageCode);
+
+    final current = _profile;
+    if (current == null || current.isAdmin) {
+      return;
+    }
+    try {
+      await firestoreService.updatePreferredLanguage(
+        uid: current.uid,
+        preferredLanguageCode: languageCode,
+      );
+      _profile = current.copyWith(preferredLanguageCode: languageCode);
+      notifyListeners();
+    } catch (_) {
+      _preferredLanguageCode = previousLanguageCode;
+      _profile = previousProfile;
+      await localStorageService.savePreferredLanguageCode(
+        previousLanguageCode,
+      );
+      notifyListeners();
+      rethrow;
+    }
   }
 
   Future<void> addToCart(Product product) async {

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../core/constants/app_constants.dart';
+import '../core/i18n/language_codes.dart';
 import '../core/utils/phone_utils.dart';
 import '../models/models.dart';
 import 'firestore_service.dart';
@@ -121,6 +122,7 @@ class AuthService {
     required String phone,
     required String address,
     required String password,
+    required String preferredLanguageCode,
   }) async {
     final normalizedPhone = PhoneUtils.normalizeSriLankanPhone(phone);
     if (!PhoneUtils.isSriLankanMobile(normalizedPhone)) {
@@ -156,6 +158,8 @@ class AuthService {
       updatedAt: now,
       isPhoneVerified: true,
       isBlocked: false,
+      preferredLanguageCode:
+          AppLanguageCodes.normalize(preferredLanguageCode),
     );
 
     await _firestoreService.saveUserProfile(profile);

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../core/i18n/app_localizations.dart';
+import '../../core/i18n/language_codes.dart';
 import '../../core/utils/phone_utils.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/common_widgets.dart';
@@ -59,7 +61,7 @@ class _AuthScaffold extends StatelessWidget {
       appBar: appBarTitle == null
           ? null
           : AppBar(
-              title: Text(appBarTitle!),
+              title: Text(context.t(appBarTitle!)),
               backgroundColor: _authBackground.withOpacity(0.96),
               shape: const Border(bottom: BorderSide(color: _authLine)),
             ),
@@ -86,7 +88,7 @@ class _AuthScaffold extends StatelessWidget {
                               const SizedBox(height: 20),
                             ],
                             Text(
-                              title,
+                              context.t(title),
                               style: Theme.of(context)
                                   .textTheme
                                   .headlineSmall
@@ -207,7 +209,7 @@ class _AuthHeroPanel extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  context.t(title),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 21,
@@ -218,7 +220,7 @@ class _AuthHeroPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  message,
+                  context.t(message),
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.82),
                     fontWeight: FontWeight.w600,
@@ -241,6 +243,57 @@ class _AuthHeroPanel extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AuthLanguageSelector extends StatelessWidget {
+  const _AuthLanguageSelector({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = AppLanguageCodes.normalize(value);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.translate, color: _authPrimary, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              context.t('Preferred language'),
+              style: const TextStyle(
+                color: _authInk,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<String>(
+            segments: [
+              ButtonSegment<String>(
+                value: AppLanguageCodes.english,
+                label: Text(context.t('English')),
+              ),
+              ButtonSegment<String>(
+                value: AppLanguageCodes.tamil,
+                label: Text(context.t('Tamil')),
+              ),
+            ],
+            selected: {normalized},
+            onSelectionChanged: (selected) => onChanged(selected.first),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -288,8 +341,10 @@ class SplashScreen extends StatelessWidget {
                               ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'Local groceries, lists, pickup, and COD delivery.',
+                    Text(
+                      context.t(
+                        'Local groceries, lists, pickup, and COD delivery.',
+                      ),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: _authMuted,
@@ -328,8 +383,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _items = const [
     _OnboardingItem(
       Icons.storefront,
-      'Order from trusted local shops',
-      'Browse products from partner shops and keep your daily groceries simple.',
+      'Everything you need in one place',
+      'Browse our carefully selected products and enjoy a simple grocery shopping experience.',
     ),
     _OnboardingItem(
       Icons.receipt_long,
@@ -418,7 +473,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 ),
                                 const SizedBox(height: 24),
                                 Text(
-                                  item.title,
+                                  context.t(item.title),
                                   textAlign: TextAlign.center,
                                   style: Theme.of(context)
                                       .textTheme
@@ -431,7 +486,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 ),
                                 const SizedBox(height: 12),
                                 Text(
-                                  item.message,
+                                  context.t(item.message),
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: Colors.white.withOpacity(0.82),
@@ -541,7 +596,7 @@ class _OnboardingChip extends StatelessWidget {
           Icon(icon, size: 17, color: _authPrimary),
           const SizedBox(width: 6),
           Text(
-            label,
+            context.t(label),
             style: const TextStyle(
               color: _authInk,
               fontWeight: FontWeight.w900,
@@ -633,7 +688,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   )
               : null,
           icon: const Icon(Icons.person_add),
-          label: const Text('Create account'),
+          label: Text(context.t('Create account')),
         ),
         TextButton(
           onPressed: appState.firebaseAvailable
@@ -643,7 +698,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   )
               : null,
-          child: const Text('Forgot password?'),
+          child: Text(context.t('Forgot password?')),
         ),
       ],
     );
@@ -771,7 +826,14 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
   final _address = TextEditingController();
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
+  var _preferredLanguageCode = AppLanguageCodes.english;
   var _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _preferredLanguageCode = context.read<AppState>().preferredLanguageCode;
+  }
 
   @override
   void dispose() {
@@ -822,6 +884,16 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
                   prefixIcon: Icons.home,
                 ),
                 const SizedBox(height: 12),
+                _AuthLanguageSelector(
+                  value: _preferredLanguageCode,
+                  onChanged: (value) async {
+                    setState(() => _preferredLanguageCode = value);
+                    await context.read<AppState>().updatePreferredLanguage(
+                          value,
+                        );
+                  },
+                ),
+                const SizedBox(height: 12),
                 AppTextField(
                   controller: _password,
                   label: 'Password',
@@ -864,6 +936,7 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
             phone: PhoneUtils.normalizeSriLankanPhone(_phone.text),
             address: _address.text,
             password: _password.text,
+            preferredLanguageCode: _preferredLanguageCode,
           );
       if (mounted) {
         Navigator.of(context).popUntil((route) => route.isFirst);
@@ -948,7 +1021,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      _statusMessage(status),
+                      context.t(_statusMessage(status)),
                       style: const TextStyle(
                         color: _authMuted,
                         fontWeight: FontWeight.w600,

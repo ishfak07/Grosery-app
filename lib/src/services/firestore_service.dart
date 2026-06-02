@@ -78,6 +78,16 @@ class FirestoreService {
     });
   }
 
+  Future<void> updatePreferredLanguage({
+    required String uid,
+    required String preferredLanguageCode,
+  }) {
+    return _users.doc(uid).update({
+      'preferredLanguageCode': preferredLanguageCode,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   Future<void> blockUser(String uid, bool isBlocked) {
     return _users.doc(uid).update({
       'isBlocked': isBlocked,
