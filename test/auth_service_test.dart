@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grocerydelivery/src/core/utils/phone_utils.dart';
+import 'package:grocerydelivery/src/models/models.dart';
 import 'package:grocerydelivery/src/services/auth_service.dart';
 import 'package:grocerydelivery/src/services/firestore_service.dart';
 
@@ -69,5 +70,20 @@ void main() {
     expect(profile.role, 'admin');
     expect(profile.isAdmin, isTrue);
     expect(profile.isPhoneVerified, isTrue);
+  });
+
+  test('uses the Firestore document id as the user profile uid', () {
+    final profile = UserProfile.fromMap({
+      'uid': 'stale-user-id',
+      'fullName': 'Customer',
+      'phone': '+94788731444',
+      'hiddenEmail': '94788731444@app.local',
+      'role': 'user',
+      'address': 'Puttalam',
+      'isPhoneVerified': true,
+      'isBlocked': false,
+    }, 'auth-user-id');
+
+    expect(profile.uid, 'auth-user-id');
   });
 }

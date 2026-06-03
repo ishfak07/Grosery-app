@@ -103,8 +103,9 @@ class UserProfile {
     final fcmTokens = (map['fcmTokens'] as List<dynamic>? ?? const <dynamic>[])
         .map((token) => token.toString())
         .toList();
+    final documentUid = uid.trim();
     return UserProfile(
-      uid: map['uid'] as String? ?? uid,
+      uid: documentUid.isNotEmpty ? documentUid : map['uid'] as String? ?? '',
       fullName: map['fullName'] as String? ?? '',
       phone: map['phone'] as String? ?? '',
       hiddenEmail: map['hiddenEmail'] as String? ?? '',

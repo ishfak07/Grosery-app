@@ -189,7 +189,6 @@ class FirestoreService {
       ),
       _fromServer(
         _notifications
-            .where('recipientRole', isEqualTo: 'user')
             .where('userId', isEqualTo: userId)
             .get(const GetOptions(source: Source.server)),
       ),
@@ -690,10 +689,9 @@ class FirestoreService {
     }
 
     final userNotifications = _notifications
-        .where('recipientRole', isEqualTo: 'user')
         .where('userId', isEqualTo: userId)
         .snapshots()
-        .map(_notificationsFromSnapshot);
+        .map(_userNotificationsFromSnapshot);
     final broadcastNotifications = _notifications
         .where('recipientRole', isEqualTo: 'broadcast')
         .snapshots()
@@ -713,6 +711,14 @@ class FirestoreService {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
+  List<AppNotification> _userNotificationsFromSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    return _notificationsFromSnapshot(snapshot)
+        .where((notification) => notification.recipientRole == 'user')
+        .toList();
+  }
+
   Stream<List<AppNotification>> _mergeNotificationStreams(
     Stream<List<AppNotification>> first,
     Stream<List<AppNotification>> second,
@@ -729,7 +735,11 @@ class FirestoreService {
       if (!hasFirstItems || !hasSecondItems) {
         return;
       }
-      final merged = [...firstItems, ...secondItems]
+      final notificationsById = <String, AppNotification>{};
+      for (final notification in [...firstItems, ...secondItems]) {
+        notificationsById[notification.notificationId] = notification;
+      }
+      final merged = notificationsById.values.toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
       controller.add(merged);
     }

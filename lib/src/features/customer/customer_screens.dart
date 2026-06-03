@@ -3229,6 +3229,15 @@ class NotificationsScreen extends StatelessWidget {
           role: profile.role,
         ),
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return RefreshableCenteredContent(
+              child: EmptyState(
+                icon: Icons.notifications_off_outlined,
+                title: 'Notifications unavailable',
+                message: appFriendlyErrorMessage(snapshot.error),
+              ),
+            );
+          }
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const _ListSkeleton();
           }
