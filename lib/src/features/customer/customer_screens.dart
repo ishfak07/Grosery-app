@@ -1757,8 +1757,8 @@ class CartScreen extends StatelessWidget {
               ),
               icon: const Icon(Icons.upload_file),
               label: Text(appState.hasBillImage
-                  ? context.t('Change bill/list photo')
-                  : context.t('Upload bill/list photo')),
+                  ? context.t('Change list photo')
+                  : context.t('Upload list photo')),
             ),
             const SizedBox(height: 10),
             PrimaryActionButton(
