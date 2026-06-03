@@ -75,7 +75,8 @@ class ConnectivityService {
   }
 
   bool _hasNoNetwork(List<ConnectivityResult> results) {
-    return results.contains(ConnectivityResult.none);
+    return results.isEmpty ||
+        results.every((result) => result == ConnectivityResult.none);
   }
 
   Future<bool> _hasInternetAccess() async {

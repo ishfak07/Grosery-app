@@ -1618,13 +1618,15 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
   }
 
   Future<void> _saveBill(OrderModel order) async {
+    final subtotal = _readNonNegativeAmount(_subtotal, 'subtotal');
+    final delivery = _readNonNegativeAmount(_delivery, 'delivery charge');
+    final service = _readNonNegativeAmount(_service, 'service charge');
+    if (subtotal == null || delivery == null || service == null) {
+      return;
+    }
+
     setState(() => _isSavingBill = true);
     try {
-      final subtotal = double.tryParse(_subtotal.text.trim()) ?? order.subtotal;
-      final delivery =
-          double.tryParse(_delivery.text.trim()) ?? order.deliveryCharge;
-      final service =
-          double.tryParse(_service.text.trim()) ?? order.serviceCharge;
       await context.read<AppState>().firestoreService.updateOrderFinancials(
             order: order,
             subtotal: subtotal,
@@ -1644,6 +1646,18 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
         setState(() => _isSavingBill = false);
       }
     }
+  }
+
+  double? _readNonNegativeAmount(
+    TextEditingController controller,
+    String label,
+  ) {
+    final value = double.tryParse(controller.text.trim());
+    if (value == null || value.isNaN || value.isInfinite || value < 0) {
+      showSnack(context, 'Enter a valid $label.');
+      return null;
+    }
+    return value;
   }
 
   Future<void> _updateStatus(OrderModel order) async {

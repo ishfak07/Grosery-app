@@ -3516,12 +3516,13 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
   Widget build(BuildContext context) {
     final appState = context.read<AppState>();
     final profile = appState.profile!;
+    final isClosed = widget.ticket.status == 'closed';
     return Scaffold(
       backgroundColor: _customerBackground,
       appBar: AppBar(
         title: Text(widget.ticket.subject),
         actions: [
-          if (profile.isAdmin && widget.ticket.status != 'closed')
+          if (profile.isAdmin && !isClosed)
             _CustomerIconButton(
               tooltip: 'Close ticket',
               icon: Icons.check_circle_outline,
@@ -3553,7 +3554,7 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
         child: Stack(
           children: [
             Positioned.fill(
-              bottom: 92,
+              bottom: isClosed ? 70 : 92,
               child: SafeArea(
                 top: false,
                 bottom: false,
@@ -3564,7 +3565,7 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
               left: 0,
               right: 0,
               bottom: 0,
-              child: _buildComposer(),
+              child: isClosed ? _buildClosedNotice() : _buildComposer(),
             ),
           ],
         ),
@@ -3660,6 +3661,32 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
             },
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildClosedNotice() {
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomInset),
+      color: _customerPrimaryLight,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.check_circle_outline,
+            color: _customerPrimary,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            context.t('Ticket closed.'),
+            style: const TextStyle(
+              color: _customerInk,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
       ),
     );
   }

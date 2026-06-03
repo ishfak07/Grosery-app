@@ -235,41 +235,43 @@ class OfflineConnectionOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isOffline = !context.watch<AppState>().hasInternetConnection;
+    final appState = context.watch<AppState>();
+    final isOffline = !appState.hasInternetConnection;
     return Stack(
       children: [
         child,
         Positioned.fill(
-          child: IgnorePointer(
-            ignoring: true,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 280),
-              reverseDuration: const Duration(milliseconds: 220),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) {
-                final curved = CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeOutCubic,
-                  reverseCurve: Curves.easeInCubic,
-                );
-                return FadeTransition(
-                  opacity: curved,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, -0.08),
-                      end: Offset.zero,
-                    ).animate(curved),
-                    child: child,
-                  ),
-                );
-              },
-              child: isOffline
-                  ? const _OfflineConnectionMessage(
-                      key: ValueKey('offline-message'),
-                    )
-                  : const SizedBox.shrink(key: ValueKey('online-message')),
-            ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 280),
+            reverseDuration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              );
+              return FadeTransition(
+                opacity: curved,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
+                  child: child,
+                ),
+              );
+            },
+            child: isOffline
+                ? _OfflineConnectionMessage(
+                    key: const ValueKey('offline-message'),
+                    onRetry: () async {
+                      final recovered =
+                          await appState.verifyInternetConnection();
+                      if (recovered) {
+                        await appState.refreshVisibleData();
+                      }
+                    },
+                  )
+                : const SizedBox.shrink(key: ValueKey('online-message')),
           ),
         ),
       ],
@@ -278,7 +280,12 @@ class OfflineConnectionOverlay extends StatelessWidget {
 }
 
 class _OfflineConnectionMessage extends StatefulWidget {
-  const _OfflineConnectionMessage({super.key});
+  const _OfflineConnectionMessage({
+    super.key,
+    required this.onRetry,
+  });
+
+  final Future<void> Function() onRetry;
 
   @override
   State<_OfflineConnectionMessage> createState() =>
@@ -289,6 +296,7 @@ class _OfflineConnectionMessageState extends State<_OfflineConnectionMessage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulseController;
   late final Animation<double> _pulse;
+  var _isRetrying = false;
 
   @override
   void initState() {
@@ -308,6 +316,20 @@ class _OfflineConnectionMessageState extends State<_OfflineConnectionMessage>
     super.dispose();
   }
 
+  Future<void> _retry() async {
+    if (_isRetrying) {
+      return;
+    }
+    setState(() => _isRetrying = true);
+    try {
+      await widget.onRetry();
+    } finally {
+      if (mounted) {
+        setState(() => _isRetrying = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
@@ -316,47 +338,43 @@ class _OfflineConnectionMessageState extends State<_OfflineConnectionMessage>
       minScaleFactor: 1,
       maxScaleFactor: 1.18,
     );
-    return SafeArea(
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: media.size.width < 520 ? media.size.width - 32 : 480,
-            ),
-            child: MediaQuery(
-              data: media.copyWith(textScaler: textScaler),
-              child: Material(
-                color: Colors.transparent,
-                shadowColor: Colors.transparent,
+    return Material(
+      color: const Color(0xFF10231A).withOpacity(0.22),
+      child: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: media.size.width < 520 ? media.size.width - 40 : 420,
+              ),
+              child: MediaQuery(
+                data: media.copyWith(textScaler: textScaler),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10231A).withOpacity(0.96),
+                    color: const Color(0xFF10231A).withOpacity(0.98),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: Colors.white.withOpacity(0.12),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF10231A).withOpacity(0.22),
-                        blurRadius: 24,
-                        offset: const Offset(0, 10),
+                        color: const Color(0xFF10231A).withOpacity(0.28),
+                        blurRadius: 28,
+                        offset: const Offset(0, 14),
                       ),
                     ],
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    child: Row(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         ScaleTransition(
                           scale: _pulse,
                           child: Container(
-                            width: 38,
-                            height: 38,
+                            width: 58,
+                            height: 58,
                             decoration: BoxDecoration(
                               color: const Color(0xFFE86F4A).withOpacity(0.18),
                               borderRadius: BorderRadius.circular(8),
@@ -364,56 +382,52 @@ class _OfflineConnectionMessageState extends State<_OfflineConnectionMessage>
                             child: const Icon(
                               Icons.wifi_off_rounded,
                               color: Color(0xFFFFC9BA),
-                              size: 22,
+                              size: 30,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                context.t('No Internet Connection'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: (theme.textTheme.titleSmall ??
-                                        const TextStyle(fontSize: 14))
-                                    .copyWith(
-                                  color: Colors.white,
-                                  decoration: TextDecoration.none,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0,
-                                  height: 1.1,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                context.t(
-                                  'Check your connection and try again.',
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: (theme.textTheme.bodySmall ??
-                                        const TextStyle(fontSize: 12))
-                                    .copyWith(
-                                  color: Colors.white.withOpacity(0.78),
-                                  decoration: TextDecoration.none,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.25,
-                                ),
-                              ),
-                            ],
+                        const SizedBox(height: 14),
+                        Text(
+                          context.t('No Internet Connection'),
+                          textAlign: TextAlign.center,
+                          style: (theme.textTheme.titleMedium ??
+                                  const TextStyle(fontSize: 16))
+                              .copyWith(
+                            color: Colors.white,
+                            decoration: TextDecoration.none,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0,
+                            height: 1.12,
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFFFB020),
-                            shape: BoxShape.circle,
+                        const SizedBox(height: 7),
+                        Text(
+                          context.t('Check your connection and try again.'),
+                          textAlign: TextAlign.center,
+                          style: (theme.textTheme.bodyMedium ??
+                                  const TextStyle(fontSize: 14))
+                              .copyWith(
+                            color: Colors.white.withOpacity(0.78),
+                            decoration: TextDecoration.none,
+                            fontWeight: FontWeight.w700,
+                            height: 1.32,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _isRetrying ? null : _retry,
+                            icon: _isRetrying
+                                ? const SizedBox(
+                                    width: 17,
+                                    height: 17,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.refresh),
+                            label: Text(context.t('Retry')),
                           ),
                         ),
                       ],

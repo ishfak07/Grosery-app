@@ -108,6 +108,7 @@ const _tamil = <String, String>{
   'No Internet Connection': 'இணைய இணைப்பு இல்லை',
   'Check your connection and try again.':
       'உங்கள் இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
+  'Retry': 'மீண்டும் முயற்சி',
   'Something went wrong. Please try again.':
       'ஏதோ தவறு ஏற்பட்டது. மீண்டும் முயற்சிக்கவும்.',
   'Service setup is not complete. Please contact support.':
@@ -330,6 +331,8 @@ const _tamil = <String, String>{
       'ஆர்டருக்கு உதவி தேவைப்பட்டால் டிக்கெட் உருவாக்குங்கள்.',
   'Subject and message are required.': 'தலைப்பும் செய்தியும் அவசியம்.',
   'Support ticket created.': 'ஆதரவு டிக்கெட் உருவாக்கப்பட்டது.',
+  'Close ticket': 'டிக்கெட்டை மூடு',
+  'Ticket closed.': 'டிக்கெட் மூடப்பட்டது.',
   'Messages unavailable': 'செய்திகள் கிடைக்கவில்லை',
   'Please go back and open this ticket again.':
       'பின்சென்று இந்த டிக்கெட்டை மீண்டும் திறக்கவும்.',

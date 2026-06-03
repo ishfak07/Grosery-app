@@ -409,11 +409,15 @@ class FirestoreService {
     required double serviceCharge,
     required String paymentStatus,
   }) async {
-    final total = subtotal + deliveryCharge + serviceCharge;
+    final normalizedSubtotal = _nonNegative(subtotal);
+    final normalizedDeliveryCharge = _nonNegative(deliveryCharge);
+    final normalizedServiceCharge = _nonNegative(serviceCharge);
+    final total =
+        normalizedSubtotal + normalizedDeliveryCharge + normalizedServiceCharge;
     final updatedOrder = order.copyWith(
-      subtotal: subtotal,
-      deliveryCharge: deliveryCharge,
-      serviceCharge: serviceCharge,
+      subtotal: normalizedSubtotal,
+      deliveryCharge: normalizedDeliveryCharge,
+      serviceCharge: normalizedServiceCharge,
       totalAmount: total,
       paymentStatus: paymentStatus,
     );
@@ -426,9 +430,9 @@ class FirestoreService {
 
     final batch = _db.batch();
     batch.update(_orders.doc(order.orderId), {
-      'subtotal': subtotal,
-      'deliveryCharge': deliveryCharge,
-      'serviceCharge': serviceCharge,
+      'subtotal': normalizedSubtotal,
+      'deliveryCharge': normalizedDeliveryCharge,
+      'serviceCharge': normalizedServiceCharge,
       'totalAmount': total,
       'paymentStatus': paymentStatus,
       'orderStatus':

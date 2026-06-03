@@ -28,8 +28,84 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/support_tickets/$(ticketId));
     }
 
+    function ticketExists(ticketId) {
+      return exists(/databases/$(database)/documents/support_tickets/$(ticketId));
+    }
+
+    function orderAfter(orderId) {
+      return getAfter(/databases/$(database)/documents/orders/$(orderId));
+    }
+
     function ticketAfter(ticketId) {
       return getAfter(/databases/$(database)/documents/support_tickets/$(ticketId));
+    }
+
+    function userEditableProfileKeys() {
+      return [
+        'fullName',
+        'address',
+        'preferredLanguageCode',
+        'fcmToken',
+        'fcmTokens',
+        'fcmTokenPlatform',
+        'fcmTokenUpdatedAt',
+        'updatedAt'
+      ];
+    }
+
+    function orderCreateKeys() {
+      return [
+        'orderId',
+        'userId',
+        'customerName',
+        'customerPhone',
+        'customerAddress',
+        'items',
+        'uploadedImageUrl',
+        'paymentReceiptImageUrl',
+        'orderNotes',
+        'subtotal',
+        'deliveryCharge',
+        'serviceCharge',
+        'totalAmount',
+        'paymentMethod',
+        'paymentStatus',
+        'orderStatus',
+        'adminNotes',
+        'assignedDeliveryPerson',
+        'createdAt',
+        'updatedAt'
+      ];
+    }
+
+    function isValidOrderCreate() {
+      return request.resource.data.keys().hasOnly(orderCreateKeys()) &&
+        request.resource.data.keys().hasAll(orderCreateKeys()) &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.orderStatus == 'Pending' &&
+        request.resource.data.adminNotes == '' &&
+        request.resource.data.assignedDeliveryPerson == '' &&
+        request.resource.data.paymentMethod in ['COD', 'Bank Transfer'] &&
+        request.resource.data.paymentStatus in ['pending', 'receipt uploaded'] &&
+        request.resource.data.subtotal >= 0 &&
+        request.resource.data.deliveryCharge >= 0 &&
+        request.resource.data.serviceCharge >= 0 &&
+        request.resource.data.totalAmount >= 0;
+    }
+
+    function validUserAdminNotification() {
+      return request.resource.data.recipientRole == 'admin' &&
+        request.resource.data.userId == '' &&
+        (
+          (
+            request.resource.data.type == 'order' &&
+            orderAfter(request.resource.data.relatedId).data.userId == request.auth.uid
+          ) ||
+          (
+            request.resource.data.type == 'support' &&
+            ticketAfter(request.resource.data.relatedId).data.userId == request.auth.uid
+          )
+        );
     }
 
     match /users/{uid} {
@@ -40,12 +116,8 @@ service cloud.firestore {
         isAdmin() ||
         (
           request.auth.uid == uid &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'role',
-            'isBlocked',
-            'hiddenEmail',
-            'isPhoneVerified'
-          ])
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(userEditableProfileKeys())
         )
       );
       allow delete: if false;
@@ -63,7 +135,7 @@ service cloud.firestore {
 
     match /orders/{orderId} {
       allow create: if notBlocked() &&
-        request.resource.data.userId == request.auth.uid;
+        isValidOrderCreate();
       allow read: if signedIn() &&
         (resource.data.userId == request.auth.uid || isAdmin());
       allow update, delete: if isAdmin();
@@ -79,16 +151,37 @@ service cloud.firestore {
       allow read: if signedIn() &&
         (resource.data.userId == request.auth.uid || isAdmin());
       allow update: if signedIn() &&
-        (resource.data.userId == request.auth.uid || isAdmin());
+        (
+          isAdmin() ||
+          (
+            resource.data.userId == request.auth.uid &&
+            resource.data.status != 'closed' &&
+            request.resource.data.status == 'open' &&
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'updatedAt'])
+          )
+        );
       allow delete: if isAdmin();
     }
 
     match /support_messages/{messageId} {
       allow create: if notBlocked() &&
-        request.resource.data.senderId == request.auth.uid && (
-        isAdmin() ||
-        ticketAfter(request.resource.data.ticketId).data.userId == request.auth.uid
-      );
+        request.resource.data.senderId == request.auth.uid &&
+        (
+          !ticketExists(request.resource.data.ticketId) ||
+          ticket(request.resource.data.ticketId).data.status != 'closed'
+        ) &&
+        (
+          (
+            isAdmin() &&
+            request.resource.data.senderRole == 'admin'
+          ) ||
+          (
+            !isAdmin() &&
+            request.resource.data.senderRole == 'user' &&
+            ticketAfter(request.resource.data.ticketId).data.userId == request.auth.uid
+          )
+        );
       allow read: if signedIn() && (
         isAdmin() ||
         ticket(resource.data.ticketId).data.userId == request.auth.uid
@@ -99,11 +192,7 @@ service cloud.firestore {
     match /notifications/{notificationId} {
       allow create: if signedIn() && (
         isAdmin() ||
-        request.resource.data.recipientRole == 'admin' ||
-        (
-          request.resource.data.recipientRole == 'user' &&
-          request.resource.data.userId == request.auth.uid
-        )
+        validUserAdminNotification()
       );
       allow read: if signedIn() && (
         isAdmin() ||
@@ -114,7 +203,9 @@ service cloud.firestore {
         isAdmin() ||
         (
           resource.data.recipientRole == 'user' &&
-          resource.data.userId == request.auth.uid
+          resource.data.userId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['isRead'])
         )
       );
       allow delete: if isAdmin();

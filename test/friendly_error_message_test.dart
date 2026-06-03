@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:grocerydelivery/services/cloudinary_service.dart';
 import 'package:grocerydelivery/src/core/widgets/common_widgets.dart';
 
 void main() {
@@ -16,6 +17,17 @@ void main() {
       appFriendlyErrorMessage(
           'Bad state: Please login before placing an order.'),
       'Please login before placing an order.',
+    );
+  });
+
+  test('turns Cloudinary upload failures into an image upload message', () {
+    expect(
+      appFriendlyErrorMessage(
+        const CloudinaryUploadException(
+          'Cloudinary upload failed with status 413.',
+        ),
+      ),
+      'Image upload failed. Please check your connection and try again.',
     );
   });
 }
