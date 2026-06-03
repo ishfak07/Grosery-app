@@ -622,6 +622,17 @@ class AdminDashboardScreen extends StatelessWidget {
                   ),
                 ),
                 _AdminTile(
+                  icon: Icons.local_offer_outlined,
+                  title: 'Offers',
+                  subtitle: 'Home banners',
+                  accent: _adminWarning,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AdminOfferManagementScreen(),
+                    ),
+                  ),
+                ),
+                _AdminTile(
                   icon: Icons.storefront,
                   title: 'Shops',
                   subtitle: 'Partner shops',
@@ -2886,6 +2897,736 @@ String _shortId(String value) {
     return value;
   }
   return value.substring(0, 8);
+}
+
+class AdminOfferManagementScreen extends StatelessWidget {
+  const AdminOfferManagementScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.read<AppState>();
+    return _AdminScaffold(
+      title: 'Manage offers',
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: _adminInk,
+        foregroundColor: Colors.white,
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const AdminOfferFormScreen()),
+        ),
+        icon: const Icon(Icons.add),
+        label: const Text('Offer'),
+      ),
+      body: _AdminPage(
+        child: StreamBuilder<List<Offer>>(
+          stream: appState.firestoreService.watchOffers(activeOnly: false),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return RefreshableCenteredContent(
+                child: EmptyState(
+                  icon: Icons.error_outline,
+                  title: 'Could not load offers',
+                  message: appFriendlyErrorMessage(snapshot.error),
+                ),
+              );
+            }
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const RefreshableCenteredContent(
+                child: LoadingView(),
+              );
+            }
+            final offers = snapshot.data ?? const <Offer>[];
+            if (offers.isEmpty) {
+              return const RefreshableCenteredContent(
+                child: EmptyState(
+                  icon: Icons.local_offer_outlined,
+                  title: 'No offers',
+                  message: 'Create home page banners for current promotions.',
+                ),
+              );
+            }
+            return ListView.separated(
+              physics: appRefreshScrollPhysics,
+              padding: const EdgeInsets.fromLTRB(0, 16, 0, 96),
+              itemCount: offers.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final offer = offers[index];
+                return _AdminReveal(
+                  index: index,
+                  child: _AdminOfferTile(
+                    offer: offer,
+                    onActiveChanged: (value) => appState.firestoreService
+                        .toggleOffer(offer.offerId, value),
+                    onDelete: () => _confirmDeleteOffer(context, offer),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => AdminOfferFormScreen(offer: offer),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteOffer(
+    BuildContext context,
+    Offer offer,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Remove offer?'),
+          content: Text(
+            'This will permanently remove "${offer.title}" from the home page offers.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFC83A2B),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Remove'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    try {
+      await context.read<AppState>().firestoreService.deleteOffer(
+            offer.offerId,
+          );
+      if (context.mounted) {
+        showSnack(context, 'Offer removed.');
+      }
+    } catch (error) {
+      if (context.mounted) {
+        showSnack(context, error.toString());
+      }
+    }
+  }
+}
+
+class _AdminOfferTile extends StatelessWidget {
+  const _AdminOfferTile({
+    required this.offer,
+    required this.onTap,
+    required this.onActiveChanged,
+    required this.onDelete,
+  });
+
+  final Offer offer;
+  final VoidCallback onTap;
+  final ValueChanged<bool> onActiveChanged;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final isLive = offer.isCurrentlyActive(DateTime.now());
+    final statusColor = isLive
+        ? _adminPrimary
+        : offer.isActive
+            ? _adminWarning
+            : _adminMuted;
+    final dateLabel = _offerDateLabel(offer);
+    return _AdminCard(
+      onTap: onTap,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 86,
+            height: 64,
+            child: ProductImage(url: offer.imageUrl),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  offer.title,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _adminInk,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (offer.tamilTitle.trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    offer.tamilTitle,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _adminMuted,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 4),
+                Text(
+                  offer.caption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _adminMuted,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    _AdminPill(
+                      label: isLive
+                          ? 'Live'
+                          : offer.isActive
+                              ? 'Scheduled'
+                              : 'Hidden',
+                      color: statusColor,
+                      icon: Icons.circle,
+                    ),
+                    if (dateLabel != null)
+                      _AdminPill(
+                        label: dateLabel,
+                        color: _adminBlue,
+                        icon: Icons.event_outlined,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            children: [
+              Switch(
+                value: offer.isActive,
+                onChanged: onActiveChanged,
+              ),
+              Text(
+                offer.isActive ? 'Active' : 'Hidden',
+                style: TextStyle(
+                  color: offer.isActive ? _adminPrimary : _adminMuted,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Remove offer',
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline),
+                color: const Color(0xFFC83A2B),
+              ),
+            ],
+          ),
+          const Icon(Icons.chevron_right, color: _adminMuted),
+        ],
+      ),
+    );
+  }
+}
+
+class AdminOfferFormScreen extends StatefulWidget {
+  const AdminOfferFormScreen({super.key, this.offer});
+
+  final Offer? offer;
+
+  @override
+  State<AdminOfferFormScreen> createState() => _AdminOfferFormScreenState();
+}
+
+class _AdminOfferFormScreenState extends State<AdminOfferFormScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _title = TextEditingController();
+  final _tamilTitle = TextEditingController();
+  final _caption = TextEditingController();
+  final _tamilCaption = TextEditingController();
+  String? _imagePath;
+  DateTime? _startDate;
+  DateTime? _endDate;
+  var _isActive = true;
+  var _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final offer = widget.offer;
+    if (offer != null) {
+      _title.text = offer.title;
+      _tamilTitle.text = offer.tamilTitle;
+      _caption.text = offer.caption;
+      _tamilCaption.text = offer.tamilCaption;
+      _startDate = offer.startDate;
+      _endDate = offer.endDate;
+      _isActive = offer.isActive;
+    }
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _tamilTitle.dispose();
+    _caption.dispose();
+    _tamilCaption.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _AdminScaffold(
+      title: widget.offer == null ? 'Add offer' : 'Edit offer',
+      actions: widget.offer == null
+          ? null
+          : [
+              _AdminAppBarButton(
+                tooltip: 'Remove offer',
+                icon: Icons.delete_outline,
+                onPressed: _isSaving ? () {} : _confirmDeleteOffer,
+              ),
+            ],
+      body: _AdminPage(
+        maxWidth: 760,
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            physics: appRefreshScrollPhysics,
+            padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
+            children: [
+              _AdminReveal(
+                child: _AdminCard(
+                  child: Column(
+                    children: [
+                      const _AdminSectionHeader(
+                        title: 'Offer details',
+                        icon: Icons.local_offer_outlined,
+                      ),
+                      AppTextField(
+                        controller: _title,
+                        label: 'Offer title',
+                        validator: (value) => Validators.requiredText(
+                          value,
+                          'Offer title',
+                        ),
+                        prefixIcon: Icons.title,
+                      ),
+                      const SizedBox(height: 10),
+                      AppTextField(
+                        controller: _tamilTitle,
+                        label: 'Tamil offer title',
+                        prefixIcon: Icons.translate,
+                      ),
+                      const SizedBox(height: 10),
+                      AppTextField(
+                        controller: _caption,
+                        label: 'Caption',
+                        validator: (value) => Validators.requiredText(
+                          value,
+                          'Caption',
+                        ),
+                        maxLines: 3,
+                        prefixIcon: Icons.notes,
+                      ),
+                      const SizedBox(height: 10),
+                      AppTextField(
+                        controller: _tamilCaption,
+                        label: 'Tamil caption',
+                        maxLines: 3,
+                        prefixIcon: Icons.translate,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              _AdminReveal(
+                index: 1,
+                child: _AdminCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const _AdminSectionHeader(
+                        title: 'Schedule',
+                        icon: Icons.event_outlined,
+                      ),
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        value: _isActive,
+                        onChanged: _isSaving
+                            ? null
+                            : (value) => setState(() => _isActive = value),
+                        title: const Text(
+                          'Show offer',
+                          style: TextStyle(
+                            color: _adminInk,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        subtitle: const Text(
+                          'Only active offers appear on the customer home page.',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _isSaving ? null : _pickStartDate,
+                              icon: const Icon(Icons.today_outlined),
+                              label: Text(_scheduleLabel(
+                                label: 'Start',
+                                date: _startDate,
+                              )),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _isSaving ? null : _pickEndDate,
+                              icon: const Icon(Icons.event_available_outlined),
+                              label: Text(_scheduleLabel(
+                                label: 'End',
+                                date: _endDate,
+                              )),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_startDate != null || _endDate != null) ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            onPressed: _isSaving ? null : _clearSchedule,
+                            icon: const Icon(Icons.clear),
+                            label: const Text('Clear dates'),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              _AdminReveal(
+                index: 2,
+                child: _AdminCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const _AdminSectionHeader(
+                        title: 'Offer image',
+                        icon: Icons.image_outlined,
+                      ),
+                      SizedBox(
+                        height: 172,
+                        child: _buildImagePreview(),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _isSaving
+                                  ? null
+                                  : () => _pickOfferImage(fromCamera: false),
+                              icon: const Icon(Icons.image),
+                              label: const Text('Gallery'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _isSaving
+                                  ? null
+                                  : () => _pickOfferImage(fromCamera: true),
+                              icon: const Icon(Icons.photo_camera),
+                              label: const Text('Camera'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_imagePath != null) ...[
+                        const SizedBox(height: 10),
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: _AdminPill(
+                            label: 'Offer image selected',
+                            color: _adminPrimary,
+                            icon: Icons.check_circle_outline,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              PrimaryActionButton(
+                label: 'Save offer',
+                icon: Icons.save,
+                isLoading: _isSaving,
+                onPressed: _isSaving ? null : _saveOffer,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImagePreview() {
+    final imagePath = _imagePath;
+    final currentImageUrl = widget.offer?.imageUrl ?? '';
+    Widget image;
+    if (imagePath != null) {
+      image = Image.file(
+        File(imagePath),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+      );
+    } else if (currentImageUrl.isNotEmpty) {
+      image = ProductImage(url: currentImageUrl, radius: 0);
+    } else {
+      image = const DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFEAF6EF),
+              Color(0xFFFFF8F3),
+            ],
+          ),
+        ),
+        child: Center(
+          child: Icon(
+            Icons.local_offer_outlined,
+            color: _adminPrimary,
+            size: 46,
+          ),
+        ),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: image,
+    );
+  }
+
+  Future<void> _saveOffer() async {
+    if (_isSaving) {
+      return;
+    }
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    if (_imagePath == null && (widget.offer?.imageUrl ?? '').isEmpty) {
+      showSnack(context, 'Offer image is required.');
+      return;
+    }
+    if (_startDate != null &&
+        _endDate != null &&
+        _endDate!.isBefore(_startDate!)) {
+      showSnack(context, 'End date must be after the start date.');
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      final appState = context.read<AppState>();
+      final offerId = widget.offer?.offerId ?? const Uuid().v4();
+      var imageUrl = widget.offer?.imageUrl ?? '';
+      if (_imagePath != null) {
+        imageUrl = await CloudinaryService.uploadImage(File(_imagePath!));
+      }
+      final offer = Offer(
+        offerId: offerId,
+        title: _title.text.trim(),
+        tamilTitle: _tamilTitle.text.trim(),
+        caption: _caption.text.trim(),
+        tamilCaption: _tamilCaption.text.trim(),
+        imageUrl: imageUrl,
+        createdAt: widget.offer?.createdAt ?? DateTime.now(),
+        isActive: _isActive,
+        startDate: _startDate,
+        endDate: _endDate,
+      );
+      await appState.firestoreService.saveOffer(offer);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteOffer() async {
+    if (_isSaving) {
+      return;
+    }
+    final offer = widget.offer;
+    if (offer == null) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Remove offer?'),
+          content: Text(
+            'This will permanently remove "${offer.title}" from the home page offers.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFC83A2B),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Remove'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      await context.read<AppState>().firestoreService.deleteOffer(
+            offer.offerId,
+          );
+      if (mounted) {
+        showSnack(context, 'Offer removed.');
+        Navigator.of(context).pop();
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _pickOfferImage({required bool fromCamera}) async {
+    final imageFile =
+        fromCamera ? await takePhotoFromCamera() : await pickImageFromGallery();
+    if (!mounted || imageFile == null) {
+      return;
+    }
+    setState(() => _imagePath = imageFile.path);
+  }
+
+  Future<void> _pickStartDate() async {
+    final selected = await _pickDate(
+      initialDate: _startDate ?? DateTime.now(),
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+    final nextStart = _dateOnly(selected);
+    setState(() {
+      _startDate = nextStart;
+      if (_endDate != null && _endDate!.isBefore(nextStart)) {
+        _endDate = null;
+      }
+    });
+  }
+
+  Future<void> _pickEndDate() async {
+    final selected = await _pickDate(
+      initialDate: _endDate ?? _startDate ?? DateTime.now(),
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+    setState(() => _endDate = _endOfDay(selected));
+  }
+
+  Future<DateTime?> _pickDate({required DateTime initialDate}) {
+    final now = DateTime.now();
+    return showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 3),
+    );
+  }
+
+  void _clearSchedule() {
+    setState(() {
+      _startDate = null;
+      _endDate = null;
+    });
+  }
+
+  String _scheduleLabel({
+    required String label,
+    required DateTime? date,
+  }) {
+    if (date == null) {
+      return '$label date';
+    }
+    return '$label ${DateFormat.yMMMd().format(date)}';
+  }
+
+  DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  DateTime _endOfDay(DateTime value) {
+    return DateTime(value.year, value.month, value.day, 23, 59, 59, 999);
+  }
+}
+
+String? _offerDateLabel(Offer offer) {
+  final startDate = offer.startDate;
+  final endDate = offer.endDate;
+  final formatter = DateFormat.MMMd();
+  if (startDate == null && endDate == null) {
+    return null;
+  }
+  if (startDate != null && endDate != null) {
+    return '${formatter.format(startDate)} - ${formatter.format(endDate)}';
+  }
+  if (startDate != null) {
+    return 'From ${formatter.format(startDate)}';
+  }
+  return 'Until ${formatter.format(endDate!)}';
 }
 
 class AdminProductManagementScreen extends StatelessWidget {

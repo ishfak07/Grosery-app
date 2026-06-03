@@ -535,7 +535,7 @@ class CustomerHomeScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
-              const _HomePromoBanner(),
+              const _HomeOffersCarousel(),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -828,6 +828,333 @@ class _HomePromoBanner extends StatelessWidget {
       ),
     );
   }
+}
+
+class _HomeOffersCarousel extends StatefulWidget {
+  const _HomeOffersCarousel();
+
+  @override
+  State<_HomeOffersCarousel> createState() => _HomeOffersCarouselState();
+}
+
+class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
+  late final PageController _controller;
+  var _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.read<AppState>();
+    return StreamBuilder<List<Offer>>(
+      stream: appState.firestoreService.watchOffers(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _OfferCarouselSkeleton();
+        }
+        if (snapshot.hasError) {
+          return const _HomePromoBanner();
+        }
+        final offers = snapshot.data ?? const <Offer>[];
+        if (offers.isEmpty) {
+          return const _HomePromoBanner();
+        }
+        if (_page >= offers.length) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) {
+              return;
+            }
+            setState(() => _page = 0);
+            if (_controller.hasClients) {
+              _controller.jumpToPage(0);
+            }
+          });
+        }
+        final activePage = _page.clamp(0, offers.length - 1);
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final height = constraints.maxWidth < 380 ? 178.0 : 204.0;
+            return Column(
+              children: [
+                SizedBox(
+                  height: height,
+                  child: PageView.builder(
+                    controller: _controller,
+                    itemCount: offers.length,
+                    onPageChanged: (index) => setState(() => _page = index),
+                    itemBuilder: (context, index) {
+                      final offer = offers[index];
+                      return _HomeOfferBanner(
+                        offer: offer,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => OfferDetailsScreen(offer: offer),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                if (offers.length > 1) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      for (var index = 0; index < offers.length; index++)
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          width: activePage == index ? 18 : 7,
+                          height: 7,
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          decoration: BoxDecoration(
+                            color: activePage == index
+                                ? _customerPrimary
+                                : _customerLine,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _HomeOfferBanner extends StatelessWidget {
+  const _HomeOfferBanner({
+    required this.offer,
+    required this.onTap,
+  });
+
+  final Offer offer;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final languageCode = appState.effectiveLanguageCode;
+    final title = offer.localizedTitle(languageCode);
+    final caption = offer.localizedCaption(languageCode);
+    final dateLabel = _offerDateLabel(offer);
+    return _Pressable(
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ProductImage(url: offer.imageUrl, radius: 8),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.08),
+                      Colors.black.withOpacity(0.72),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Align(
+                      alignment: Alignment.topLeft,
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 240),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _customerGold,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          context.t('New offer'),
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _customerInk,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0,
+                            height: 1.1,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      caption,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.88),
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                    if (dateLabel != null) ...[
+                      const SizedBox(height: 9),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.event_available_outlined,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              dateLabel,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OfferCarouselSkeleton extends StatelessWidget {
+  const _OfferCarouselSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      height: 204,
+      child: _ShimmerBox(width: double.infinity, radius: 8),
+    );
+  }
+}
+
+class OfferDetailsScreen extends StatelessWidget {
+  const OfferDetailsScreen({super.key, required this.offer});
+
+  final Offer offer;
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final languageCode = appState.effectiveLanguageCode;
+    final title = offer.localizedTitle(languageCode);
+    final caption = offer.localizedCaption(languageCode);
+    final dateLabel = _offerDateLabel(offer);
+    return _CustomerScaffold(
+      title: 'Offer details',
+      body: _CustomerScrollView(
+        children: [
+          SizedBox(
+            height: 260,
+            child: ProductImage(url: offer.imageUrl),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: _customerInk,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0,
+                  height: 1.12,
+                ),
+          ),
+          if (dateLabel != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(
+                  Icons.event_available_outlined,
+                  color: _customerPrimary,
+                  size: 18,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    dateLabel,
+                    style: const TextStyle(
+                      color: _customerMuted,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 14),
+          Text(
+            caption,
+            style: const TextStyle(
+              color: _customerInk,
+              fontWeight: FontWeight.w600,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String? _offerDateLabel(Offer offer) {
+  final startDate = offer.startDate;
+  final endDate = offer.endDate;
+  final formatter = DateFormat.MMMd();
+  if (startDate == null && endDate == null) {
+    return null;
+  }
+  if (startDate != null && endDate != null) {
+    return '${formatter.format(startDate)} - ${formatter.format(endDate)}';
+  }
+  if (startDate != null) {
+    return 'From ${formatter.format(startDate)}';
+  }
+  return 'Until ${formatter.format(endDate!)}';
 }
 
 class _CustomerBottomNavigation extends StatelessWidget {

@@ -24,6 +24,8 @@ class FirestoreService {
       _db.collection('users');
   CollectionReference<Map<String, dynamic>> get _shops =>
       _db.collection('shops');
+  CollectionReference<Map<String, dynamic>> get _offers =>
+      _db.collection('offers');
   CollectionReference<Map<String, dynamic>> get _products =>
       _db.collection('products');
   CollectionReference<Map<String, dynamic>> get _orders =>
@@ -151,6 +153,7 @@ class FirestoreService {
     await Future.wait([
       _fromServer(_users.get(const GetOptions(source: Source.server))),
       _fromServer(_shops.get(const GetOptions(source: Source.server))),
+      _fromServer(_offers.get(const GetOptions(source: Source.server))),
       _fromServer(_products.get(const GetOptions(source: Source.server))),
       _fromServer(_orders.get(const GetOptions(source: Source.server))),
       _fromServer(_accountSales.get(const GetOptions(source: Source.server))),
@@ -173,6 +176,11 @@ class FirestoreService {
           )),
       _fromServer(
         _shops
+            .where('isActive', isEqualTo: true)
+            .get(const GetOptions(source: Source.server)),
+      ),
+      _fromServer(
+        _offers
             .where('isActive', isEqualTo: true)
             .get(const GetOptions(source: Source.server)),
       ),
@@ -215,6 +223,39 @@ class FirestoreService {
 
   Future<void> toggleShop(String shopId, bool isActive) {
     return _shops.doc(shopId).update({'isActive': isActive});
+  }
+
+  Stream<List<Offer>> watchOffers({bool activeOnly = true}) {
+    if (!_firebaseAvailable) {
+      return Stream<List<Offer>>.value(const <Offer>[]);
+    }
+    Query<Map<String, dynamic>> query = _offers;
+    if (activeOnly) {
+      query = query.where('isActive', isEqualTo: true);
+    }
+    return query.snapshots().map((snapshot) {
+      final now = DateTime.now();
+      final offers = snapshot.docs
+          .map((doc) => Offer.fromMap(doc.data(), doc.id))
+          .where((offer) => !activeOnly || offer.isCurrentlyActive(now))
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return offers;
+    });
+  }
+
+  Future<void> saveOffer(Offer offer) {
+    return _offers
+        .doc(offer.offerId)
+        .set(offer.toMap(), SetOptions(merge: true));
+  }
+
+  Future<void> toggleOffer(String offerId, bool isActive) {
+    return _offers.doc(offerId).update({'isActive': isActive});
+  }
+
+  Future<void> deleteOffer(String offerId) {
+    return _offers.doc(offerId).delete();
   }
 
   Stream<List<Product>> watchProducts({

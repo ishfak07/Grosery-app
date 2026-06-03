@@ -17,6 +17,22 @@ DateTime _readDate(dynamic value) {
   return DateTime.now();
 }
 
+DateTime? _readOptionalDate(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is Timestamp) {
+    return value.toDate();
+  }
+  if (value is DateTime) {
+    return value;
+  }
+  if (value is String) {
+    return DateTime.tryParse(value);
+  }
+  return null;
+}
+
 Object _writeDate(DateTime value) => Timestamp.fromDate(value);
 
 class UserProfile {
@@ -161,6 +177,91 @@ class Shop {
       phone: map['phone'] as String? ?? '',
       isActive: map['isActive'] as bool? ?? true,
       createdAt: _readDate(map['createdAt']),
+    );
+  }
+}
+
+class Offer {
+  const Offer({
+    required this.offerId,
+    required this.title,
+    required this.tamilTitle,
+    required this.caption,
+    required this.tamilCaption,
+    required this.imageUrl,
+    required this.createdAt,
+    required this.isActive,
+    this.startDate,
+    this.endDate,
+  });
+
+  final String offerId;
+  final String title;
+  final String tamilTitle;
+  final String caption;
+  final String tamilCaption;
+  final String imageUrl;
+  final DateTime createdAt;
+  final bool isActive;
+  final DateTime? startDate;
+  final DateTime? endDate;
+
+  String localizedTitle(String languageCode) {
+    if (AppLanguageCodes.normalize(languageCode) == AppLanguageCodes.tamil &&
+        tamilTitle.trim().isNotEmpty) {
+      return tamilTitle;
+    }
+    return title;
+  }
+
+  String localizedCaption(String languageCode) {
+    if (AppLanguageCodes.normalize(languageCode) == AppLanguageCodes.tamil &&
+        tamilCaption.trim().isNotEmpty) {
+      return tamilCaption;
+    }
+    return caption;
+  }
+
+  bool isCurrentlyActive(DateTime now) {
+    if (!isActive) {
+      return false;
+    }
+    if (startDate != null && now.isBefore(startDate!)) {
+      return false;
+    }
+    if (endDate != null && now.isAfter(endDate!)) {
+      return false;
+    }
+    return true;
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'offerId': offerId,
+      'title': title,
+      'tamilTitle': tamilTitle,
+      'caption': caption,
+      'tamilCaption': tamilCaption,
+      'imageUrl': imageUrl,
+      'createdAt': _writeDate(createdAt),
+      'isActive': isActive,
+      'startDate': startDate == null ? null : _writeDate(startDate!),
+      'endDate': endDate == null ? null : _writeDate(endDate!),
+    };
+  }
+
+  factory Offer.fromMap(Map<String, dynamic> map, String id) {
+    return Offer(
+      offerId: map['offerId'] as String? ?? id,
+      title: map['title'] as String? ?? '',
+      tamilTitle: map['tamilTitle'] as String? ?? '',
+      caption: map['caption'] as String? ?? '',
+      tamilCaption: map['tamilCaption'] as String? ?? '',
+      imageUrl: map['imageUrl'] as String? ?? '',
+      createdAt: _readDate(map['createdAt']),
+      isActive: map['isActive'] as bool? ?? true,
+      startDate: _readOptionalDate(map['startDate']),
+      endDate: _readOptionalDate(map['endDate']),
     );
   }
 }
