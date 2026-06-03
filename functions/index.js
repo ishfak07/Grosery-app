@@ -22,43 +22,52 @@ exports.sendPushForNotification = onDocumentCreated(
       return;
     }
 
-    const response = await admin.messaging().sendEachForMulticast({
-      tokens,
-      notification: {
-        title,
-        body,
-      },
-      android: {
-        priority: "high",
+    for (const tokenBatch of chunk(tokens, 500)) {
+      const response = await admin.messaging().sendEachForMulticast({
+        tokens: tokenBatch,
         notification: {
-          channelId: notificationChannelId,
-          defaultSound: true,
-          priority: "max",
-          visibility: "public",
+          title,
+          body,
         },
-      },
-      apns: {
-        headers: {
-          "apns-priority": "10",
-          "apns-push-type": "alert",
-        },
-        payload: {
-          aps: {
-            alert: {
-              title,
-              body,
-            },
-            sound: "default",
+        android: {
+          priority: "high",
+          notification: {
+            channelId: notificationChannelId,
+            defaultSound: true,
+            priority: "max",
+            visibility: "public",
           },
         },
-      },
-      data: {
-        notificationId: event.params.notificationId,
-        type: notification.type || "",
-        relatedId: notification.relatedId || "",
-      },
-    });
-    await removeInvalidTokens(tokens, response.responses, notification);
+        apns: {
+          headers: {
+            "apns-priority": "10",
+            "apns-push-type": "alert",
+          },
+          payload: {
+            aps: {
+              alert: {
+                title,
+                body,
+              },
+              sound: "default",
+            },
+          },
+        },
+        data: {
+          notificationId: event.params.notificationId,
+          title,
+          body,
+          type: notification.type || "",
+          relatedId: notification.relatedId || "",
+          click_action: "FLUTTER_NOTIFICATION_CLICK",
+        },
+      });
+      await removeInvalidTokens(
+        tokenBatch,
+        response.responses,
+        notification,
+      );
+    }
   },
 );
 
@@ -250,11 +259,12 @@ async function resolveTokens(notification) {
       .firestore()
       .collection("users")
       .where("role", "==", "admin")
-      .where("isBlocked", "==", false)
       .get();
 
     return uniqueTokens(
-      admins.docs.flatMap((doc) => tokensForUserDoc(doc)),
+      admins.docs
+        .filter((doc) => doc.get("isBlocked") !== true)
+        .flatMap((doc) => tokensForUserDoc(doc)),
     );
   }
 
@@ -266,11 +276,12 @@ async function resolveTokens(notification) {
       .firestore()
       .collection("users")
       .where("role", "==", "user")
-      .where("isBlocked", "==", false)
       .get();
 
     return uniqueTokens(
-      users.docs.flatMap((doc) => tokensForUserDoc(doc)),
+      users.docs
+        .filter((doc) => doc.get("isBlocked") !== true)
+        .flatMap((doc) => tokensForUserDoc(doc)),
     );
   }
 
@@ -284,15 +295,21 @@ async function resolveTokens(notification) {
     .doc(notification.userId)
     .get();
 
-  return user.exists ? uniqueTokens(tokensForUserDoc(user)) : [];
+  if (!user.exists || user.get("isBlocked") === true) {
+    return [];
+  }
+  return uniqueTokens(tokensForUserDoc(user));
 }
 
 function tokensForUserDoc(doc) {
   const token = doc.get("fcmToken");
   const legacyTokens = doc.get("fcmTokens") || [];
+  const savedTokens = Array.isArray(legacyTokens) ?
+    legacyTokens :
+    [legacyTokens];
   return [
     token,
-    ...(Array.isArray(legacyTokens) ? legacyTokens : []),
+    ...savedTokens,
   ];
 }
 
@@ -302,6 +319,14 @@ function uniqueTokens(tokens) {
       tokens.filter((token) => typeof token === "string" && token),
     ),
   ];
+}
+
+function chunk(items, size) {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
 }
 
 async function removeInvalidTokens(tokens, responses, notification) {

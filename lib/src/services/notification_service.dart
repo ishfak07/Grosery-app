@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../../firebase_options.dart';
+import '../models/models.dart';
 
 const _notificationChannelId = 'puttalam_drop_alerts';
 const _notificationChannelName = 'Puttalam Drop Alerts';
@@ -20,6 +21,7 @@ const _notificationChannel = AndroidNotificationChannel(
   enableVibration: true,
   audioAttributesUsage: AudioAttributesUsage.notification,
 );
+const _maxRememberedNotificationIds = 120;
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -42,12 +44,17 @@ class NotificationService {
       : _firebaseAvailable = firebaseAvailable;
 
   static final _localNotifications = FlutterLocalNotificationsPlugin();
+  static final _rememberedNotificationIds = <String>[];
+  static final _displayedNotificationIds = <String>{};
   static var _localNotificationsConfigured = false;
   static var _backgroundHandlerRegistered = false;
 
   final bool _firebaseAvailable;
   String? _configuredUserId;
+  String? _configuredNotificationListenerKey;
   StreamSubscription<String>? _tokenRefreshSubscription;
+  StreamSubscription<List<AppNotification>>? _appNotificationSubscription;
+  final _knownAppNotificationIds = <String>{};
   var _foregroundListenerConfigured = false;
 
   static void registerBackgroundHandler() {
@@ -71,12 +78,16 @@ class NotificationService {
     _configureForegroundListener();
   }
 
-  Future<void> configureForUser(String uid) async {
+  Future<void> configureForUser({
+    required String uid,
+    required String role,
+    required Stream<List<AppNotification>> notifications,
+  }) async {
     if (!_firebaseAvailable) {
       return;
     }
 
-    await initialize(requestPermission: false);
+    await initialize(requestPermission: true);
 
     if (_configuredUserId != uid) {
       _configuredUserId = uid;
@@ -91,6 +102,11 @@ class NotificationService {
     }
 
     await _trySaveCurrentToken(uid);
+    await _configureAppNotificationListener(
+      uid: uid,
+      role: role,
+      notifications: notifications,
+    );
   }
 
   Future<void> clearTokenForUser(String uid) async {
@@ -109,14 +125,31 @@ class NotificationService {
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final snapshot = await transaction.get(userRef);
         final data = snapshot.data();
-        if (data == null || data['fcmToken'] != token) {
+        if (data == null) {
           return;
         }
-        transaction.update(userRef, {
-          'fcmToken': FieldValue.delete(),
+
+        final storedTokens =
+            (data['fcmTokens'] as List<dynamic>? ?? const <dynamic>[])
+                .map((item) => item.toString())
+                .toList();
+        final hasPrimaryToken = data['fcmToken'] == token;
+        final hasStoredToken = storedTokens.contains(token);
+        if (!hasPrimaryToken && !hasStoredToken) {
+          return;
+        }
+
+        final updates = <String, Object>{
           'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
-        });
+        };
+        if (hasPrimaryToken) {
+          updates['fcmToken'] = FieldValue.delete();
+        }
+        if (hasStoredToken) {
+          updates['fcmTokens'] = FieldValue.arrayRemove([token]);
+        }
+        transaction.update(userRef, updates);
       });
     } catch (_) {
       // Token cleanup is best-effort; logout should continue.
@@ -125,8 +158,12 @@ class NotificationService {
 
   Future<void> detachUser() async {
     _configuredUserId = null;
+    _configuredNotificationListenerKey = null;
+    _knownAppNotificationIds.clear();
     await _tokenRefreshSubscription?.cancel();
     _tokenRefreshSubscription = null;
+    await _appNotificationSubscription?.cancel();
+    _appNotificationSubscription = null;
   }
 
   static Future<void> _configureLocalNotifications() async {
@@ -235,6 +272,8 @@ class NotificationService {
     await FirebaseFirestore.instance.collection('users').doc(uid).set(
       {
         'fcmToken': token,
+        'fcmTokens': FieldValue.arrayUnion([token]),
+        'fcmTokenPlatform': defaultTargetPlatform.name,
         'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       },
@@ -280,19 +319,91 @@ class NotificationService {
     }
   }
 
+  Future<void> _configureAppNotificationListener({
+    required String uid,
+    required String role,
+    required Stream<List<AppNotification>> notifications,
+  }) async {
+    final listenerKey = '$uid:$role';
+    if (_configuredNotificationListenerKey == listenerKey) {
+      return;
+    }
+
+    _configuredNotificationListenerKey = listenerKey;
+    _knownAppNotificationIds.clear();
+    await _appNotificationSubscription?.cancel();
+    var hasLoadedInitialSnapshot = false;
+
+    _appNotificationSubscription = notifications.listen(
+      (items) {
+        if (!hasLoadedInitialSnapshot) {
+          _knownAppNotificationIds
+            ..clear()
+            ..addAll(items.map((item) => item.notificationId));
+          hasLoadedInitialSnapshot = true;
+          return;
+        }
+
+        final newItems = items
+            .where(
+              (item) => _knownAppNotificationIds.add(item.notificationId),
+            )
+            .toList()
+          ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+        for (final notification in newItems) {
+          unawaited(showAppNotification(notification));
+        }
+      },
+      onError: (_) {
+        // Firestore streams recover automatically when connectivity returns.
+      },
+    );
+  }
+
   static Future<void> showLocalNotification(RemoteMessage message) async {
+    final notificationId =
+        message.data['notificationId']?.toString() ?? message.messageId;
+    await _showLocalNotificationDetails(
+      notificationKey: notificationId,
+      title: message.notification?.title ??
+          message.data['title']?.toString() ??
+          'Puttalam Drop',
+      body: message.notification?.body ??
+          message.data['body']?.toString() ??
+          'You have a new update.',
+      payload: message.data['relatedId']?.toString(),
+    );
+  }
+
+  static Future<void> showAppNotification(
+    AppNotification notification,
+  ) async {
+    await _showLocalNotificationDetails(
+      notificationKey: notification.notificationId,
+      title:
+          notification.title.isNotEmpty ? notification.title : 'Puttalam Drop',
+      body: notification.body.isNotEmpty
+          ? notification.body
+          : 'You have a new update.',
+      payload: notification.relatedId,
+    );
+  }
+
+  static Future<void> _showLocalNotificationDetails({
+    required String? notificationKey,
+    required String title,
+    required String body,
+    required String? payload,
+  }) async {
+    if (!_rememberLocalNotification(notificationKey)) {
+      return;
+    }
+
     try {
       await _configureLocalNotifications();
-      final title = message.notification?.title ??
-          message.data['title']?.toString() ??
-          'Puttalam Drop';
-      final body = message.notification?.body ??
-          message.data['body']?.toString() ??
-          'You have a new update.';
-      final notificationId =
-          message.data['notificationId'] ?? message.messageId;
       final localId =
-          (notificationId ?? DateTime.now().toIso8601String()).hashCode &
+          (notificationKey ?? DateTime.now().toIso8601String()).hashCode &
               0x7fffffff;
 
       await _localNotifications.show(
@@ -320,11 +431,28 @@ class NotificationService {
             presentList: true,
           ),
         ),
-        payload: message.data['relatedId']?.toString(),
+        payload: payload,
       );
     } catch (_) {
       // Local foreground display should not interrupt active app flows.
     }
+  }
+
+  static bool _rememberLocalNotification(String? notificationKey) {
+    if (notificationKey == null || notificationKey.isEmpty) {
+      return true;
+    }
+    if (_displayedNotificationIds.contains(notificationKey)) {
+      return false;
+    }
+
+    _displayedNotificationIds.add(notificationKey);
+    _rememberedNotificationIds.add(notificationKey);
+    if (_rememberedNotificationIds.length > _maxRememberedNotificationIds) {
+      final oldest = _rememberedNotificationIds.removeAt(0);
+      _displayedNotificationIds.remove(oldest);
+    }
+    return true;
   }
 
   void dispose() {

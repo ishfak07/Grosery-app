@@ -49,7 +49,7 @@ class AppState extends ChangeNotifier {
   UserProfile? _profile;
   List<CartItem> _cartItems = const <CartItem>[];
   String? _billImagePath;
-  String? _notificationsConfiguredForUid;
+  String? _notificationsConfiguredForProfileKey;
   String _preferredLanguageCode = AppLanguageCodes.english;
 
   bool get isInitializing => _isInitializing;
@@ -100,7 +100,7 @@ class AppState extends ChangeNotifier {
     await _profileSubscription?.cancel();
     if (user == null) {
       _profile = null;
-      _notificationsConfiguredForUid = null;
+      _notificationsConfiguredForProfileKey = null;
       unawaited(notificationService.detachUser());
       _isInitializing = false;
       notifyListeners();
@@ -127,9 +127,21 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _configureNotificationsForProfile(UserProfile? profile) async {
-    if (profile != null && _notificationsConfiguredForUid != profile.uid) {
-      _notificationsConfiguredForUid = profile.uid;
-      await notificationService.configureForUser(profile.uid);
+    if (profile == null) {
+      return;
+    }
+
+    final profileKey = '${profile.uid}:${profile.role}';
+    if (_notificationsConfiguredForProfileKey != profileKey) {
+      _notificationsConfiguredForProfileKey = profileKey;
+      await notificationService.configureForUser(
+        uid: profile.uid,
+        role: profile.role,
+        notifications: firestoreService.watchNotifications(
+          userId: profile.uid,
+          role: profile.role,
+        ),
+      );
     }
   }
 
@@ -242,7 +254,7 @@ class AppState extends ChangeNotifier {
       }
     }
     _profile = null;
-    _notificationsConfiguredForUid = null;
+    _notificationsConfiguredForProfileKey = null;
     await authService.logout();
     notifyListeners();
   }
