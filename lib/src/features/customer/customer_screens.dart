@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -838,18 +839,20 @@ class _HomeOffersCarousel extends StatefulWidget {
 }
 
 class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
-  late final PageController _controller;
-  var _page = 0;
+  static const _autoPlayInterval = Duration(seconds: 4);
+  static const _pageAnimationDuration = Duration(milliseconds: 260);
+  static const _swipeDistanceThreshold = 36.0;
+  static const _swipeVelocityThreshold = 220.0;
 
-  @override
-  void initState() {
-    super.initState();
-    _controller = PageController();
-  }
+  Timer? _autoPlayTimer;
+  var _page = 0;
+  var _offerCount = 0;
+  var _dragDistance = 0.0;
+  var _isForward = true;
 
   @override
   void dispose() {
-    _controller.dispose();
+    _stopAutoPlay();
     super.dispose();
   }
 
@@ -863,24 +866,21 @@ class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
           return const _OfferCarouselSkeleton();
         }
         if (snapshot.hasError) {
+          _syncOfferCount(0);
           return const _HomePromoBanner();
         }
         final offers = snapshot.data ?? const <Offer>[];
         if (offers.isEmpty) {
+          _syncOfferCount(0);
           return const _HomePromoBanner();
         }
-        if (_page >= offers.length) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) {
-              return;
-            }
-            setState(() => _page = 0);
-            if (_controller.hasClients) {
-              _controller.jumpToPage(0);
-            }
-          });
-        }
-        final activePage = _page.clamp(0, offers.length - 1);
+        _syncOfferCount(offers.length);
+        final activePage = _page < 0
+            ? 0
+            : _page >= offers.length
+                ? offers.length - 1
+                : _page;
+        final activeOffer = offers[activePage];
         return LayoutBuilder(
           builder: (context, constraints) {
             final height = constraints.maxWidth < 380 ? 178.0 : 204.0;
@@ -888,21 +888,57 @@ class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
               children: [
                 SizedBox(
                   height: height,
-                  child: PageView.builder(
-                    controller: _controller,
-                    itemCount: offers.length,
-                    onPageChanged: (index) => setState(() => _page = index),
-                    itemBuilder: (context, index) {
-                      final offer = offers[index];
-                      return _HomeOfferBanner(
-                        offer: offer,
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => OfferDetailsScreen(offer: offer),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onHorizontalDragStart: offers.length > 1
+                        ? (_) {
+                            _stopAutoPlay();
+                            _dragDistance = 0;
+                          }
+                        : null,
+                    onHorizontalDragUpdate: offers.length > 1
+                        ? (details) {
+                            _dragDistance += details.primaryDelta ?? 0;
+                          }
+                        : null,
+                    onHorizontalDragEnd:
+                        offers.length > 1 ? _handleOfferDragEnd : null,
+                    onHorizontalDragCancel:
+                        offers.length > 1 ? _handleOfferDragCancel : null,
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: AnimatedSwitcher(
+                            duration: _pageAnimationDuration,
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeOutCubic,
+                            transitionBuilder: (child, animation) {
+                              final offset = _isForward ? 0.08 : -0.08;
+                              return FadeTransition(
+                                opacity: animation,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: Offset(offset, 0),
+                                    end: Offset.zero,
+                                  ).animate(animation),
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: _HomeOfferBanner(
+                              key: ValueKey(activeOffer.offerId),
+                              offer: activeOffer,
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      OfferDetailsScreen(offer: activeOffer),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      );
-                    },
+                      ],
+                    ),
                   ),
                 ),
                 if (offers.length > 1) ...[
@@ -911,16 +947,20 @@ class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       for (var index = 0; index < offers.length; index++)
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          width: activePage == index ? 18 : 7,
-                          height: 7,
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          decoration: BoxDecoration(
-                            color: activePage == index
-                                ? _customerPrimary
-                                : _customerLine,
-                            borderRadius: BorderRadius.circular(8),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _showOfferAt(index),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            width: activePage == index ? 18 : 7,
+                            height: 7,
+                            margin: const EdgeInsets.symmetric(horizontal: 5),
+                            decoration: BoxDecoration(
+                              color: activePage == index
+                                  ? _customerPrimary
+                                  : _customerLine,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                         ),
                     ],
@@ -933,10 +973,97 @@ class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
       },
     );
   }
+
+  void _syncOfferCount(int offerCount) {
+    if (_offerCount == offerCount) {
+      return;
+    }
+    _offerCount = offerCount;
+    if (offerCount <= 1) {
+      _stopAutoPlay();
+    } else {
+      _startAutoPlay();
+    }
+    if (_page < offerCount || offerCount == 0) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _page = 0);
+    });
+  }
+
+  void _startAutoPlay() {
+    _autoPlayTimer?.cancel();
+    _autoPlayTimer = Timer.periodic(
+      _autoPlayInterval,
+      (_) => _showNextOffer(),
+    );
+  }
+
+  void _stopAutoPlay() {
+    _autoPlayTimer?.cancel();
+    _autoPlayTimer = null;
+  }
+
+  void _handleOfferDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity <= -_swipeVelocityThreshold ||
+        _dragDistance <= -_swipeDistanceThreshold) {
+      _showNextOffer();
+    } else if (velocity >= _swipeVelocityThreshold ||
+        _dragDistance >= _swipeDistanceThreshold) {
+      _showPreviousOffer();
+    }
+    _dragDistance = 0;
+    if (_offerCount > 1) {
+      _startAutoPlay();
+    }
+  }
+
+  void _handleOfferDragCancel() {
+    _dragDistance = 0;
+    if (_offerCount > 1) {
+      _startAutoPlay();
+    }
+  }
+
+  void _showNextOffer() {
+    if (!mounted || _offerCount <= 1) {
+      return;
+    }
+    _showOfferAt((_page + 1) % _offerCount);
+  }
+
+  void _showPreviousOffer() {
+    if (!mounted || _offerCount <= 1) {
+      return;
+    }
+    _showOfferAt((_page - 1 + _offerCount) % _offerCount);
+  }
+
+  void _showOfferAt(int page) {
+    if (!mounted || _offerCount == 0 || page == _page) {
+      return;
+    }
+    final boundedPage = page < 0
+        ? 0
+        : page >= _offerCount
+            ? _offerCount - 1
+            : page;
+    setState(() {
+      _isForward =
+          boundedPage > _page || (_page == _offerCount - 1 && boundedPage == 0);
+      _page = boundedPage;
+    });
+  }
 }
 
 class _HomeOfferBanner extends StatelessWidget {
   const _HomeOfferBanner({
+    super.key,
     required this.offer,
     required this.onTap,
   });
