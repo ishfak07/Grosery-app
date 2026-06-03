@@ -19,6 +19,9 @@ class GroceryDeliveryApp extends StatelessWidget {
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
+      builder: (context, child) => OfflineConnectionOverlay(
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: const HomeGate(),
     );
   }

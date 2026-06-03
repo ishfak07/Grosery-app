@@ -1321,17 +1321,7 @@ class _DataErrorState extends StatelessWidget {
 }
 
 String _friendlyDataError(Object? error) {
-  final text = error.toString();
-  if (text.contains('permission-denied')) {
-    return 'Firebase rules blocked product reads. Deploy the latest Firestore rules.';
-  }
-  if (text.contains('failed-precondition') || text.contains('index')) {
-    return 'Firestore needs an index for this product query. The app now uses a simpler product query, so restart and try again.';
-  }
-  if (text.contains('TimeoutException')) {
-    return 'Firestore did not answer in time. Check the device internet connection and Firebase project.';
-  }
-  return text;
+  return appFriendlyErrorMessage(error);
 }
 
 class ProductCard extends StatelessWidget {

@@ -193,11 +193,21 @@ class FirestoreService {
             .where('userId', isEqualTo: userId)
             .get(const GetOptions(source: Source.server)),
       ),
+      _fromServer(
+        _notifications
+            .where('recipientRole', isEqualTo: 'broadcast')
+            .get(const GetOptions(source: Source.server)),
+      ),
     ]);
   }
 
   Future<void> _fromServer(Future<Object?> request) async {
-    await request;
+    try {
+      await request.timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // Pull-to-refresh warms the local cache only. Live streams keep rendering
+      // current data, so transient refresh failures should not interrupt users.
+    }
   }
 
   Future<void> saveShop(Shop shop) {
@@ -668,18 +678,84 @@ class FirestoreService {
     if (!_firebaseAvailable) {
       return Stream<List<AppNotification>>.value(const <AppNotification>[]);
     }
-    final query = role == 'admin'
-        ? _notifications.where('recipientRole', isEqualTo: 'admin')
-        : _notifications
-            .where('recipientRole', isEqualTo: 'user')
-            .where('userId', isEqualTo: userId);
-    return query.snapshots().map((snapshot) {
-      final notifications = snapshot.docs
-          .map((doc) => AppNotification.fromMap(doc.data(), doc.id))
-          .toList()
+    if (role == 'admin') {
+      return _notifications
+          .where('recipientRole', isEqualTo: 'admin')
+          .snapshots()
+          .map(_notificationsFromSnapshot);
+    }
+
+    final userNotifications = _notifications
+        .where('recipientRole', isEqualTo: 'user')
+        .where('userId', isEqualTo: userId)
+        .snapshots()
+        .map(_notificationsFromSnapshot);
+    final broadcastNotifications = _notifications
+        .where('recipientRole', isEqualTo: 'broadcast')
+        .snapshots()
+        .map(_notificationsFromSnapshot);
+    return _mergeNotificationStreams(
+      userNotifications,
+      broadcastNotifications,
+    );
+  }
+
+  List<AppNotification> _notificationsFromSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    return snapshot.docs
+        .map((doc) => AppNotification.fromMap(doc.data(), doc.id))
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  Stream<List<AppNotification>> _mergeNotificationStreams(
+    Stream<List<AppNotification>> first,
+    Stream<List<AppNotification>> second,
+  ) {
+    late final StreamController<List<AppNotification>> controller;
+    StreamSubscription<List<AppNotification>>? firstSubscription;
+    StreamSubscription<List<AppNotification>>? secondSubscription;
+    var firstItems = const <AppNotification>[];
+    var secondItems = const <AppNotification>[];
+    var hasFirstItems = false;
+    var hasSecondItems = false;
+
+    void emitIfReady() {
+      if (!hasFirstItems || !hasSecondItems) {
+        return;
+      }
+      final merged = [...firstItems, ...secondItems]
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return notifications;
-    });
+      controller.add(merged);
+    }
+
+    controller = StreamController<List<AppNotification>>(
+      onListen: () {
+        firstSubscription = first.listen(
+          (items) {
+            firstItems = items;
+            hasFirstItems = true;
+            emitIfReady();
+          },
+          onError: controller.addError,
+        );
+        secondSubscription = second.listen(
+          (items) {
+            secondItems = items;
+            hasSecondItems = true;
+            emitIfReady();
+          },
+          onError: controller.addError,
+        );
+      },
+      onCancel: () async {
+        await firstSubscription?.cancel();
+        await secondSubscription?.cancel();
+      },
+    );
+
+    return controller.stream;
   }
 
   Future<void> notifyUser({
@@ -699,6 +775,26 @@ class FirestoreService {
             body: body,
             type: type,
             relatedId: relatedId,
+            isRead: false,
+            createdAt: DateTime.now(),
+          ).toMap(),
+        );
+  }
+
+  Future<void> broadcastToUsers({
+    required String title,
+    required String body,
+  }) {
+    final id = _uuid.v4();
+    return _notifications.doc(id).set(
+          AppNotification(
+            notificationId: id,
+            userId: '',
+            recipientRole: 'broadcast',
+            title: title,
+            body: body,
+            type: 'broadcast',
+            relatedId: '',
             isRead: false,
             createdAt: DateTime.now(),
           ).toMap(),

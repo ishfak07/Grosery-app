@@ -32,6 +32,7 @@ class UserProfile {
     required this.isPhoneVerified,
     required this.isBlocked,
     this.preferredLanguageCode = AppLanguageCodes.english,
+    this.fcmToken = '',
     this.fcmTokens = const <String>[],
   });
 
@@ -46,6 +47,7 @@ class UserProfile {
   final bool isPhoneVerified;
   final bool isBlocked;
   final String preferredLanguageCode;
+  final String fcmToken;
   final List<String> fcmTokens;
 
   bool get isAdmin => role == 'admin';
@@ -56,6 +58,7 @@ class UserProfile {
     String? role,
     bool? isBlocked,
     String? preferredLanguageCode,
+    String? fcmToken,
     List<String>? fcmTokens,
   }) {
     return UserProfile(
@@ -72,6 +75,7 @@ class UserProfile {
       preferredLanguageCode: AppLanguageCodes.normalize(
         preferredLanguageCode ?? this.preferredLanguageCode,
       ),
+      fcmToken: fcmToken ?? this.fcmToken,
       fcmTokens: fcmTokens ?? this.fcmTokens,
     );
   }
@@ -90,11 +94,15 @@ class UserProfile {
       'isBlocked': isBlocked,
       'preferredLanguageCode':
           AppLanguageCodes.normalize(preferredLanguageCode),
+      'fcmToken': fcmToken,
       'fcmTokens': fcmTokens,
     };
   }
 
   factory UserProfile.fromMap(Map<String, dynamic> map, String uid) {
+    final fcmTokens = (map['fcmTokens'] as List<dynamic>? ?? const <dynamic>[])
+        .map((token) => token.toString())
+        .toList();
     return UserProfile(
       uid: map['uid'] as String? ?? uid,
       fullName: map['fullName'] as String? ?? '',
@@ -109,9 +117,9 @@ class UserProfile {
       preferredLanguageCode: AppLanguageCodes.normalize(
         map['preferredLanguageCode'] as String?,
       ),
-      fcmTokens: (map['fcmTokens'] as List<dynamic>? ?? const <dynamic>[])
-          .map((token) => token.toString())
-          .toList(),
+      fcmToken: map['fcmToken'] as String? ??
+          (fcmTokens.isEmpty ? '' : fcmTokens.first),
+      fcmTokens: fcmTokens,
     );
   }
 }

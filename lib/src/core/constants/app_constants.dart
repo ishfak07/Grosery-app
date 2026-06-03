@@ -30,6 +30,17 @@ class AppConstants {
     'Rejected',
   ];
 
+  static const selectableOrderStatuses = <String>[
+    'Pending',
+    'Accepted',
+    'Need Clarification',
+    'Shopping Started',
+    'Bill Updated',
+    'Out for Delivery',
+    'Delivered',
+    'Rejected',
+  ];
+
   static const customerTrackingStatuses = orderStatuses;
 
   static const productUnits = <String>[

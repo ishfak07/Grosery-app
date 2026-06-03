@@ -254,7 +254,23 @@ async function resolveTokens(notification) {
       .get();
 
     return uniqueTokens(
-      admins.docs.flatMap((doc) => doc.get("fcmTokens") || []),
+      admins.docs.flatMap((doc) => tokensForUserDoc(doc)),
+    );
+  }
+
+  if (
+    notification.recipientRole === "broadcast" ||
+    notification.recipientRole === "all"
+  ) {
+    const users = await admin
+      .firestore()
+      .collection("users")
+      .where("role", "==", "user")
+      .where("isBlocked", "==", false)
+      .get();
+
+    return uniqueTokens(
+      users.docs.flatMap((doc) => tokensForUserDoc(doc)),
     );
   }
 
@@ -268,7 +284,16 @@ async function resolveTokens(notification) {
     .doc(notification.userId)
     .get();
 
-  return user.exists ? uniqueTokens(user.get("fcmTokens") || []) : [];
+  return user.exists ? uniqueTokens(tokensForUserDoc(user)) : [];
+}
+
+function tokensForUserDoc(doc) {
+  const token = doc.get("fcmToken");
+  const legacyTokens = doc.get("fcmTokens") || [];
+  return [
+    token,
+    ...(Array.isArray(legacyTokens) ? legacyTokens : []),
+  ];
 }
 
 function uniqueTokens(tokens) {
@@ -290,7 +315,6 @@ async function removeInvalidTokens(tokens, responses, notification) {
     return;
   }
 
-  const tokenRemoval = admin.firestore.FieldValue.arrayRemove(...invalidTokens);
   if (notification.recipientRole === "admin") {
     const admins = await admin
       .firestore()
@@ -299,17 +323,60 @@ async function removeInvalidTokens(tokens, responses, notification) {
       .get();
 
     await Promise.all(
-      admins.docs.map((doc) => doc.ref.update({fcmTokens: tokenRemoval})),
+      admins.docs.map((doc) => removeInvalidTokensFromUserDoc(
+        doc,
+        invalidTokens,
+      )),
+    );
+    return;
+  }
+
+  if (
+    notification.recipientRole === "broadcast" ||
+    notification.recipientRole === "all"
+  ) {
+    const users = await admin
+      .firestore()
+      .collection("users")
+      .where("role", "==", "user")
+      .get();
+
+    await Promise.all(
+      users.docs.map((doc) => removeInvalidTokensFromUserDoc(
+        doc,
+        invalidTokens,
+      )),
     );
     return;
   }
 
   if (notification.userId) {
-    await admin
+    const user = await admin
       .firestore()
       .collection("users")
       .doc(notification.userId)
-      .update({fcmTokens: tokenRemoval});
+      .get();
+    if (user.exists) {
+      await removeInvalidTokensFromUserDoc(user, invalidTokens);
+    }
+  }
+}
+
+async function removeInvalidTokensFromUserDoc(doc, invalidTokens) {
+  const updates = {};
+  if (invalidTokens.includes(doc.get("fcmToken"))) {
+    updates.fcmToken = admin.firestore.FieldValue.delete();
+  }
+
+  const legacyTokens = doc.get("fcmTokens") || [];
+  if (Array.isArray(legacyTokens) && legacyTokens.length > 0) {
+    updates.fcmTokens = admin.firestore.FieldValue.arrayRemove(
+      ...invalidTokens,
+    );
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await doc.ref.update(updates);
   }
 }
 

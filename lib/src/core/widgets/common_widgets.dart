@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +16,9 @@ const appRefreshScrollPhysics = AlwaysScrollableScrollPhysics(
   parent: ClampingScrollPhysics(),
 );
 const _appRefreshMinimumDuration = Duration(milliseconds: 650);
+const appOfflineMessage =
+    'No internet connection. Please check your connection and try again.';
+const _appGenericErrorMessage = 'Something went wrong. Please try again.';
 
 class FirebaseSetupBanner extends StatelessWidget {
   const FirebaseSetupBanner({super.key, required this.appState});
@@ -198,21 +205,226 @@ class AppRefreshIndicator extends StatelessWidget {
       notificationPredicate: (notification) =>
           notification.depth == 0 && notification.metrics.axis == Axis.vertical,
       onRefresh: () async {
+        final appState = context.read<AppState>();
+        final refresh = onRefresh ?? appState.refreshVisibleData;
         try {
           await Future.wait([
-            onRefresh == null ? performAppRefresh(context) : onRefresh!(),
+            () async {
+              if (!await appState.verifyInternetConnection()) {
+                return;
+              }
+              await refresh();
+            }(),
             Future<void>.delayed(_appRefreshMinimumDuration),
           ]);
         } catch (error) {
-          if (context.mounted) {
-            showSnack(
-              context,
-              context.tNow('Refresh failed: {error}', values: {'error': error}),
-            );
+          if (appFriendlyErrorMessage(error) == appOfflineMessage) {
+            appState.markInternetUnavailable();
           }
         }
       },
       child: child,
+    );
+  }
+}
+
+class OfflineConnectionOverlay extends StatelessWidget {
+  const OfflineConnectionOverlay({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final isOffline = !context.watch<AppState>().hasInternetConnection;
+    return Stack(
+      children: [
+        child,
+        Positioned.fill(
+          child: IgnorePointer(
+            ignoring: true,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 280),
+              reverseDuration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                final curved = CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                  reverseCurve: Curves.easeInCubic,
+                );
+                return FadeTransition(
+                  opacity: curved,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, -0.08),
+                      end: Offset.zero,
+                    ).animate(curved),
+                    child: child,
+                  ),
+                );
+              },
+              child: isOffline
+                  ? const _OfflineConnectionMessage(
+                      key: ValueKey('offline-message'),
+                    )
+                  : const SizedBox.shrink(key: ValueKey('online-message')),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OfflineConnectionMessage extends StatefulWidget {
+  const _OfflineConnectionMessage({super.key});
+
+  @override
+  State<_OfflineConnectionMessage> createState() =>
+      _OfflineConnectionMessageState();
+}
+
+class _OfflineConnectionMessageState extends State<_OfflineConnectionMessage>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+    _pulse = Tween<double>(begin: 0.94, end: 1).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final theme = Theme.of(context);
+    final textScaler = MediaQuery.textScalerOf(context).clamp(
+      minScaleFactor: 1,
+      maxScaleFactor: 1.18,
+    );
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: media.size.width < 520 ? media.size.width - 32 : 480,
+            ),
+            child: MediaQuery(
+              data: media.copyWith(textScaler: textScaler),
+              child: Material(
+                color: Colors.transparent,
+                shadowColor: Colors.transparent,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10231A).withOpacity(0.96),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.12),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF10231A).withOpacity(0.22),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      children: [
+                        ScaleTransition(
+                          scale: _pulse,
+                          child: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE86F4A).withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.wifi_off_rounded,
+                              color: Color(0xFFFFC9BA),
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                context.t('No Internet Connection'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: (theme.textTheme.titleSmall ??
+                                        const TextStyle(fontSize: 14))
+                                    .copyWith(
+                                  color: Colors.white,
+                                  decoration: TextDecoration.none,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0,
+                                  height: 1.1,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                context.t(
+                                  'Check your connection and try again.',
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: (theme.textTheme.bodySmall ??
+                                        const TextStyle(fontSize: 12))
+                                    .copyWith(
+                                  color: Colors.white.withOpacity(0.78),
+                                  decoration: TextDecoration.none,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.25,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFFB020),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -589,10 +801,117 @@ class PrimaryActionButton extends StatelessWidget {
   }
 }
 
-void showSnack(BuildContext context, String message) {
-  final friendlyMessage = message.startsWith('Bad state: ')
-      ? message.substring('Bad state: '.length)
-      : message;
+String appFriendlyErrorMessage(Object? error, {String? fallback}) {
+  if (error == null) {
+    return fallback ?? _appGenericErrorMessage;
+  }
+  if (error is TimeoutException || error is SocketException) {
+    return appOfflineMessage;
+  }
+  if (error is FirebaseException) {
+    return _firebaseFriendlyMessage(error.code, fallback: fallback);
+  }
+
+  final message = _stripExceptionPrefix(error.toString().trim());
+  if (message.isEmpty) {
+    return fallback ?? _appGenericErrorMessage;
+  }
+
+  final lower = message.toLowerCase();
+  if (_looksLikeNetworkError(lower)) {
+    return appOfflineMessage;
+  }
+  if (lower.contains('permission-denied') ||
+      lower.contains('permission denied') ||
+      lower.contains('unauthenticated')) {
+    return 'You are not allowed to perform this action.';
+  }
+  if (lower.contains('failed-precondition') || lower.contains('index')) {
+    return 'This request is not ready yet.';
+  }
+  if (lower.contains('firebase is not configured') ||
+      lower.contains('firebaseunavailableexception')) {
+    return 'Service setup is not complete. Please contact support.';
+  }
+  if (lower.contains('cloudinary upload')) {
+    return 'Image upload failed. Please check your connection and try again.';
+  }
+  if (_looksLikeTechnicalFirebaseError(lower)) {
+    return fallback ?? _appGenericErrorMessage;
+  }
+
+  return message;
+}
+
+String _firebaseFriendlyMessage(String code, {String? fallback}) {
+  switch (code) {
+    case 'unavailable':
+    case 'network-request-failed':
+      return appOfflineMessage;
+    case 'permission-denied':
+    case 'unauthenticated':
+      return 'You are not allowed to perform this action.';
+    case 'failed-precondition':
+      return 'This request is not ready yet.';
+    default:
+      return fallback ?? _appGenericErrorMessage;
+  }
+}
+
+String _stripExceptionPrefix(String message) {
+  var cleaned = message;
+  const prefixes = [
+    'Bad state: ',
+    'Exception: ',
+    'FirebaseException: ',
+  ];
+  for (final prefix in prefixes) {
+    if (cleaned.startsWith(prefix)) {
+      cleaned = cleaned.substring(prefix.length).trim();
+    }
+  }
+  return cleaned;
+}
+
+bool _looksLikeNetworkError(String message) {
+  const markers = [
+    'cloud_firestore/unavailable',
+    'cloud_functions/unavailable',
+    'firebase_auth/network-request-failed',
+    'network-request-failed',
+    'socketexception',
+    'clientexception',
+    'timeoutexception',
+    'failed host lookup',
+    'connection refused',
+    'connection reset',
+    'connection closed',
+    'network is unreachable',
+    'software caused connection abort',
+    'xmlhttprequest error',
+    'failed to fetch',
+    'no address associated with hostname',
+  ];
+  return markers.any(message.contains);
+}
+
+bool _looksLikeTechnicalFirebaseError(String message) {
+  const markers = [
+    '[cloud_firestore/',
+    '[cloud_functions/',
+    '[firebase_auth/',
+    '[firebase_storage/',
+    'firebaseexception',
+  ];
+  return markers.any(message.contains);
+}
+
+void showSnack(BuildContext context, Object? message) {
+  final friendlyMessage = appFriendlyErrorMessage(message);
+  if (friendlyMessage == appOfflineMessage) {
+    context.read<AppState>().markInternetUnavailable();
+    return;
+  }
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(context.tNow(friendlyMessage))));

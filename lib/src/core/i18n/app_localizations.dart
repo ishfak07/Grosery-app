@@ -36,8 +36,7 @@ class AppLocalizer {
       );
     }
 
-    final statusChanged =
-        RegExp(r'^Status changed to (.+)$').firstMatch(value);
+    final statusChanged = RegExp(r'^Status changed to (.+)$').firstMatch(value);
     if (statusChanged != null) {
       return text(
         'Status changed to {status}',
@@ -45,8 +44,8 @@ class AppLocalizer {
       );
     }
 
-    final orderTotal = RegExp(r'^Your order total is (.+)\.$')
-        .firstMatch(value);
+    final orderTotal =
+        RegExp(r'^Your order total is (.+)\.$').firstMatch(value);
     if (orderTotal != null) {
       return text(
         'Your order total is {amount}.',
@@ -104,6 +103,17 @@ const _tamil = <String, String>{
   'Language updated.': 'மொழி புதுப்பிக்கப்பட்டது.',
   'Profile updated.': 'சுயவிவரம் புதுப்பிக்கப்பட்டது.',
   'Loading...': 'ஏற்றப்படுகிறது...',
+  'No internet connection. Please check your connection and try again.':
+      'இணைய இணைப்பு இல்லை. உங்கள் இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
+  'No Internet Connection': 'இணைய இணைப்பு இல்லை',
+  'Check your connection and try again.':
+      'உங்கள் இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
+  'Something went wrong. Please try again.':
+      'ஏதோ தவறு ஏற்பட்டது. மீண்டும் முயற்சிக்கவும்.',
+  'Service setup is not complete. Please contact support.':
+      'சேவை அமைப்பு முழுமையாக இல்லை. ஆதரவை தொடர்புகொள்ளவும்.',
+  'Image upload failed. Please check your connection and try again.':
+      'படத்தை பதிவேற்ற முடியவில்லை. உங்கள் இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
   'Refresh failed: {error}': 'புதுப்பிக்க முடியவில்லை: {error}',
   'Show password': 'கடவுச்சொல்லைக் காட்டு',
   'Hide password': 'கடவுச்சொல்லை மறை',
@@ -169,7 +179,8 @@ const _tamil = <String, String>{
   'Notifications': 'அறிவிப்புகள்',
   'Cart': 'கார்ட்',
   'Items': 'பொருட்கள்',
-  'Pick the items you need.': 'உங்களுக்கு தேவையான பொருட்களை தேர்வு செய்யுங்கள்.',
+  'Pick the items you need.':
+      'உங்களுக்கு தேவையான பொருட்களை தேர்வு செய்யுங்கள்.',
   'Photo list': 'புகைப்பட பட்டியல்',
   'Send any grocery list': 'எந்த மளிகை பட்டியலையும் அனுப்புங்கள்',
   'Fresh picks': 'புதிய தேர்வுகள்',
@@ -220,8 +231,7 @@ const _tamil = <String, String>{
       'பட்டியல் பொருட்களை சேர்க்கவும் அல்லது ஷாப்பிங் பட்டியல் புகைப்படத்தை பதிவேற்றவும்.',
   'Browse products': 'பொருட்களை பார்க்க',
   'Items in cart': 'கார்டில் உள்ள பொருட்கள்',
-  'Adjust quantities before checkout':
-      'Checkoutக்கு முன் அளவுகளை மாற்றுங்கள்',
+  'Adjust quantities before checkout': 'Checkoutக்கு முன் அளவுகளை மாற்றுங்கள்',
   'Attached list': 'இணைக்கப்பட்ட பட்டியல்',
   'Admin will review this with your order':
       'அட்மின் இதை உங்கள் ஆர்டருடன் சரிபார்ப்பார்',
@@ -302,8 +312,7 @@ const _tamil = <String, String>{
   'Order {id}': 'ஆர்டர் {id}',
   'Order tracking': 'ஆர்டர் கண்காணிப்பு',
   'Order not found': 'ஆர்டர் கிடைக்கவில்லை',
-  'This order may have been removed.':
-      'இந்த ஆர்டர் நீக்கப்பட்டிருக்கலாம்.',
+  'This order may have been removed.': 'இந்த ஆர்டர் நீக்கப்பட்டிருக்கலாம்.',
   'Uploaded list': 'பதிவேற்றப்பட்ட பட்டியல்',
   'Contact admin': 'அட்மினை தொடர்புகொள்',
   'Updates': 'புதுப்பிப்புகள்',
@@ -319,8 +328,7 @@ const _tamil = <String, String>{
   'No support tickets': 'ஆதரவு டிக்கெட்டுகள் இல்லை',
   'Create a ticket when you need help with an order.':
       'ஆர்டருக்கு உதவி தேவைப்பட்டால் டிக்கெட் உருவாக்குங்கள்.',
-  'Subject and message are required.':
-      'தலைப்பும் செய்தியும் அவசியம்.',
+  'Subject and message are required.': 'தலைப்பும் செய்தியும் அவசியம்.',
   'Support ticket created.': 'ஆதரவு டிக்கெட் உருவாக்கப்பட்டது.',
   'Messages unavailable': 'செய்திகள் கிடைக்கவில்லை',
   'Please go back and open this ticket again.':
@@ -403,8 +411,7 @@ const _tamil = <String, String>{
       'விவரங்களை சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
   'No account was found for that phone number.':
       'அந்த தொலைபேசி எண்ணிற்கு கணக்கு கிடைக்கவில்லை.',
-  'This request is not ready yet.':
-      'இந்த கோரிக்கை இன்னும் தயாராக இல்லை.',
+  'This request is not ready yet.': 'இந்த கோரிக்கை இன்னும் தயாராக இல்லை.',
   'You are not allowed to perform this action.':
       'இந்த செயலை செய்ய உங்களுக்கு அனுமதி இல்லை.',
   'Password reset service is unavailable. Try again shortly.':

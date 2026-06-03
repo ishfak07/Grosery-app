@@ -665,6 +665,17 @@ class AdminDashboardScreen extends StatelessWidget {
                     ),
                   ),
                 ),
+                _AdminTile(
+                  icon: Icons.campaign_outlined,
+                  title: 'Broadcast',
+                  subtitle: 'Notify customers',
+                  accent: _adminPrimary,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AdminBroadcastScreen(),
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 22),
@@ -764,6 +775,156 @@ class AdminDashboardScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class AdminBroadcastScreen extends StatefulWidget {
+  const AdminBroadcastScreen({super.key});
+
+  @override
+  State<AdminBroadcastScreen> createState() => _AdminBroadcastScreenState();
+}
+
+class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _title = TextEditingController();
+  final _body = TextEditingController();
+  var _isSending = false;
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _body.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _AdminScaffold(
+      title: 'Broadcast',
+      body: _AdminPage(
+        maxWidth: 720,
+        child: ListView(
+          physics: appRefreshScrollPhysics,
+          padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
+          children: [
+            _AdminReveal(
+              child: _AdminCard(
+                padding: const EdgeInsets.all(18),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const _AdminIconBadge(
+                            icon: Icons.campaign_outlined,
+                            color: _adminPrimary,
+                            size: 48,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Broadcast notification',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        color: _adminInk,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0,
+                                      ),
+                                ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'All active customers',
+                                  style: TextStyle(
+                                    color: _adminMuted,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      AppTextField(
+                        controller: _title,
+                        label: 'Title',
+                        prefixIcon: Icons.title,
+                        validator: (value) =>
+                            Validators.requiredText(value, 'Title'),
+                      ),
+                      const SizedBox(height: 12),
+                      AppTextField(
+                        controller: _body,
+                        label: 'Message',
+                        maxLines: 4,
+                        prefixIcon: Icons.notes_outlined,
+                        validator: (value) =>
+                            Validators.requiredText(value, 'Message'),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: FilledButton.icon(
+                          onPressed: _isSending ? null : _sendBroadcast,
+                          icon: _isSending
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.send_outlined),
+                          label: Text(
+                            _isSending ? 'Sending' : 'Send broadcast',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sendBroadcast() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() => _isSending = true);
+    try {
+      await context.read<AppState>().firestoreService.broadcastToUsers(
+            title: _title.text.trim(),
+            body: _body.text.trim(),
+          );
+      if (mounted) {
+        _title.clear();
+        _body.clear();
+        showSnack(context, 'Broadcast notification sent.');
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
+    }
   }
 }
 
@@ -1399,12 +1560,14 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                         icon: Icons.route_outlined,
                       ),
                       DropdownButtonFormField<String>(
-                        value: AppConstants.orderStatuses.contains(_status)
+                        value: AppConstants.selectableOrderStatuses.contains(
+                          _status,
+                        )
                             ? _status
-                            : 'Pending',
+                            : null,
                         decoration:
                             const InputDecoration(labelText: 'Order status'),
-                        items: AppConstants.orderStatuses
+                        items: AppConstants.selectableOrderStatuses
                             .map(
                               (status) => DropdownMenuItem(
                                 value: status,
@@ -2737,7 +2900,7 @@ class AdminProductManagementScreen extends StatelessWidget {
                 child: EmptyState(
                   icon: Icons.error_outline,
                   title: 'Could not load products',
-                  message: snapshot.error.toString(),
+                  message: appFriendlyErrorMessage(snapshot.error),
                 ),
               );
             }

@@ -11,6 +11,7 @@ import '../core/i18n/language_codes.dart';
 import '../core/utils/phone_utils.dart';
 import '../models/models.dart';
 import '../services/auth_service.dart';
+import '../services/connectivity_service.dart';
 import '../services/firebase_bootstrap.dart';
 import '../services/firestore_service.dart';
 import '../services/local_storage_service.dart';
@@ -34,6 +35,7 @@ class AppState extends ChangeNotifier {
   final String? firebaseError;
   final FirestoreService firestoreService;
   final NotificationService notificationService;
+  final ConnectivityService connectivityService = ConnectivityService();
   final LocalStorageService localStorageService = LocalStorageService();
   late final AuthService authService;
 
@@ -43,6 +45,7 @@ class AppState extends ChangeNotifier {
 
   bool _isInitializing = true;
   bool _hasSeenOnboarding = false;
+  bool _hasInternetConnection = true;
   UserProfile? _profile;
   List<CartItem> _cartItems = const <CartItem>[];
   String? _billImagePath;
@@ -51,6 +54,7 @@ class AppState extends ChangeNotifier {
 
   bool get isInitializing => _isInitializing;
   bool get hasSeenOnboarding => _hasSeenOnboarding;
+  bool get hasInternetConnection => _hasInternetConnection;
   UserProfile? get profile => _profile;
   bool get isLoggedIn => _profile != null;
   bool get isAdmin => _profile?.isAdmin ?? false;
@@ -66,6 +70,9 @@ class AppState extends ChangeNotifier {
       _cartItems.fold<double>(0, (sum, item) => sum + item.lineTotal);
 
   Future<void> initialize() async {
+    unawaited(
+      connectivityService.start(onStatusChanged: _setInternetConnection),
+    );
     _cartItems = await localStorageService.loadCart();
     _billImagePath = await localStorageService.loadBillImagePath();
     _hasSeenOnboarding = await localStorageService.hasSeenOnboarding();
@@ -73,6 +80,14 @@ class AppState extends ChangeNotifier {
         await localStorageService.loadPreferredLanguageCode();
 
     if (firebaseAvailable) {
+      final requestNotificationPermission =
+          !(await localStorageService.hasRequestedNotificationPermission());
+      await notificationService.initialize(
+        requestPermission: requestNotificationPermission,
+      );
+      if (requestNotificationPermission) {
+        await localStorageService.setNotificationPermissionRequested();
+      }
       _authSubscription =
           authService.authStateChanges().listen(_handleAuthUser);
     } else {
@@ -86,6 +101,7 @@ class AppState extends ChangeNotifier {
     if (user == null) {
       _profile = null;
       _notificationsConfiguredForUid = null;
+      unawaited(notificationService.detachUser());
       _isInitializing = false;
       notifyListeners();
       return;
@@ -160,12 +176,45 @@ class AppState extends ChangeNotifier {
     if (!firebaseAvailable) {
       return;
     }
-    await refreshProfile();
+    if (!await verifyInternetConnection()) {
+      return;
+    }
+    try {
+      await refreshProfile();
+    } catch (_) {
+      await verifyInternetConnection();
+      return;
+    }
     final current = _profile;
     if (current == null) {
       return;
     }
-    await firestoreService.refreshForProfile(current);
+    try {
+      await firestoreService.refreshForProfile(current);
+    } catch (_) {
+      await verifyInternetConnection();
+    }
+  }
+
+  Future<bool> verifyInternetConnection() async {
+    final isOnline = await connectivityService.verifyNow();
+    _setInternetConnection(isOnline);
+    return isOnline;
+  }
+
+  void markInternetUnavailable() {
+    _setInternetConnection(false);
+  }
+
+  void _setInternetConnection(bool isOnline) {
+    if (_hasInternetConnection == isOnline) {
+      return;
+    }
+    _hasInternetConnection = isOnline;
+    notifyListeners();
+    if (isOnline && firebaseAvailable && _profile != null) {
+      unawaited(refreshVisibleData());
+    }
   }
 
   Future<UserProfile> login({
@@ -184,7 +233,16 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    final current = _profile;
+    if (current != null) {
+      try {
+        await notificationService.clearTokenForUser(current.uid);
+      } catch (_) {
+        // Push-token cleanup should not block logout.
+      }
+    }
     _profile = null;
+    _notificationsConfiguredForUid = null;
     await authService.logout();
     notifyListeners();
   }
@@ -391,6 +449,7 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _authSubscription?.cancel();
     _profileSubscription?.cancel();
+    unawaited(connectivityService.dispose());
     notificationService.dispose();
     super.dispose();
   }

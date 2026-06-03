@@ -9,6 +9,8 @@ class LocalStorageService {
   static const _onboardingKey = 'has_seen_onboarding';
   static const _addressDraftKey = 'address_draft';
   static const _preferredLanguageKey = 'preferred_language_code';
+  static const _notificationPermissionRequestedKey =
+      'notification_permission_requested';
 
   Future<List<CartItem>> loadCart() async {
     final prefs = await SharedPreferences.getInstance();
@@ -70,5 +72,15 @@ class LocalStorageService {
       _preferredLanguageKey,
       AppLanguageCodes.normalize(languageCode),
     );
+  }
+
+  Future<bool> hasRequestedNotificationPermission() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_notificationPermissionRequestedKey) ?? false;
+  }
+
+  Future<void> setNotificationPermissionRequested() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_notificationPermissionRequestedKey, true);
   }
 }
