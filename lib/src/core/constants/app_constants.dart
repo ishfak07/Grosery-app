@@ -43,12 +43,14 @@ class AppConstants {
 
   static const customerTrackingStatuses = orderStatuses;
 
+  static const productUnitOther = 'Other';
   static const productUnits = <String>[
     'kg',
     'g',
     'packet',
     'bottle',
     'piece',
+    productUnitOther,
   ];
 
   static const productCategories = <String>[

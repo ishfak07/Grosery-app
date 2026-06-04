@@ -4275,6 +4275,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   final _description = TextEditingController();
   final _descriptionTamil = TextEditingController();
   final _price = TextEditingController();
+  final _customUnit = TextEditingController();
   String _unit = AppConstants.productUnits.first;
   String _stockStatus = 'available';
   String? _selectedShopId;
@@ -4291,7 +4292,12 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       _description.text = product.description;
       _descriptionTamil.text = product.descriptionTamil;
       _price.text = product.price.toStringAsFixed(2);
-      _unit = product.unit;
+      if (_isPresetUnit(product.unit)) {
+        _unit = product.unit;
+      } else {
+        _unit = AppConstants.productUnitOther;
+        _customUnit.text = product.unit;
+      }
       _stockStatus = product.stockStatus;
       _selectedShopId = product.shopId;
     }
@@ -4304,7 +4310,15 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     _description.dispose();
     _descriptionTamil.dispose();
     _price.dispose();
+    _customUnit.dispose();
     super.dispose();
+  }
+
+  bool get _isCustomUnit => _unit == AppConstants.productUnitOther;
+
+  bool _isPresetUnit(String unit) {
+    return unit != AppConstants.productUnitOther &&
+        AppConstants.productUnits.contains(unit);
   }
 
   @override
@@ -4457,6 +4471,18 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                               }
                             },
                           ),
+                          if (_isCustomUnit) ...[
+                            const SizedBox(height: 10),
+                            AppTextField(
+                              controller: _customUnit,
+                              label: 'Custom unit',
+                              validator: (value) => Validators.requiredText(
+                                value,
+                                'Custom unit',
+                              ),
+                              prefixIcon: Icons.edit_outlined,
+                            ),
+                          ],
                           const SizedBox(height: 10),
                           DropdownButtonFormField<String>(
                             value: _stockStatus,
@@ -4572,6 +4598,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         imageUrl = await CloudinaryService.uploadImage(File(_imagePath!));
       }
       final now = DateTime.now();
+      final productUnit = _isCustomUnit ? _customUnit.text.trim() : _unit;
       final product = Product(
         productId: productId,
         shopId: selectedShop.shopId,
@@ -4583,7 +4610,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         descriptionTamil: _descriptionTamil.text.trim(),
         price: double.parse(_price.text.trim()),
         imageUrl: imageUrl,
-        unit: _unit,
+        unit: productUnit,
         stockStatus: _stockStatus,
         isActive: widget.product?.isActive ?? true,
         createdAt: widget.product?.createdAt ?? now,
