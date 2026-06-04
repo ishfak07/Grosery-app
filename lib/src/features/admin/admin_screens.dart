@@ -125,6 +125,20 @@ class _AdminBackdrop extends StatelessWidget {
   }
 }
 
+class _AdminLogoutTransition extends StatelessWidget {
+  const _AdminLogoutTransition();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: _adminBackground,
+      body: _AdminBackdrop(
+        child: LoadingView(message: 'Logging out...'),
+      ),
+    );
+  }
+}
+
 class _AdminPage extends StatelessWidget {
   const _AdminPage({
     required this.child,
@@ -561,7 +575,10 @@ class AdminDashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final profile = appState.profile!;
+    final profile = appState.profile;
+    if (profile == null) {
+      return const _AdminLogoutTransition();
+    }
     return _AdminScaffold(
       title: 'Admin dashboard',
       actions: [

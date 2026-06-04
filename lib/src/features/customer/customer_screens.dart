@@ -86,6 +86,20 @@ class _CustomerScaffold extends StatelessWidget {
   }
 }
 
+class _CustomerLogoutTransition extends StatelessWidget {
+  const _CustomerLogoutTransition();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: _customerBackground,
+      body: _CustomerBackdrop(
+        child: LoadingView(message: 'Logging out...'),
+      ),
+    );
+  }
+}
+
 class _CustomerScrollView extends StatelessWidget {
   const _CustomerScrollView({
     required this.children,
@@ -515,7 +529,10 @@ class CustomerHomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final profile = appState.profile!;
+    final profile = appState.profile;
+    if (profile == null) {
+      return const _CustomerLogoutTransition();
+    }
     return Scaffold(
       backgroundColor: _customerBackground,
       body: _CustomerBackdrop(
@@ -4331,7 +4348,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final profile = appState.profile!;
+    final profile = appState.profile;
+    if (profile == null) {
+      return const _CustomerLogoutTransition();
+    }
     return _CustomerScaffold(
       title: 'Profile',
       body: Form(
@@ -4378,10 +4398,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: () async {
+                final navigator = Navigator.of(context);
+                navigator.popUntil((route) => route.isFirst);
                 await appState.logout();
-                if (context.mounted) {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                }
               },
               icon: const Icon(Icons.logout),
               label: Text(context.t('Logout')),
