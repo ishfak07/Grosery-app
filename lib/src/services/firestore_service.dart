@@ -40,6 +40,28 @@ class FirestoreService {
       _db.collection('notifications');
   CollectionReference<Map<String, dynamic>> get _passwordResetRequests =>
       _db.collection('password_reset_requests');
+  CollectionReference<Map<String, dynamic>> get _appSettings =>
+      _db.collection('app_settings');
+
+  DocumentReference<Map<String, dynamic>> get _checkoutChargesDoc =>
+      _appSettings.doc('checkout_charges');
+
+  Stream<CheckoutChargeSettings> watchCheckoutChargeSettings() {
+    if (!_firebaseAvailable) {
+      return Stream<CheckoutChargeSettings>.value(
+        CheckoutChargeSettings.defaults,
+      );
+    }
+    return _checkoutChargesDoc.snapshots().map(
+          (doc) => CheckoutChargeSettings.fromMap(doc.data()),
+        );
+  }
+
+  Future<void> saveCheckoutChargeSettings(
+    CheckoutChargeSettings settings,
+  ) {
+    return _checkoutChargesDoc.set(settings.toMap(), SetOptions(merge: true));
+  }
 
   Future<UserProfile?> fetchUserProfile(String uid) async {
     final doc = await _users.doc(uid).get();
@@ -157,6 +179,7 @@ class FirestoreService {
       _fromServer(_products.get(const GetOptions(source: Source.server))),
       _fromServer(_orders.get(const GetOptions(source: Source.server))),
       _fromServer(_accountSales.get(const GetOptions(source: Source.server))),
+      _fromServer(_appSettings.get(const GetOptions(source: Source.server))),
       _fromServer(_tickets.get(const GetOptions(source: Source.server))),
       _fromServer(_passwordResetRequests.get(
         const GetOptions(source: Source.server),
@@ -185,6 +208,7 @@ class FirestoreService {
             .get(const GetOptions(source: Source.server)),
       ),
       _fromServer(_products.get(const GetOptions(source: Source.server))),
+      _fromServer(_appSettings.get(const GetOptions(source: Source.server))),
       _fromServer(
         _orders
             .where('userId', isEqualTo: userId)

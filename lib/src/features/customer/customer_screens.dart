@@ -2681,9 +2681,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final appState = context.watch<AppState>();
     final isBankTransfer =
         _paymentMethod == AppConstants.paymentMethodBankTransfer;
-    final total = appState.cartSubtotal +
-        AppConstants.defaultDeliveryCharge +
-        AppConstants.defaultServiceCharge;
+    final charges = appState.checkoutChargeSettings;
+    final total = charges.totalFor(appState.cartSubtotal);
     return _CustomerScaffold(
       title: 'Checkout',
       body: Form(
@@ -2745,10 +2744,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ],
                   const Divider(height: 24),
                   _AmountRow('Subtotal', appState.cartSubtotal.money),
-                  _AmountRow('Delivery charge',
-                      AppConstants.defaultDeliveryCharge.money),
-                  _AmountRow('Service charge',
-                      AppConstants.defaultServiceCharge.money),
+                  if (charges.deliveryCharge > 0)
+                    _AmountRow('Delivery charge', charges.deliveryCharge.money),
+                  if (charges.serviceCharge > 0)
+                    _AmountRow('Service charge', charges.serviceCharge.money),
                   if (appState.hasBillImage) ...[
                     const SizedBox(height: 10),
                     const _AttachedListPriceNotice(),

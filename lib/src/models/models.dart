@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../core/constants/app_constants.dart';
 import '../core/i18n/language_codes.dart';
 
 DateTime _readDate(dynamic value) {
@@ -34,6 +35,75 @@ DateTime? _readOptionalDate(dynamic value) {
 }
 
 Object _writeDate(DateTime value) => Timestamp.fromDate(value);
+
+class CheckoutChargeSettings {
+  const CheckoutChargeSettings({
+    required this.deliveryCharge,
+    required this.serviceCharge,
+    required this.updatedAt,
+  });
+
+  static CheckoutChargeSettings get defaults => CheckoutChargeSettings(
+        deliveryCharge: AppConstants.defaultDeliveryCharge,
+        serviceCharge: AppConstants.defaultServiceCharge,
+        updatedAt: DateTime.now(),
+      );
+
+  final double deliveryCharge;
+  final double serviceCharge;
+  final DateTime updatedAt;
+
+  double get totalCharge => deliveryCharge + serviceCharge;
+  double totalFor(double subtotal) => subtotal + totalCharge;
+
+  CheckoutChargeSettings copyWith({
+    double? deliveryCharge,
+    double? serviceCharge,
+    DateTime? updatedAt,
+  }) {
+    return CheckoutChargeSettings(
+      deliveryCharge: deliveryCharge ?? this.deliveryCharge,
+      serviceCharge: serviceCharge ?? this.serviceCharge,
+      updatedAt: updatedAt ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'deliveryCharge': deliveryCharge,
+      'serviceCharge': serviceCharge,
+      'updatedAt': _writeDate(updatedAt),
+    };
+  }
+
+  factory CheckoutChargeSettings.fromMap(Map<String, dynamic>? map) {
+    final fallback = CheckoutChargeSettings.defaults;
+    if (map == null) {
+      return fallback;
+    }
+    return CheckoutChargeSettings(
+      deliveryCharge: _readNonNegativeAmount(
+        map['deliveryCharge'],
+        fallback.deliveryCharge,
+      ),
+      serviceCharge: _readNonNegativeAmount(
+        map['serviceCharge'],
+        fallback.serviceCharge,
+      ),
+      updatedAt: _readDate(map['updatedAt']),
+    );
+  }
+
+  static double _readNonNegativeAmount(dynamic value, double fallback) {
+    if (value is num) {
+      final amount = value.toDouble();
+      if (!amount.isNaN && !amount.isInfinite && amount >= 0) {
+        return amount;
+      }
+    }
+    return fallback;
+  }
+}
 
 class UserProfile {
   const UserProfile({

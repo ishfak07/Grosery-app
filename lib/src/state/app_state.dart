@@ -42,6 +42,8 @@ class AppState extends ChangeNotifier {
   final _uuid = const Uuid();
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<UserProfile?>? _profileSubscription;
+  StreamSubscription<CheckoutChargeSettings>?
+      _checkoutChargeSettingsSubscription;
 
   bool _isInitializing = true;
   bool _hasSeenOnboarding = false;
@@ -49,6 +51,9 @@ class AppState extends ChangeNotifier {
   UserProfile? _profile;
   List<CartItem> _cartItems = const <CartItem>[];
   String? _billImagePath;
+  CheckoutChargeSettings _checkoutChargeSettings =
+      CheckoutChargeSettings.defaults;
+  bool _hasLoadedCheckoutChargeSettings = false;
   String? _notificationsConfiguredForProfileKey;
   String _preferredLanguageCode = AppLanguageCodes.english;
 
@@ -64,6 +69,8 @@ class AppState extends ChangeNotifier {
   List<CartItem> get cartItems => List.unmodifiable(_cartItems);
   String? get billImagePath => _billImagePath;
   bool get hasBillImage => _billImagePath != null && _billImagePath!.isNotEmpty;
+  CheckoutChargeSettings get checkoutChargeSettings => _checkoutChargeSettings;
+  bool get hasLoadedCheckoutChargeSettings => _hasLoadedCheckoutChargeSettings;
   int get cartCount =>
       _cartItems.fold<int>(0, (sum, item) => sum + item.quantity);
   double get cartSubtotal =>
@@ -99,13 +106,18 @@ class AppState extends ChangeNotifier {
   Future<void> _handleAuthUser(User? user) async {
     await _profileSubscription?.cancel();
     if (user == null) {
+      await _checkoutChargeSettingsSubscription?.cancel();
       _profile = null;
+      _checkoutChargeSettings = CheckoutChargeSettings.defaults;
+      _hasLoadedCheckoutChargeSettings = false;
       _notificationsConfiguredForProfileKey = null;
       unawaited(notificationService.detachUser());
       _isInitializing = false;
       notifyListeners();
       return;
     }
+
+    _watchCheckoutChargeSettings();
 
     if (authService.isBootstrapAdminUser(user)) {
       _profile = authService.bootstrapAdminProfile(user.uid);
@@ -122,6 +134,28 @@ class AppState extends ChangeNotifier {
         _isInitializing = false;
         notifyListeners();
         await _configureNotificationsForProfile(profile);
+      },
+    );
+  }
+
+  void _watchCheckoutChargeSettings() {
+    if (!firebaseAvailable) {
+      _checkoutChargeSettings = CheckoutChargeSettings.defaults;
+      _hasLoadedCheckoutChargeSettings = true;
+      return;
+    }
+    unawaited(_checkoutChargeSettingsSubscription?.cancel());
+    _hasLoadedCheckoutChargeSettings = false;
+    _checkoutChargeSettingsSubscription =
+        firestoreService.watchCheckoutChargeSettings().listen(
+      (settings) {
+        _checkoutChargeSettings = settings;
+        _hasLoadedCheckoutChargeSettings = true;
+        notifyListeners();
+      },
+      onError: (_) {
+        _hasLoadedCheckoutChargeSettings = true;
+        notifyListeners();
       },
     );
   }
@@ -239,6 +273,7 @@ class AppState extends ChangeNotifier {
     );
     _profile = user;
     await _applyProfileLanguage(user);
+    _watchCheckoutChargeSettings();
     notifyListeners();
     await _configureNotificationsForProfile(user);
     return user;
@@ -255,6 +290,9 @@ class AppState extends ChangeNotifier {
     }
     _profile = null;
     _notificationsConfiguredForProfileKey = null;
+    _checkoutChargeSettings = CheckoutChargeSettings.defaults;
+    _hasLoadedCheckoutChargeSettings = false;
+    await _checkoutChargeSettingsSubscription?.cancel();
     await authService.logout();
     notifyListeners();
   }
@@ -276,8 +314,32 @@ class AppState extends ChangeNotifier {
     );
     _preferredLanguageCode = languageCode;
     await localStorageService.savePreferredLanguageCode(languageCode);
+    _watchCheckoutChargeSettings();
     notifyListeners();
     await _configureNotificationsForProfile(_profile);
+  }
+
+  Future<void> updateCheckoutChargeSettings({
+    required double deliveryCharge,
+    required double serviceCharge,
+  }) async {
+    if (deliveryCharge.isNaN ||
+        deliveryCharge.isInfinite ||
+        deliveryCharge < 0 ||
+        serviceCharge.isNaN ||
+        serviceCharge.isInfinite ||
+        serviceCharge < 0) {
+      throw StateError('Enter valid checkout charges.');
+    }
+    final settings = CheckoutChargeSettings(
+      deliveryCharge: deliveryCharge,
+      serviceCharge: serviceCharge,
+      updatedAt: DateTime.now(),
+    );
+    await firestoreService.saveCheckoutChargeSettings(settings);
+    _checkoutChargeSettings = settings;
+    _hasLoadedCheckoutChargeSettings = true;
+    notifyListeners();
   }
 
   Future<void> updateProfile({
@@ -421,10 +483,9 @@ class AppState extends ChangeNotifier {
           await CloudinaryService.uploadImage(File(paymentReceiptImagePath));
     }
 
+    final charges = _checkoutChargeSettings;
     final subtotal = cartSubtotal;
-    final total = subtotal +
-        AppConstants.defaultDeliveryCharge +
-        AppConstants.defaultServiceCharge;
+    final total = charges.totalFor(subtotal);
     final now = DateTime.now();
     final order = OrderModel(
       orderId: orderId,
@@ -437,8 +498,8 @@ class AppState extends ChangeNotifier {
       paymentReceiptImageUrl: paymentReceiptImageUrl,
       orderNotes: orderNotes.trim(),
       subtotal: subtotal,
-      deliveryCharge: AppConstants.defaultDeliveryCharge,
-      serviceCharge: AppConstants.defaultServiceCharge,
+      deliveryCharge: charges.deliveryCharge,
+      serviceCharge: charges.serviceCharge,
       totalAmount: total,
       paymentMethod: paymentMethod,
       paymentStatus: paymentMethod == AppConstants.paymentMethodBankTransfer
@@ -461,6 +522,7 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _authSubscription?.cancel();
     _profileSubscription?.cancel();
+    _checkoutChargeSettingsSubscription?.cancel();
     unawaited(connectivityService.dispose());
     notificationService.dispose();
     super.dispose();

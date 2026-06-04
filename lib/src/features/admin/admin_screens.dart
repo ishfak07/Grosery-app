@@ -611,6 +611,17 @@ class AdminDashboardScreen extends StatelessWidget {
                   ),
                 ),
                 _AdminTile(
+                  icon: Icons.tune,
+                  title: 'Charges',
+                  subtitle: 'Checkout fees',
+                  accent: _adminViolet,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AdminCheckoutChargeSettingsScreen(),
+                    ),
+                  ),
+                ),
+                _AdminTile(
                   icon: Icons.inventory_2_outlined,
                   title: 'Products',
                   subtitle: 'Add, edit, disable',
@@ -786,6 +797,183 @@ class AdminDashboardScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class AdminCheckoutChargeSettingsScreen extends StatefulWidget {
+  const AdminCheckoutChargeSettingsScreen({super.key});
+
+  @override
+  State<AdminCheckoutChargeSettingsScreen> createState() =>
+      _AdminCheckoutChargeSettingsScreenState();
+}
+
+class _AdminCheckoutChargeSettingsScreenState
+    extends State<AdminCheckoutChargeSettingsScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _delivery = TextEditingController();
+  final _service = TextEditingController();
+  var _isSaving = false;
+  var _isSyncingFields = false;
+  var _hasUserEdited = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _delivery.addListener(_markUserEdited);
+    _service.addListener(_markUserEdited);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final appState = context.watch<AppState>();
+    if (!appState.hasLoadedCheckoutChargeSettings || _hasUserEdited) {
+      return;
+    }
+    _syncFields(appState.checkoutChargeSettings);
+  }
+
+  @override
+  void dispose() {
+    _delivery.dispose();
+    _service.dispose();
+    super.dispose();
+  }
+
+  void _markUserEdited() {
+    if (!_isSyncingFields) {
+      _hasUserEdited = true;
+    }
+  }
+
+  void _syncFields(CheckoutChargeSettings settings) {
+    final deliveryText = settings.deliveryCharge.toStringAsFixed(2);
+    final serviceText = settings.serviceCharge.toStringAsFixed(2);
+    if (_delivery.text == deliveryText && _service.text == serviceText) {
+      return;
+    }
+    _isSyncingFields = true;
+    _delivery.text = deliveryText;
+    _service.text = serviceText;
+    _isSyncingFields = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    return _AdminScaffold(
+      title: 'Checkout charges',
+      body: _AdminPage(
+        maxWidth: 720,
+        child: appState.hasLoadedCheckoutChargeSettings
+            ? ListView(
+                physics: appRefreshScrollPhysics,
+                padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
+                children: [
+                  _AdminReveal(
+                    child: _AdminCard(
+                      padding: const EdgeInsets.all(18),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _AdminSectionHeader(
+                              title: 'Customer checkout',
+                              icon: Icons.payments_outlined,
+                            ),
+                            TextFormField(
+                              controller: _delivery,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                              validator: (value) => _amountError(
+                                value,
+                                'delivery charge',
+                              ),
+                              decoration: const InputDecoration(
+                                labelText: 'Delivery charge',
+                                prefixIcon: Icon(Icons.local_shipping_outlined),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _service,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                              validator: (value) => _amountError(
+                                value,
+                                'service charge',
+                              ),
+                              decoration: const InputDecoration(
+                                labelText: 'Service charge',
+                                prefixIcon: Icon(Icons.receipt_outlined),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            PrimaryActionButton(
+                              label: 'Save checkout charges',
+                              icon: Icons.save,
+                              isLoading: _isSaving,
+                              onPressed: _isSaving ? null : _save,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : const LoadingView(message: 'Loading checkout charges...'),
+      ),
+    );
+  }
+
+  String? _amountError(String? value, String label) {
+    final amount = _readAmount(value);
+    if (amount == null) {
+      return 'Enter a valid $label.';
+    }
+    return null;
+  }
+
+  double? _readAmount(String? value) {
+    final amount = double.tryParse(value?.trim() ?? '');
+    if (amount == null || amount.isNaN || amount.isInfinite || amount < 0) {
+      return null;
+    }
+    return amount;
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    final delivery = _readAmount(_delivery.text)!;
+    final service = _readAmount(_service.text)!;
+    setState(() => _isSaving = true);
+    try {
+      await context.read<AppState>().updateCheckoutChargeSettings(
+            deliveryCharge: delivery,
+            serviceCharge: service,
+          );
+      _hasUserEdited = false;
+      if (mounted) {
+        showSnack(context, 'Checkout charges saved.');
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 }
 
