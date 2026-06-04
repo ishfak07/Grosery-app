@@ -354,6 +354,48 @@ class _AdminSectionHeader extends StatelessWidget {
   }
 }
 
+class _AdminNotice extends StatelessWidget {
+  const _AdminNotice({
+    required this.icon,
+    required this.color,
+    required this.message,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.22)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: _adminInk,
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AdminAppBarButton extends StatelessWidget {
   const _AdminAppBarButton({
     required this.tooltip,
@@ -629,8 +671,8 @@ class AdminDashboardScreen extends StatelessWidget {
                 ),
                 _AdminTile(
                   icon: Icons.tune,
-                  title: 'Charges',
-                  subtitle: 'Checkout fees',
+                  title: 'Checkout',
+                  subtitle: 'Fees and payments',
                   accent: _adminViolet,
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
@@ -830,6 +872,12 @@ class _AdminCheckoutChargeSettingsScreenState
   final _formKey = GlobalKey<FormState>();
   final _delivery = TextEditingController();
   final _service = TextEditingController();
+  final _bankAccountName = TextEditingController();
+  final _bankName = TextEditingController();
+  final _bankBranch = TextEditingController();
+  final _bankAccountNumber = TextEditingController();
+  var _codEnabled = true;
+  var _bankTransferEnabled = true;
   var _isSaving = false;
   var _isSyncingFields = false;
   var _hasUserEdited = false;
@@ -839,22 +887,32 @@ class _AdminCheckoutChargeSettingsScreenState
     super.initState();
     _delivery.addListener(_markUserEdited);
     _service.addListener(_markUserEdited);
+    _bankAccountName.addListener(_markUserEdited);
+    _bankName.addListener(_markUserEdited);
+    _bankBranch.addListener(_markUserEdited);
+    _bankAccountNumber.addListener(_markUserEdited);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final appState = context.watch<AppState>();
-    if (!appState.hasLoadedCheckoutChargeSettings || _hasUserEdited) {
+    if (!appState.hasLoadedCheckoutChargeSettings ||
+        !appState.hasLoadedPaymentSettings ||
+        _hasUserEdited) {
       return;
     }
-    _syncFields(appState.checkoutChargeSettings);
+    _syncFields(appState.checkoutChargeSettings, appState.paymentSettings);
   }
 
   @override
   void dispose() {
     _delivery.dispose();
     _service.dispose();
+    _bankAccountName.dispose();
+    _bankName.dispose();
+    _bankBranch.dispose();
+    _bankAccountNumber.dispose();
     super.dispose();
   }
 
@@ -864,26 +922,44 @@ class _AdminCheckoutChargeSettingsScreenState
     }
   }
 
-  void _syncFields(CheckoutChargeSettings settings) {
-    final deliveryText = settings.deliveryCharge.toStringAsFixed(2);
-    final serviceText = settings.serviceCharge.toStringAsFixed(2);
-    if (_delivery.text == deliveryText && _service.text == serviceText) {
+  void _syncFields(
+    CheckoutChargeSettings chargeSettings,
+    PaymentSettings paymentSettings,
+  ) {
+    final deliveryText = chargeSettings.deliveryCharge.toStringAsFixed(2);
+    final serviceText = chargeSettings.serviceCharge.toStringAsFixed(2);
+    if (_delivery.text == deliveryText &&
+        _service.text == serviceText &&
+        _bankAccountName.text == paymentSettings.bankAccountName &&
+        _bankName.text == paymentSettings.bankName &&
+        _bankBranch.text == paymentSettings.bankBranch &&
+        _bankAccountNumber.text == paymentSettings.bankAccountNumber &&
+        _codEnabled == paymentSettings.codEnabled &&
+        _bankTransferEnabled == paymentSettings.bankTransferEnabled) {
       return;
     }
     _isSyncingFields = true;
     _delivery.text = deliveryText;
     _service.text = serviceText;
+    _bankAccountName.text = paymentSettings.bankAccountName;
+    _bankName.text = paymentSettings.bankName;
+    _bankBranch.text = paymentSettings.bankBranch;
+    _bankAccountNumber.text = paymentSettings.bankAccountNumber;
+    _codEnabled = paymentSettings.codEnabled;
+    _bankTransferEnabled = paymentSettings.bankTransferEnabled;
     _isSyncingFields = false;
   }
 
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    final hasLoadedSettings = appState.hasLoadedCheckoutChargeSettings &&
+        appState.hasLoadedPaymentSettings;
     return _AdminScaffold(
-      title: 'Checkout charges',
+      title: 'Checkout settings',
       body: _AdminPage(
         maxWidth: 720,
-        child: appState.hasLoadedCheckoutChargeSettings
+        child: hasLoadedSettings
             ? ListView(
                 physics: appRefreshScrollPhysics,
                 padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
@@ -897,7 +973,7 @@ class _AdminCheckoutChargeSettingsScreenState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const _AdminSectionHeader(
-                              title: 'Customer checkout',
+                              title: 'Checkout charges',
                               icon: Icons.payments_outlined,
                             ),
                             TextFormField(
@@ -931,9 +1007,112 @@ class _AdminCheckoutChargeSettingsScreenState
                                 prefixIcon: Icon(Icons.receipt_outlined),
                               ),
                             ),
+                            const SizedBox(height: 18),
+                            const Divider(height: 1),
+                            const SizedBox(height: 18),
+                            const _AdminSectionHeader(
+                              title: 'Payment methods',
+                              icon: Icons.point_of_sale_outlined,
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              value: _codEnabled,
+                              onChanged: (value) {
+                                setState(() {
+                                  _codEnabled = value;
+                                  _hasUserEdited = true;
+                                });
+                              },
+                              secondary: const Icon(Icons.payments_outlined),
+                              title: const Text('Cash on Delivery'),
+                              subtitle: const Text(
+                                'Allow customers to place COD orders.',
+                              ),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              value: _bankTransferEnabled,
+                              onChanged: (value) {
+                                setState(() {
+                                  _bankTransferEnabled = value;
+                                  _hasUserEdited = true;
+                                });
+                              },
+                              secondary:
+                                  const Icon(Icons.account_balance_outlined),
+                              title: const Text('Bank transfer'),
+                              subtitle: const Text(
+                                'Allow customers to upload transfer receipts.',
+                              ),
+                            ),
+                            if (!_codEnabled && !_bankTransferEnabled) ...[
+                              const SizedBox(height: 10),
+                              const _AdminNotice(
+                                icon: Icons.pause_circle_outline,
+                                color: _adminWarning,
+                                message:
+                                    'Both methods are off. Customers will not be able to place orders until one method is enabled.',
+                              ),
+                            ],
+                            const SizedBox(height: 18),
+                            const Divider(height: 1),
+                            const SizedBox(height: 18),
+                            const _AdminSectionHeader(
+                              title: 'Bank transfer account',
+                              icon: Icons.account_balance_outlined,
+                            ),
+                            TextFormField(
+                              controller: _bankAccountName,
+                              validator: (value) => Validators.requiredText(
+                                value,
+                                'Account name',
+                              ),
+                              decoration: const InputDecoration(
+                                labelText: 'Account name',
+                                prefixIcon: Icon(Icons.person_outline),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _bankName,
+                              validator: (value) => Validators.requiredText(
+                                value,
+                                'Bank name',
+                              ),
+                              decoration: const InputDecoration(
+                                labelText: 'Bank name',
+                                prefixIcon: Icon(Icons.account_balance),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _bankBranch,
+                              validator: (value) => Validators.requiredText(
+                                value,
+                                'Branch',
+                              ),
+                              decoration: const InputDecoration(
+                                labelText: 'Branch',
+                                prefixIcon: Icon(Icons.location_on_outlined),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _bankAccountNumber,
+                              validator: (value) => Validators.requiredText(
+                                value,
+                                'Account number',
+                              ),
+                              keyboardType: TextInputType.text,
+                              decoration: const InputDecoration(
+                                labelText: 'Account number',
+                                prefixIcon:
+                                    Icon(Icons.confirmation_number_outlined),
+                              ),
+                            ),
                             const SizedBox(height: 16),
                             PrimaryActionButton(
-                              label: 'Save checkout charges',
+                              label: 'Save checkout settings',
                               icon: Icons.save,
                               isLoading: _isSaving,
                               onPressed: _isSaving ? null : _save,
@@ -945,7 +1124,7 @@ class _AdminCheckoutChargeSettingsScreenState
                   ),
                 ],
               )
-            : const LoadingView(message: 'Loading checkout charges...'),
+            : const LoadingView(message: 'Loading checkout settings...'),
       ),
     );
   }
@@ -974,13 +1153,22 @@ class _AdminCheckoutChargeSettingsScreenState
     final service = _readAmount(_service.text)!;
     setState(() => _isSaving = true);
     try {
-      await context.read<AppState>().updateCheckoutChargeSettings(
-            deliveryCharge: delivery,
-            serviceCharge: service,
-          );
+      final appState = context.read<AppState>();
+      await appState.updateCheckoutChargeSettings(
+        deliveryCharge: delivery,
+        serviceCharge: service,
+      );
+      await appState.updatePaymentSettings(
+        codEnabled: _codEnabled,
+        bankTransferEnabled: _bankTransferEnabled,
+        bankAccountName: _bankAccountName.text,
+        bankName: _bankName.text,
+        bankBranch: _bankBranch.text,
+        bankAccountNumber: _bankAccountNumber.text,
+      );
       _hasUserEdited = false;
       if (mounted) {
-        showSnack(context, 'Checkout charges saved.');
+        showSnack(context, 'Checkout settings saved.');
       }
     } catch (error) {
       if (mounted) {
@@ -1493,7 +1681,8 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final appState = context.read<AppState>();
+    final appState = context.watch<AppState>();
+    final paymentSettings = appState.paymentSettings;
     return _AdminScaffold(
       title: 'Order details',
       body: _AdminPage(
@@ -1599,18 +1788,18 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                       if (order.paymentMethod ==
                           AppConstants.paymentMethodBankTransfer) ...[
                         const Divider(height: 22),
-                        const _OrderInfoRow(
+                        _OrderInfoRow(
                           'Account name',
-                          AppConstants.bankAccountName,
+                          paymentSettings.bankAccountName,
                         ),
-                        const _OrderInfoRow('Bank', AppConstants.bankName),
-                        const _OrderInfoRow(
+                        _OrderInfoRow('Bank', paymentSettings.bankName),
+                        _OrderInfoRow(
                           'Branch',
-                          AppConstants.bankBranch,
+                          paymentSettings.bankBranch,
                         ),
-                        const _OrderInfoRow(
+                        _OrderInfoRow(
                           'Account number',
-                          AppConstants.bankAccountNumber,
+                          paymentSettings.bankAccountNumber,
                         ),
                         const SizedBox(height: 12),
                         if (order.hasPaymentReceipt) ...[

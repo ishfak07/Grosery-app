@@ -105,6 +105,128 @@ class CheckoutChargeSettings {
   }
 }
 
+class PaymentSettings {
+  const PaymentSettings({
+    required this.codEnabled,
+    required this.bankTransferEnabled,
+    required this.bankAccountName,
+    required this.bankName,
+    required this.bankBranch,
+    required this.bankAccountNumber,
+    required this.updatedAt,
+  });
+
+  static PaymentSettings get defaults => PaymentSettings(
+        codEnabled: true,
+        bankTransferEnabled: true,
+        bankAccountName: AppConstants.bankAccountName,
+        bankName: AppConstants.bankName,
+        bankBranch: AppConstants.bankBranch,
+        bankAccountNumber: AppConstants.bankAccountNumber,
+        updatedAt: DateTime.now(),
+      );
+
+  final bool codEnabled;
+  final bool bankTransferEnabled;
+  final String bankAccountName;
+  final String bankName;
+  final String bankBranch;
+  final String bankAccountNumber;
+  final DateTime updatedAt;
+
+  bool get hasAvailablePaymentMethod => codEnabled || bankTransferEnabled;
+
+  List<String> get availablePaymentMethods => <String>[
+        if (codEnabled) AppConstants.paymentMethodCod,
+        if (bankTransferEnabled) AppConstants.paymentMethodBankTransfer,
+      ];
+
+  bool isPaymentMethodEnabled(String paymentMethod) {
+    switch (paymentMethod) {
+      case AppConstants.paymentMethodCod:
+        return codEnabled;
+      case AppConstants.paymentMethodBankTransfer:
+        return bankTransferEnabled;
+      default:
+        return false;
+    }
+  }
+
+  String? availablePaymentMethodOrNull(String preferredPaymentMethod) {
+    if (isPaymentMethodEnabled(preferredPaymentMethod)) {
+      return preferredPaymentMethod;
+    }
+    final methods = availablePaymentMethods;
+    return methods.isEmpty ? null : methods.first;
+  }
+
+  PaymentSettings copyWith({
+    bool? codEnabled,
+    bool? bankTransferEnabled,
+    String? bankAccountName,
+    String? bankName,
+    String? bankBranch,
+    String? bankAccountNumber,
+    DateTime? updatedAt,
+  }) {
+    return PaymentSettings(
+      codEnabled: codEnabled ?? this.codEnabled,
+      bankTransferEnabled: bankTransferEnabled ?? this.bankTransferEnabled,
+      bankAccountName: bankAccountName ?? this.bankAccountName,
+      bankName: bankName ?? this.bankName,
+      bankBranch: bankBranch ?? this.bankBranch,
+      bankAccountNumber: bankAccountNumber ?? this.bankAccountNumber,
+      updatedAt: updatedAt ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'codEnabled': codEnabled,
+      'bankTransferEnabled': bankTransferEnabled,
+      'bankAccountName': bankAccountName,
+      'bankName': bankName,
+      'bankBranch': bankBranch,
+      'bankAccountNumber': bankAccountNumber,
+      'updatedAt': _writeDate(updatedAt),
+    };
+  }
+
+  factory PaymentSettings.fromMap(Map<String, dynamic>? map) {
+    final fallback = PaymentSettings.defaults;
+    if (map == null) {
+      return fallback;
+    }
+    return PaymentSettings(
+      codEnabled: _readBool(map['codEnabled'], fallback.codEnabled),
+      bankTransferEnabled: _readBool(
+        map['bankTransferEnabled'],
+        fallback.bankTransferEnabled,
+      ),
+      bankAccountName: _readText(
+        map['bankAccountName'],
+        fallback.bankAccountName,
+      ),
+      bankName: _readText(map['bankName'], fallback.bankName),
+      bankBranch: _readText(map['bankBranch'], fallback.bankBranch),
+      bankAccountNumber: _readText(
+        map['bankAccountNumber'],
+        fallback.bankAccountNumber,
+      ),
+      updatedAt: _readDate(map['updatedAt']),
+    );
+  }
+
+  static bool _readBool(dynamic value, bool fallback) {
+    return value is bool ? value : fallback;
+  }
+
+  static String _readText(dynamic value, String fallback) {
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? fallback : text;
+  }
+}
+
 class UserProfile {
   const UserProfile({
     required this.uid,

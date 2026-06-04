@@ -40,6 +40,26 @@ service cloud.firestore {
       return getAfter(/databases/$(database)/documents/support_tickets/$(ticketId));
     }
 
+    function hasPaymentSettings() {
+      return exists(/databases/$(database)/documents/app_settings/payment_methods);
+    }
+
+    function paymentSettings() {
+      return get(/databases/$(database)/documents/app_settings/payment_methods).data;
+    }
+
+    function isPaymentMethodEnabled(paymentMethod) {
+      return !hasPaymentSettings() ||
+        (
+          paymentMethod == 'COD' &&
+          paymentSettings().get('codEnabled', true) == true
+        ) ||
+        (
+          paymentMethod == 'Bank Transfer' &&
+          paymentSettings().get('bankTransferEnabled', true) == true
+        );
+    }
+
     function userEditableProfileKeys() {
       return [
         'fullName',
@@ -86,6 +106,7 @@ service cloud.firestore {
         request.resource.data.adminNotes == '' &&
         request.resource.data.assignedDeliveryPerson == '' &&
         request.resource.data.paymentMethod in ['COD', 'Bank Transfer'] &&
+        isPaymentMethodEnabled(request.resource.data.paymentMethod) &&
         request.resource.data.paymentStatus in ['pending', 'receipt uploaded'] &&
         request.resource.data.subtotal >= 0 &&
         request.resource.data.deliveryCharge >= 0 &&

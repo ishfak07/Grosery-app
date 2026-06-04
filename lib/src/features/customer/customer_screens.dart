@@ -2685,6 +2685,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final paymentSettings = context.watch<AppState>().paymentSettings;
+    final availablePaymentMethod =
+        paymentSettings.availablePaymentMethodOrNull(_paymentMethod);
+    if (availablePaymentMethod != null &&
+        availablePaymentMethod != _paymentMethod) {
+      _paymentMethod = availablePaymentMethod;
+    }
+  }
+
+  @override
   void dispose() {
     _name.dispose();
     _phone.dispose();
@@ -2696,8 +2708,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    final paymentSettings = appState.paymentSettings;
+    final selectedPaymentMethod =
+        paymentSettings.availablePaymentMethodOrNull(_paymentMethod);
+    final hasPaymentMethods = selectedPaymentMethod != null;
     final isBankTransfer =
-        _paymentMethod == AppConstants.paymentMethodBankTransfer;
+        selectedPaymentMethod == AppConstants.paymentMethodBankTransfer;
     final charges = appState.checkoutChargeSettings;
     final total = charges.totalFor(appState.cartSubtotal);
     return _CustomerScaffold(
@@ -2719,38 +2735,50 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   RadioListTile<String>(
                     contentPadding: EdgeInsets.zero,
                     value: AppConstants.paymentMethodCod,
-                    groupValue: _paymentMethod,
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _paymentMethod = value);
-                      }
-                    },
+                    groupValue: selectedPaymentMethod,
+                    onChanged: paymentSettings.codEnabled
+                        ? (value) {
+                            if (value != null) {
+                              setState(() => _paymentMethod = value);
+                            }
+                          }
+                        : null,
                     title: Text(context.t('Cash on Delivery')),
                     subtitle: Text(
                       context.t(
-                        'Pay by cash when your order is delivered.',
+                        paymentSettings.codEnabled
+                            ? 'Pay by cash when your order is delivered.'
+                            : 'Temporarily unavailable.',
                       ),
                     ),
                   ),
                   RadioListTile<String>(
                     contentPadding: EdgeInsets.zero,
                     value: AppConstants.paymentMethodBankTransfer,
-                    groupValue: _paymentMethod,
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _paymentMethod = value);
-                      }
-                    },
+                    groupValue: selectedPaymentMethod,
+                    onChanged: paymentSettings.bankTransferEnabled
+                        ? (value) {
+                            if (value != null) {
+                              setState(() => _paymentMethod = value);
+                            }
+                          }
+                        : null,
                     title: Text(context.t('Bank transfer')),
                     subtitle: Text(
                       context.t(
-                        'Transfer to the store account and upload your receipt.',
+                        paymentSettings.bankTransferEnabled
+                            ? 'Transfer to the store account and upload your receipt.'
+                            : 'Temporarily unavailable.',
                       ),
                     ),
                   ),
+                  if (!hasPaymentMethods) ...[
+                    const SizedBox(height: 8),
+                    const _CheckoutPaymentUnavailableNotice(),
+                  ],
                   if (isBankTransfer) ...[
                     const SizedBox(height: 8),
-                    const _BankTransferDetails(),
+                    _BankTransferDetails(settings: paymentSettings),
                     const SizedBox(height: 12),
                     _ReceiptUploadSection(
                       imagePath: _receiptImagePath,
@@ -2804,12 +2832,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
             const SizedBox(height: 18),
             PrimaryActionButton(
-              label: isBankTransfer
-                  ? 'Place bank transfer order'
-                  : 'Place COD order',
-              icon: isBankTransfer ? Icons.account_balance : Icons.check_circle,
+              label: !hasPaymentMethods
+                  ? 'Payment unavailable'
+                  : isBankTransfer
+                      ? 'Place bank transfer order'
+                      : 'Place COD order',
+              icon: !hasPaymentMethods
+                  ? Icons.block
+                  : isBankTransfer
+                      ? Icons.account_balance
+                      : Icons.check_circle,
               isLoading: _isSubmitting,
-              onPressed: _isSubmitting ? null : _submit,
+              onPressed: _isSubmitting || !hasPaymentMethods ? null : _submit,
             ),
           ],
         ),
@@ -2824,21 +2858,31 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    if (_paymentMethod == AppConstants.paymentMethodBankTransfer &&
+    final appState = context.read<AppState>();
+    final paymentMethod =
+        appState.paymentSettings.availablePaymentMethodOrNull(_paymentMethod);
+    if (paymentMethod == null) {
+      showSnack(context, 'Payment methods are temporarily unavailable.');
+      return;
+    }
+    if (paymentMethod != _paymentMethod) {
+      setState(() => _paymentMethod = paymentMethod);
+    }
+    if (paymentMethod == AppConstants.paymentMethodBankTransfer &&
         (_receiptImagePath == null || _receiptImagePath!.isEmpty)) {
       showSnack(context, 'Upload the bank transfer receipt before checkout.');
       return;
     }
     setState(() => _isSubmitting = true);
     try {
-      final order = await context.read<AppState>().createOrder(
-            customerName: _name.text,
-            customerPhone: PhoneUtils.normalizeSriLankanPhone(_phone.text),
-            customerAddress: _address.text,
-            orderNotes: _notes.text,
-            paymentMethod: _paymentMethod,
-            paymentReceiptImagePath: _receiptImagePath,
-          );
+      final order = await appState.createOrder(
+        customerName: _name.text,
+        customerPhone: PhoneUtils.normalizeSriLankanPhone(_phone.text),
+        customerAddress: _address.text,
+        orderNotes: _notes.text,
+        paymentMethod: paymentMethod,
+        paymentReceiptImagePath: _receiptImagePath,
+      );
       if (!mounted) {
         return;
       }
@@ -3016,8 +3060,46 @@ class _AttachedListPriceNotice extends StatelessWidget {
   }
 }
 
+class _CheckoutPaymentUnavailableNotice extends StatelessWidget {
+  const _CheckoutPaymentUnavailableNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF5E5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFFD89A)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.pause_circle_outline, color: _customerWarning),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              context.t(
+                'Payment methods are temporarily unavailable. Please try again later.',
+              ),
+              style: const TextStyle(
+                color: _customerInk,
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BankTransferDetails extends StatelessWidget {
-  const _BankTransferDetails();
+  const _BankTransferDetails({required this.settings});
+
+  final PaymentSettings settings;
 
   @override
   Widget build(BuildContext context) {
@@ -3037,11 +3119,10 @@ class _BankTransferDetails extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 8),
-          const _BankDetailRow('Name', AppConstants.bankAccountName),
-          const _BankDetailRow('Bank', AppConstants.bankName),
-          const _BankDetailRow('Branch', AppConstants.bankBranch),
-          const _BankDetailRow(
-              'Account number', AppConstants.bankAccountNumber),
+          _BankDetailRow('Name', settings.bankAccountName),
+          _BankDetailRow('Bank', settings.bankName),
+          _BankDetailRow('Branch', settings.bankBranch),
+          _BankDetailRow('Account number', settings.bankAccountNumber),
         ],
       ),
     );

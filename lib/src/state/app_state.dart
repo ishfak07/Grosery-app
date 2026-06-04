@@ -44,6 +44,7 @@ class AppState extends ChangeNotifier {
   StreamSubscription<UserProfile?>? _profileSubscription;
   StreamSubscription<CheckoutChargeSettings>?
       _checkoutChargeSettingsSubscription;
+  StreamSubscription<PaymentSettings>? _paymentSettingsSubscription;
 
   bool _isInitializing = true;
   bool _hasSeenOnboarding = false;
@@ -54,6 +55,8 @@ class AppState extends ChangeNotifier {
   CheckoutChargeSettings _checkoutChargeSettings =
       CheckoutChargeSettings.defaults;
   bool _hasLoadedCheckoutChargeSettings = false;
+  PaymentSettings _paymentSettings = PaymentSettings.defaults;
+  bool _hasLoadedPaymentSettings = false;
   String? _notificationsConfiguredForProfileKey;
   String _preferredLanguageCode = AppLanguageCodes.english;
 
@@ -71,6 +74,8 @@ class AppState extends ChangeNotifier {
   bool get hasBillImage => _billImagePath != null && _billImagePath!.isNotEmpty;
   CheckoutChargeSettings get checkoutChargeSettings => _checkoutChargeSettings;
   bool get hasLoadedCheckoutChargeSettings => _hasLoadedCheckoutChargeSettings;
+  PaymentSettings get paymentSettings => _paymentSettings;
+  bool get hasLoadedPaymentSettings => _hasLoadedPaymentSettings;
   int get cartCount =>
       _cartItems.fold<int>(0, (sum, item) => sum + item.quantity);
   double get cartSubtotal =>
@@ -107,9 +112,12 @@ class AppState extends ChangeNotifier {
     await _profileSubscription?.cancel();
     if (user == null) {
       await _checkoutChargeSettingsSubscription?.cancel();
+      await _paymentSettingsSubscription?.cancel();
       _profile = null;
       _checkoutChargeSettings = CheckoutChargeSettings.defaults;
       _hasLoadedCheckoutChargeSettings = false;
+      _paymentSettings = PaymentSettings.defaults;
+      _hasLoadedPaymentSettings = false;
       _notificationsConfiguredForProfileKey = null;
       unawaited(notificationService.detachUser());
       _isInitializing = false;
@@ -118,6 +126,7 @@ class AppState extends ChangeNotifier {
     }
 
     _watchCheckoutChargeSettings();
+    _watchPaymentSettings();
 
     if (authService.isBootstrapAdminUser(user)) {
       _profile = authService.bootstrapAdminProfile(user.uid);
@@ -155,6 +164,28 @@ class AppState extends ChangeNotifier {
       },
       onError: (_) {
         _hasLoadedCheckoutChargeSettings = true;
+        notifyListeners();
+      },
+    );
+  }
+
+  void _watchPaymentSettings() {
+    if (!firebaseAvailable) {
+      _paymentSettings = PaymentSettings.defaults;
+      _hasLoadedPaymentSettings = true;
+      return;
+    }
+    unawaited(_paymentSettingsSubscription?.cancel());
+    _hasLoadedPaymentSettings = false;
+    _paymentSettingsSubscription =
+        firestoreService.watchPaymentSettings().listen(
+      (settings) {
+        _paymentSettings = settings;
+        _hasLoadedPaymentSettings = true;
+        notifyListeners();
+      },
+      onError: (_) {
+        _hasLoadedPaymentSettings = true;
         notifyListeners();
       },
     );
@@ -274,6 +305,7 @@ class AppState extends ChangeNotifier {
     _profile = user;
     await _applyProfileLanguage(user);
     _watchCheckoutChargeSettings();
+    _watchPaymentSettings();
     notifyListeners();
     await _configureNotificationsForProfile(user);
     return user;
@@ -292,7 +324,10 @@ class AppState extends ChangeNotifier {
     _notificationsConfiguredForProfileKey = null;
     _checkoutChargeSettings = CheckoutChargeSettings.defaults;
     _hasLoadedCheckoutChargeSettings = false;
+    _paymentSettings = PaymentSettings.defaults;
+    _hasLoadedPaymentSettings = false;
     await _checkoutChargeSettingsSubscription?.cancel();
+    await _paymentSettingsSubscription?.cancel();
     await authService.logout();
     notifyListeners();
   }
@@ -315,6 +350,7 @@ class AppState extends ChangeNotifier {
     _preferredLanguageCode = languageCode;
     await localStorageService.savePreferredLanguageCode(languageCode);
     _watchCheckoutChargeSettings();
+    _watchPaymentSettings();
     notifyListeners();
     await _configureNotificationsForProfile(_profile);
   }
@@ -339,6 +375,35 @@ class AppState extends ChangeNotifier {
     await firestoreService.saveCheckoutChargeSettings(settings);
     _checkoutChargeSettings = settings;
     _hasLoadedCheckoutChargeSettings = true;
+    notifyListeners();
+  }
+
+  Future<void> updatePaymentSettings({
+    required bool codEnabled,
+    required bool bankTransferEnabled,
+    required String bankAccountName,
+    required String bankName,
+    required String bankBranch,
+    required String bankAccountNumber,
+  }) async {
+    if (bankAccountName.trim().isEmpty ||
+        bankName.trim().isEmpty ||
+        bankBranch.trim().isEmpty ||
+        bankAccountNumber.trim().isEmpty) {
+      throw StateError('Enter all bank transfer account details.');
+    }
+    final settings = PaymentSettings(
+      codEnabled: codEnabled,
+      bankTransferEnabled: bankTransferEnabled,
+      bankAccountName: bankAccountName.trim(),
+      bankName: bankName.trim(),
+      bankBranch: bankBranch.trim(),
+      bankAccountNumber: bankAccountNumber.trim(),
+      updatedAt: DateTime.now(),
+    );
+    await firestoreService.savePaymentSettings(settings);
+    _paymentSettings = settings;
+    _hasLoadedPaymentSettings = true;
     notifyListeners();
   }
 
@@ -463,6 +528,12 @@ class AppState extends ChangeNotifier {
       throw StateError(
           'Add products or upload a shopping list before checkout.');
     }
+    if (!_paymentSettings.hasAvailablePaymentMethod) {
+      throw StateError('Payment methods are temporarily unavailable.');
+    }
+    if (!_paymentSettings.isPaymentMethodEnabled(paymentMethod)) {
+      throw StateError('This payment method is temporarily unavailable.');
+    }
     if (paymentMethod == AppConstants.paymentMethodBankTransfer &&
         (paymentReceiptImagePath == null ||
             paymentReceiptImagePath.trim().isEmpty)) {
@@ -523,6 +594,7 @@ class AppState extends ChangeNotifier {
     _authSubscription?.cancel();
     _profileSubscription?.cancel();
     _checkoutChargeSettingsSubscription?.cancel();
+    _paymentSettingsSubscription?.cancel();
     unawaited(connectivityService.dispose());
     notificationService.dispose();
     super.dispose();

@@ -45,6 +45,8 @@ class FirestoreService {
 
   DocumentReference<Map<String, dynamic>> get _checkoutChargesDoc =>
       _appSettings.doc('checkout_charges');
+  DocumentReference<Map<String, dynamic>> get _paymentSettingsDoc =>
+      _appSettings.doc('payment_methods');
 
   Stream<CheckoutChargeSettings> watchCheckoutChargeSettings() {
     if (!_firebaseAvailable) {
@@ -61,6 +63,19 @@ class FirestoreService {
     CheckoutChargeSettings settings,
   ) {
     return _checkoutChargesDoc.set(settings.toMap(), SetOptions(merge: true));
+  }
+
+  Stream<PaymentSettings> watchPaymentSettings() {
+    if (!_firebaseAvailable) {
+      return Stream<PaymentSettings>.value(PaymentSettings.defaults);
+    }
+    return _paymentSettingsDoc.snapshots().map(
+          (doc) => PaymentSettings.fromMap(doc.data()),
+        );
+  }
+
+  Future<void> savePaymentSettings(PaymentSettings settings) {
+    return _paymentSettingsDoc.set(settings.toMap(), SetOptions(merge: true));
   }
 
   Future<UserProfile?> fetchUserProfile(String uid) async {
