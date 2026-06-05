@@ -385,6 +385,7 @@ class FirestoreService {
       ..remove('photoListAmount')
       ..remove('manualListAmount')
       ..remove('listAmountsReviewed')
+      ..remove('rejectionReason')
       ..remove('assignedDeliveryPhone');
   }
 
@@ -449,6 +450,7 @@ class FirestoreService {
     required OrderModel order,
     required String status,
     String? adminNotes,
+    String? rejectionReason,
     String? assignedDeliveryPerson,
     String? assignedDeliveryPhone,
   }) async {
@@ -457,11 +459,17 @@ class FirestoreService {
         order.orderStatus != 'Delivered') {
       throw StateError('Order must be out for delivery before delivered.');
     }
+    final normalizedRejectionReason =
+        status == 'Rejected' ? (rejectionReason ?? '').trim() : '';
+    if (status == 'Rejected' && normalizedRejectionReason.isEmpty) {
+      throw StateError('Enter the rejection reason before rejecting.');
+    }
 
     final now = DateTime.now();
     final updatedOrder = order.copyWith(
       orderStatus: status,
       adminNotes: adminNotes,
+      rejectionReason: normalizedRejectionReason,
       assignedDeliveryPerson: assignedDeliveryPerson,
       assignedDeliveryPhone: assignedDeliveryPhone,
     );
@@ -477,6 +485,7 @@ class FirestoreService {
     batch.update(_orders.doc(order.orderId), {
       'orderStatus': status,
       if (adminNotes != null) 'adminNotes': adminNotes,
+      'rejectionReason': normalizedRejectionReason,
       if (assignedDeliveryPerson != null)
         'assignedDeliveryPerson': assignedDeliveryPerson,
       if (assignedDeliveryPhone != null)

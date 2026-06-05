@@ -606,6 +606,7 @@ class AppState extends ChangeNotifier {
           : 'pending',
       orderStatus: 'Pending',
       adminNotes: '',
+      rejectionReason: '',
       assignedDeliveryPerson: '',
       assignedDeliveryPhone: '',
       createdAt: now,

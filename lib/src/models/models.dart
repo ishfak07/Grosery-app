@@ -796,6 +796,7 @@ class OrderModel {
     required this.paymentStatus,
     required this.orderStatus,
     required this.adminNotes,
+    required this.rejectionReason,
     required this.assignedDeliveryPerson,
     required this.assignedDeliveryPhone,
     required this.createdAt,
@@ -824,6 +825,7 @@ class OrderModel {
   final String paymentStatus;
   final String orderStatus;
   final String adminNotes;
+  final String rejectionReason;
   final String assignedDeliveryPerson;
   final String assignedDeliveryPhone;
   final DateTime createdAt;
@@ -858,6 +860,7 @@ class OrderModel {
     String? paymentReceiptImageUrl,
     String? orderStatus,
     String? adminNotes,
+    String? rejectionReason,
     String? assignedDeliveryPerson,
     String? assignedDeliveryPhone,
     double? cartItemsAmount,
@@ -894,6 +897,7 @@ class OrderModel {
       paymentStatus: paymentStatus ?? this.paymentStatus,
       orderStatus: orderStatus ?? this.orderStatus,
       adminNotes: adminNotes ?? this.adminNotes,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
       assignedDeliveryPerson:
           assignedDeliveryPerson ?? this.assignedDeliveryPerson,
       assignedDeliveryPhone:
@@ -929,6 +933,7 @@ class OrderModel {
       'paymentStatus': paymentStatus,
       'orderStatus': orderStatus,
       'adminNotes': adminNotes,
+      'rejectionReason': rejectionReason,
       'assignedDeliveryPerson': assignedDeliveryPerson,
       'assignedDeliveryPhone': assignedDeliveryPhone,
       'createdAt': _writeDate(createdAt),
@@ -1002,6 +1007,7 @@ class OrderModel {
       paymentStatus: map['paymentStatus'] as String? ?? 'pending',
       orderStatus: map['orderStatus'] as String? ?? 'Pending',
       adminNotes: map['adminNotes'] as String? ?? '',
+      rejectionReason: map['rejectionReason'] as String? ?? '',
       assignedDeliveryPerson: map['assignedDeliveryPerson'] as String? ?? '',
       assignedDeliveryPhone: map['assignedDeliveryPhone'] as String? ?? '',
       createdAt: _readDate(map['createdAt']),

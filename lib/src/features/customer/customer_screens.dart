@@ -3867,7 +3867,14 @@ class _AmountRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: Text(context.t(label), style: style)),
-          Text(value, style: style),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: style,
+            ),
+          ),
         ],
       ),
     );
@@ -4320,148 +4327,444 @@ class OrderTrackingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.read<AppState>();
-    return _CustomerScaffold(
-      title: 'Order tracking',
-      body: StreamBuilder<OrderModel?>(
-        stream: appState.firestoreService.watchOrder(orderId),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const _ListSkeleton(itemCount: 3);
-          }
-          final order = snapshot.data;
-          if (order == null) {
-            return const RefreshableCenteredContent(
+    return StreamBuilder<OrderModel?>(
+      stream: appState.firestoreService.watchOrder(orderId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _CustomerScaffold(
+            title: 'Order tracking',
+            body: _ListSkeleton(itemCount: 3),
+          );
+        }
+        final order = snapshot.data;
+        if (order == null) {
+          return const _CustomerScaffold(
+            title: 'Order tracking',
+            body: RefreshableCenteredContent(
               child: EmptyState(
                 icon: Icons.receipt_long,
                 title: 'Order not found',
                 message: 'This order may have been removed.',
               ),
-            );
-          }
-          return _CustomerScrollView(
+            ),
+          );
+        }
+        if (order.orderStatus == 'Delivered') {
+          return _CustomerScaffold(
+            title: 'Order delivered',
+            body: _DeliveredOrderCompletionView(order: order),
+          );
+        }
+        if (order.orderStatus == 'Rejected') {
+          return _CustomerScaffold(
+            title: 'Order rejected',
+            body: _RejectedOrderCompletionView(order: order),
+          );
+        }
+        return _CustomerScaffold(
+          title: 'Order tracking',
+          body: _ActiveOrderTrackingView(order: order),
+        );
+      },
+    );
+  }
+}
+
+class _ActiveOrderTrackingView extends StatelessWidget {
+  const _ActiveOrderTrackingView({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerScrollView(
+      children: [
+        _CustomerCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _CustomerCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            context.t(
-                              'Order {id}',
-                              values: {
-                                'id': order.orderId.substring(0, 8),
-                              },
-                            ),
-                            style: const TextStyle(
-                              color: _customerInk,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 18,
-                            ),
-                          ),
-                        ),
-                        StatusChip(status: order.orderStatus),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    _AmountRow('Total', order.totalAmount.money,
-                        isStrong: true),
-                    _AmountRow(
-                      'Payment',
-                      '${context.t(order.paymentMethod)} (${context.t(order.paymentStatus)})',
-                    ),
-                    if (order.hasAssignedDeliveryContact) ...[
-                      const Divider(height: 24),
-                      _DeliveryContactSummary(order: order),
-                    ],
-                    if (order.adminNotes.isNotEmpty) ...[
-                      const Divider(height: 24),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(
-                            Icons.sticky_note_2_outlined,
-                            color: _customerAccent,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              order.adminNotes,
-                              style: const TextStyle(
-                                color: _customerMuted,
-                                fontWeight: FontWeight.w700,
-                                height: 1.35,
-                              ),
-                            ),
-                          ),
-                        ],
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      context.t(
+                        'Order {id}',
+                        values: {
+                          'id': order.orderId.substring(0, 8),
+                        },
                       ),
-                    ],
-                  ],
-                ),
+                      style: const TextStyle(
+                        color: _customerInk,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                  StatusChip(status: order.orderStatus),
+                ],
               ),
-              if (_shouldShowFinalBillBreakdown(order)) ...[
-                const SizedBox(height: 16),
-                const _CustomerSectionHeader(title: 'Bill details'),
-                _OrderBillBreakdown(order: order),
+              const SizedBox(height: 14),
+              _AmountRow('Total', order.totalAmount.money, isStrong: true),
+              _AmountRow(
+                'Payment',
+                '${context.t(order.paymentMethod)} (${context.t(order.paymentStatus)})',
+              ),
+              if (order.hasAssignedDeliveryContact) ...[
+                const Divider(height: 24),
+                _DeliveryContactSummary(order: order),
               ],
-              const SizedBox(height: 16),
-              _TrackingSteps(status: order.orderStatus),
-              const SizedBox(height: 16),
-              if (order.items.isNotEmpty) ...[
-                const _CustomerSectionHeader(title: 'Items'),
-                for (final item in order.items) _OrderItemRow(item: item),
+              if (order.adminNotes.isNotEmpty) ...[
+                const Divider(height: 24),
+                _AdminNoteSummary(order: order),
               ],
-              if (order.hasManualList) ...[
-                if (order.items.isNotEmpty) const SizedBox(height: 12),
-                const _CustomerSectionHeader(title: 'Manual list'),
-                _ManualListPreview(text: order.effectiveManualListText),
-              ],
-              if (order.hasUpload) ...[
-                const SizedBox(height: 12),
-                const _CustomerSectionHeader(title: 'Uploaded list'),
-                const _AttachedListPriceNotice(),
-                const SizedBox(height: 10),
-                _CustomerCard(
-                  padding: EdgeInsets.zero,
-                  child: AspectRatio(
-                    aspectRatio: 1.4,
-                    child: ProductImage(url: order.uploadedImageUrl, radius: 8),
+            ],
+          ),
+        ),
+        if (_shouldShowFinalBillBreakdown(order)) ...[
+          const SizedBox(height: 16),
+          const _CustomerSectionHeader(title: 'Bill details'),
+          _OrderBillBreakdown(order: order),
+        ],
+        const SizedBox(height: 16),
+        _TrackingSteps(status: order.orderStatus),
+        const SizedBox(height: 16),
+        _OrderContentSections(
+          order: order,
+          showAttachedListPriceNotice: true,
+        ),
+        const SizedBox(height: 18),
+        _OrderSupportButton(order: order),
+      ],
+    );
+  }
+}
+
+class _DeliveredOrderCompletionView extends StatelessWidget {
+  const _DeliveredOrderCompletionView({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerScrollView(
+      children: [
+        _OrderTerminalHero(
+          icon: Icons.check_circle_outline,
+          color: _customerPrimary,
+          status: order.orderStatus,
+          title: 'Thank you for your order!',
+          message:
+              'Your groceries have been delivered successfully. We hope everything reached you safely.',
+        ),
+        const SizedBox(height: 16),
+        const _CustomerSectionHeader(
+          title: 'Amount details',
+          subtitle: 'Final bill summary',
+        ),
+        _OrderBillBreakdown(order: order),
+        const SizedBox(height: 12),
+        _OrderSummaryCard(order: order),
+        if (order.hasAssignedDeliveryContact) ...[
+          const SizedBox(height: 12),
+          _CustomerCard(child: _DeliveryContactSummary(order: order)),
+        ],
+        if (order.adminNotes.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _CustomerCard(child: _AdminNoteSummary(order: order)),
+        ],
+        const SizedBox(height: 16),
+        _OrderContentSections(order: order),
+        const SizedBox(height: 18),
+        ElevatedButton.icon(
+          onPressed: () =>
+              Navigator.of(context).popUntil((route) => route.isFirst),
+          icon: const Icon(Icons.home_outlined),
+          label: Text(context.t('Back home')),
+        ),
+        const SizedBox(height: 8),
+        _OrderSupportButton(order: order),
+      ],
+    );
+  }
+}
+
+class _RejectedOrderCompletionView extends StatelessWidget {
+  const _RejectedOrderCompletionView({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    final reason = order.rejectionReason.trim();
+    return _CustomerScrollView(
+      children: [
+        _OrderTerminalHero(
+          icon: Icons.cancel_outlined,
+          color: _customerDanger,
+          status: order.orderStatus,
+          title: 'Sorry, your order was rejected',
+          message:
+              'We could not complete this order. Please review the admin reason below.',
+        ),
+        const SizedBox(height: 16),
+        const _CustomerSectionHeader(title: 'Rejection reason'),
+        _CustomerCard(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.report_problem_outlined,
+                color: _customerDanger,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  reason.isEmpty
+                      ? context.t('Admin did not add a rejection reason.')
+                      : reason,
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w800,
+                    height: 1.4,
                   ),
                 ),
-              ],
-              if (order.hasPaymentReceipt) ...[
-                const SizedBox(height: 12),
-                const _CustomerSectionHeader(title: 'Payment receipt'),
-                _CustomerCard(
-                  padding: EdgeInsets.zero,
-                  child: AspectRatio(
-                    aspectRatio: 1.4,
-                    child: ProductImage(
-                      url: order.paymentReceiptImageUrl,
-                      radius: 8,
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 18),
-              OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => SupportScreen(
-                      initialSubject: 'Order ${order.orderId.substring(0, 8)}',
-                    ),
-                  ),
-                ),
-                icon: const Icon(Icons.support_agent),
-                label: Text(context.t('Contact admin')),
               ),
             ],
-          );
-        },
+          ),
+        ),
+        const SizedBox(height: 12),
+        _OrderSummaryCard(order: order),
+        if (order.adminNotes.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _CustomerCard(child: _AdminNoteSummary(order: order)),
+        ],
+        const SizedBox(height: 16),
+        _OrderContentSections(order: order),
+        const SizedBox(height: 18),
+        ElevatedButton.icon(
+          onPressed: () =>
+              Navigator.of(context).popUntil((route) => route.isFirst),
+          icon: const Icon(Icons.home_outlined),
+          label: Text(context.t('Back home')),
+        ),
+        const SizedBox(height: 8),
+        _OrderSupportButton(order: order),
+      ],
+    );
+  }
+}
+
+class _OrderTerminalHero extends StatelessWidget {
+  const _OrderTerminalHero({
+    required this.icon,
+    required this.color,
+    required this.status,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String status;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 38),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            context.t(title),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: _customerInk,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            context.t(message),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: _customerMuted,
+              fontWeight: FontWeight.w700,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          StatusChip(status: status),
+        ],
       ),
+    );
+  }
+}
+
+class _OrderSummaryCard extends StatelessWidget {
+  const _OrderSummaryCard({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerCard(
+      child: Column(
+        children: [
+          _AmountRow('Order', '#${order.orderId.substring(0, 8)}'),
+          _AmountRow('Status', context.t(order.orderStatus)),
+          _AmountRow(
+            'Payment',
+            '${context.t(order.paymentMethod)} (${context.t(order.paymentStatus)})',
+          ),
+          _AmountRow('Total', order.totalAmount.money, isStrong: true),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminNoteSummary extends StatelessWidget {
+  const _AdminNoteSummary({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(
+          Icons.sticky_note_2_outlined,
+          color: _customerAccent,
+          size: 20,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            order.adminNotes,
+            style: const TextStyle(
+              color: _customerMuted,
+              fontWeight: FontWeight.w700,
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OrderContentSections extends StatelessWidget {
+  const _OrderContentSections({
+    required this.order,
+    this.showAttachedListPriceNotice = false,
+  });
+
+  final OrderModel order;
+  final bool showAttachedListPriceNotice;
+
+  @override
+  Widget build(BuildContext context) {
+    final children = <Widget>[];
+
+    void addSectionGap() {
+      if (children.isNotEmpty) {
+        children.add(const SizedBox(height: 12));
+      }
+    }
+
+    if (order.items.isNotEmpty) {
+      addSectionGap();
+      children.add(const _CustomerSectionHeader(title: 'Items'));
+      for (var index = 0; index < order.items.length; index++) {
+        children.add(_OrderItemRow(item: order.items[index]));
+        if (index != order.items.length - 1) {
+          children.add(const SizedBox(height: 8));
+        }
+      }
+    }
+
+    if (order.hasManualList) {
+      addSectionGap();
+      children.add(const _CustomerSectionHeader(title: 'Manual list'));
+      children.add(_ManualListPreview(text: order.effectiveManualListText));
+    }
+
+    if (order.hasUpload) {
+      addSectionGap();
+      children.add(const _CustomerSectionHeader(title: 'Uploaded list'));
+      if (showAttachedListPriceNotice) {
+        children.add(const _AttachedListPriceNotice());
+        children.add(const SizedBox(height: 10));
+      }
+      children.add(
+        _CustomerCard(
+          padding: EdgeInsets.zero,
+          child: AspectRatio(
+            aspectRatio: 1.4,
+            child: ProductImage(url: order.uploadedImageUrl, radius: 8),
+          ),
+        ),
+      );
+    }
+
+    if (order.hasPaymentReceipt) {
+      addSectionGap();
+      children.add(const _CustomerSectionHeader(title: 'Payment receipt'));
+      children.add(
+        _CustomerCard(
+          padding: EdgeInsets.zero,
+          child: AspectRatio(
+            aspectRatio: 1.4,
+            child: ProductImage(
+              url: order.paymentReceiptImageUrl,
+              radius: 8,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (children.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    );
+  }
+}
+
+class _OrderSupportButton extends StatelessWidget {
+  const _OrderSupportButton({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => SupportScreen(
+            initialSubject: 'Order ${order.orderId.substring(0, 8)}',
+          ),
+        ),
+      ),
+      icon: const Icon(Icons.support_agent),
+      label: Text(context.t('Contact admin')),
     );
   }
 }

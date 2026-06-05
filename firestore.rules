@@ -121,6 +121,7 @@ service cloud.firestore {
         'paymentStatus',
         'orderStatus',
         'adminNotes',
+        'rejectionReason',
         'assignedDeliveryPerson',
         'assignedDeliveryPhone',
         'createdAt',
@@ -132,6 +133,7 @@ service cloud.firestore {
       return request.resource.data.userId == request.auth.uid &&
         request.resource.data.orderStatus == 'Pending' &&
         request.resource.data.adminNotes == '' &&
+        request.resource.data.get('rejectionReason', '') == '' &&
         request.resource.data.assignedDeliveryPerson == '' &&
         request.resource.data.get('assignedDeliveryPhone', '') == '' &&
         request.resource.data.paymentMethod in ['COD', 'Bank Transfer'] &&

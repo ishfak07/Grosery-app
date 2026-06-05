@@ -1459,7 +1459,8 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
       'Pending',
       'Accepted',
       'Out for Delivery',
-      'Delivered'
+      'Delivered',
+      'Rejected',
     ];
     return _AdminScaffold(
       title: 'Orders',
@@ -1651,6 +1652,7 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
   final _delivery = TextEditingController();
   final _service = TextEditingController();
   final _adminNotes = TextEditingController();
+  final _rejectionReason = TextEditingController();
   final _deliveryPerson = TextEditingController();
   final _deliveryPhone = TextEditingController();
   String _status = 'Pending';
@@ -1679,6 +1681,7 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
     _delivery.dispose();
     _service.dispose();
     _adminNotes.dispose();
+    _rejectionReason.dispose();
     _deliveryPerson.dispose();
     _deliveryPhone.dispose();
     super.dispose();
@@ -1696,6 +1699,7 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
     _delivery.text = order.deliveryCharge.toStringAsFixed(2);
     _service.text = order.serviceCharge.toStringAsFixed(2);
     _adminNotes.text = order.adminNotes;
+    _rejectionReason.text = order.rejectionReason;
     _deliveryPerson.text = order.assignedDeliveryPerson;
     _deliveryPhone.text = order.assignedDeliveryPhone;
     _status = order.orderStatus;
@@ -2102,6 +2106,18 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                           }
                         },
                       ),
+                      if (_status == 'Rejected') ...[
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _rejectionReason,
+                          minLines: 2,
+                          maxLines: 4,
+                          decoration: const InputDecoration(
+                            labelText: 'Rejection reason',
+                            prefixIcon: Icon(Icons.report_problem_outlined),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       TextField(
                         controller: _deliveryPerson,
@@ -2209,6 +2225,11 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
       showSnack(context, deliveryPhoneError);
       return;
     }
+    final rejectionReason = _rejectionReason.text.trim();
+    if (_status == 'Rejected' && rejectionReason.isEmpty) {
+      showSnack(context, 'Enter the rejection reason before rejecting.');
+      return;
+    }
     final deliveryPhone = deliveryPhoneText.isEmpty
         ? ''
         : PhoneUtils.normalizeSriLankanPhone(deliveryPhoneText);
@@ -2218,6 +2239,7 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
             order: order,
             status: _status,
             adminNotes: _adminNotes.text.trim(),
+            rejectionReason: _status == 'Rejected' ? rejectionReason : '',
             assignedDeliveryPerson: _deliveryPerson.text.trim(),
             assignedDeliveryPhone: deliveryPhone,
           );

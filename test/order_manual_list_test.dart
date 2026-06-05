@@ -139,6 +139,22 @@ void main() {
     expect(restored.assignedDeliveryPhone, '+94712345678');
     expect(restored.hasAssignedDeliveryContact, isTrue);
   });
+
+  test('order stores and restores rejection reason', () {
+    final order = _order(
+      orderStatus: 'Rejected',
+      rejectionReason: 'Outside delivery area today.',
+    );
+
+    final restored = OrderModel.fromMap(order.toMap(), order.orderId);
+    final legacyRestored = OrderModel.fromMap(
+      order.toMap()..remove('rejectionReason'),
+      order.orderId,
+    );
+
+    expect(restored.rejectionReason, 'Outside delivery area today.');
+    expect(legacyRestored.rejectionReason, '');
+  });
 }
 
 OrderModel _order({
@@ -147,6 +163,8 @@ OrderModel _order({
   String uploadedImageUrl = '',
   String assignedDeliveryPerson = '',
   String assignedDeliveryPhone = '',
+  String orderStatus = 'Pending',
+  String rejectionReason = '',
   double cartItemsAmount = 0,
   double photoListAmount = 0,
   double manualListAmount = 0,
@@ -176,8 +194,9 @@ OrderModel _order({
     totalAmount: totalAmount,
     paymentMethod: 'COD',
     paymentStatus: 'pending',
-    orderStatus: 'Pending',
+    orderStatus: orderStatus,
     adminNotes: '',
+    rejectionReason: rejectionReason,
     assignedDeliveryPerson: assignedDeliveryPerson,
     assignedDeliveryPhone: assignedDeliveryPhone,
     createdAt: now,
