@@ -342,8 +342,25 @@ class FirestoreService {
   }
 
   Future<void> createOrder(OrderModel order) async {
+    final orderMap = order.toMap();
+    try {
+      await _commitOrderCreate(order, orderMap);
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-denied') {
+        rethrow;
+      }
+      // Allows the updated app to keep creating orders until deployed
+      // Firestore rules include the split bill amount keys.
+      await _commitOrderCreate(order, _legacyOrderCreateMap(orderMap));
+    }
+  }
+
+  Future<void> _commitOrderCreate(
+    OrderModel order,
+    Map<String, dynamic> orderMap,
+  ) async {
     final batch = _db.batch();
-    batch.set(_orders.doc(order.orderId), order.toMap());
+    batch.set(_orders.doc(order.orderId), orderMap);
     final notificationId = _uuid.v4();
     batch.set(
       _notifications.doc(notificationId),
@@ -360,6 +377,14 @@ class FirestoreService {
       ).toMap(),
     );
     await batch.commit();
+  }
+
+  Map<String, dynamic> _legacyOrderCreateMap(Map<String, dynamic> orderMap) {
+    return Map<String, dynamic>.from(orderMap)
+      ..remove('cartItemsAmount')
+      ..remove('photoListAmount')
+      ..remove('manualListAmount')
+      ..remove('listAmountsReviewed');
   }
 
   Stream<List<OrderModel>> watchOrdersForUser(String userId) {
@@ -483,17 +508,28 @@ class FirestoreService {
 
   Future<void> updateOrderFinancials({
     required OrderModel order,
-    required double subtotal,
+    required double cartItemsAmount,
+    required double photoListAmount,
+    required double manualListAmount,
     required double deliveryCharge,
     required double serviceCharge,
     required String paymentStatus,
   }) async {
-    final normalizedSubtotal = _nonNegative(subtotal);
+    final normalizedCartItemsAmount = _nonNegative(cartItemsAmount);
+    final normalizedPhotoListAmount = _nonNegative(photoListAmount);
+    final normalizedManualListAmount = _nonNegative(manualListAmount);
+    final normalizedSubtotal = normalizedCartItemsAmount +
+        normalizedPhotoListAmount +
+        normalizedManualListAmount;
     final normalizedDeliveryCharge = _nonNegative(deliveryCharge);
     final normalizedServiceCharge = _nonNegative(serviceCharge);
     final total =
         normalizedSubtotal + normalizedDeliveryCharge + normalizedServiceCharge;
     final updatedOrder = order.copyWith(
+      cartItemsAmount: normalizedCartItemsAmount,
+      photoListAmount: normalizedPhotoListAmount,
+      manualListAmount: normalizedManualListAmount,
+      listAmountsReviewed: true,
       subtotal: normalizedSubtotal,
       deliveryCharge: normalizedDeliveryCharge,
       serviceCharge: normalizedServiceCharge,
@@ -509,6 +545,10 @@ class FirestoreService {
 
     final batch = _db.batch();
     batch.update(_orders.doc(order.orderId), {
+      'cartItemsAmount': normalizedCartItemsAmount,
+      'photoListAmount': normalizedPhotoListAmount,
+      'manualListAmount': normalizedManualListAmount,
+      'listAmountsReviewed': true,
       'subtotal': normalizedSubtotal,
       'deliveryCharge': normalizedDeliveryCharge,
       'serviceCharge': normalizedServiceCharge,
@@ -537,23 +577,27 @@ class FirestoreService {
 
   Future<void> updateAccountSaleManuals({
     required AccountSaleRecord record,
-    required double manualSalesAmount,
+    required double photoListSalesAmount,
+    required double manualListSalesAmount,
     required double costAmount,
     required double expenseAmount,
     required String accountNotes,
   }) async {
-    final normalizedManual = _nonNegative(manualSalesAmount);
+    final normalizedPhotoList = _nonNegative(photoListSalesAmount);
+    final normalizedManualList = _nonNegative(manualListSalesAmount);
     final normalizedCost = _nonNegative(costAmount);
     final normalizedExpense = _nonNegative(expenseAmount);
     final updatedRecord = record.copyWith(
-      manualSalesAmount: normalizedManual,
+      photoListSalesAmount: normalizedPhotoList,
+      manualListSalesAmount: normalizedManualList,
       manualSalesReviewed: true,
       costAmount: normalizedCost,
       expenseAmount: normalizedExpense,
       accountNotes: accountNotes.trim(),
       updatedAt: DateTime.now(),
     );
-    final orderSubtotal = record.cartSalesAmount + normalizedManual;
+    final orderSubtotal =
+        record.cartSalesAmount + normalizedPhotoList + normalizedManualList;
     final orderTotal =
         orderSubtotal + record.deliveryCharge + record.serviceCharge;
 
@@ -565,6 +609,10 @@ class FirestoreService {
     );
     if (record.orderId.isNotEmpty) {
       batch.update(_orders.doc(record.orderId), {
+        'cartItemsAmount': record.cartSalesAmount,
+        'photoListAmount': normalizedPhotoList,
+        'manualListAmount': normalizedManualList,
+        'listAmountsReviewed': true,
         'subtotal': orderSubtotal,
         'totalAmount': orderTotal,
         'updatedAt': FieldValue.serverTimestamp(),

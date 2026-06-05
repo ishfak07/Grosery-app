@@ -1644,6 +1644,9 @@ class AdminOrderDetailsScreen extends StatefulWidget {
 }
 
 class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
+  final _cartItemsAmount = TextEditingController();
+  final _photoListAmount = TextEditingController();
+  final _manualListAmount = TextEditingController();
   final _subtotal = TextEditingController();
   final _delivery = TextEditingController();
   final _service = TextEditingController();
@@ -1656,7 +1659,21 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
   var _isUpdatingStatus = false;
 
   @override
+  void initState() {
+    super.initState();
+    _cartItemsAmount.addListener(_updateSubtotalPreview);
+    _photoListAmount.addListener(_updateSubtotalPreview);
+    _manualListAmount.addListener(_updateSubtotalPreview);
+  }
+
+  @override
   void dispose() {
+    _cartItemsAmount.removeListener(_updateSubtotalPreview);
+    _photoListAmount.removeListener(_updateSubtotalPreview);
+    _manualListAmount.removeListener(_updateSubtotalPreview);
+    _cartItemsAmount.dispose();
+    _photoListAmount.dispose();
+    _manualListAmount.dispose();
     _subtotal.dispose();
     _delivery.dispose();
     _service.dispose();
@@ -1670,6 +1687,9 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
       return;
     }
     _loadedOrderId = order.orderId;
+    _cartItemsAmount.text = order.cartItemsAmount.toStringAsFixed(2);
+    _photoListAmount.text = order.photoListAmount.toStringAsFixed(2);
+    _manualListAmount.text = order.manualListAmount.toStringAsFixed(2);
     _subtotal.text = order.subtotal.toStringAsFixed(2);
     _delivery.text = order.deliveryCharge.toStringAsFixed(2);
     _service.text = order.serviceCharge.toStringAsFixed(2);
@@ -1677,6 +1697,24 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
     _deliveryPerson.text = order.assignedDeliveryPerson;
     _status = order.orderStatus;
     _paymentStatus = order.paymentStatus;
+  }
+
+  void _updateSubtotalPreview() {
+    final subtotal = _previewAmount(_cartItemsAmount) +
+        _previewAmount(_photoListAmount) +
+        _previewAmount(_manualListAmount);
+    final text = subtotal.toStringAsFixed(2);
+    if (_subtotal.text != text) {
+      _subtotal.text = text;
+    }
+  }
+
+  double _previewAmount(TextEditingController controller) {
+    final value = double.tryParse(controller.text.trim());
+    if (value == null || value.isNaN || value.isInfinite || value < 0) {
+      return 0;
+    }
+    return value;
   }
 
   @override
@@ -1937,11 +1975,43 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                         icon: Icons.request_quote_outlined,
                       ),
                       TextField(
-                        controller: _subtotal,
+                        controller: _cartItemsAmount,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
-                          labelText: 'Final subtotal',
-                          prefixIcon: Icon(Icons.shopping_bag_outlined),
+                          labelText: 'Cart items amount',
+                          prefixIcon: Icon(Icons.shopping_basket_outlined),
+                        ),
+                      ),
+                      if (order.hasUpload) ...[
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _photoListAmount,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Photo list amount',
+                            prefixIcon: Icon(Icons.image_outlined),
+                          ),
+                        ),
+                      ],
+                      if (order.hasManualList) ...[
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _manualListAmount,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Manual list amount',
+                            prefixIcon: Icon(Icons.edit_note),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _subtotal,
+                        readOnly: true,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Order subtotal',
+                          prefixIcon: Icon(Icons.calculate_outlined),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -2066,10 +2136,19 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
   }
 
   Future<void> _saveBill(OrderModel order) async {
-    final subtotal = _readNonNegativeAmount(_subtotal, 'subtotal');
+    final cartItemsAmount =
+        _readNonNegativeAmount(_cartItemsAmount, 'cart items amount');
+    final photoListAmount =
+        _readNonNegativeAmount(_photoListAmount, 'photo list amount');
+    final manualListAmount =
+        _readNonNegativeAmount(_manualListAmount, 'manual list amount');
     final delivery = _readNonNegativeAmount(_delivery, 'delivery charge');
     final service = _readNonNegativeAmount(_service, 'service charge');
-    if (subtotal == null || delivery == null || service == null) {
+    if (cartItemsAmount == null ||
+        photoListAmount == null ||
+        manualListAmount == null ||
+        delivery == null ||
+        service == null) {
       return;
     }
 
@@ -2077,7 +2156,9 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
     try {
       await context.read<AppState>().firestoreService.updateOrderFinancials(
             order: order,
-            subtotal: subtotal,
+            cartItemsAmount: cartItemsAmount,
+            photoListAmount: photoListAmount,
+            manualListAmount: manualListAmount,
             deliveryCharge: delivery,
             serviceCharge: service,
             paymentStatus: _paymentStatus,
@@ -2302,13 +2383,13 @@ class _AdminAccountsManagementScreenState
                       ),
                       const SizedBox(height: 18),
                       const _AdminSectionHeader(
-                        title: 'Manual sales entries',
+                        title: 'List sales entries',
                         icon: Icons.edit_note,
                       ),
                       if (manualRecords.isEmpty)
                         const _AdminCard(
                           child: Text(
-                            'No manual sales entries in this date range.',
+                            'No list sales entries in this date range.',
                             style: TextStyle(
                               color: _adminMuted,
                               fontWeight: FontWeight.w700,
@@ -2641,7 +2722,7 @@ class _AccountSummaryPanel extends StatelessWidget {
                       icon: Icons.filter_alt_outlined,
                     ),
                     _AdminPill(
-                      label: '${summary.pendingManualCount} pending manual',
+                      label: '${summary.pendingManualCount} pending list',
                       color: summary.pendingManualCount > 0
                           ? _adminWarning
                           : _adminPrimary,
@@ -2657,9 +2738,15 @@ class _AccountSummaryPanel extends StatelessWidget {
             final finance = Column(
               children: [
                 _AccountMiniMetric(
-                  label: 'Manual sales',
-                  value: summary.manualSales.money,
+                  label: 'Photo list',
+                  value: summary.photoListSales.money,
                   color: _adminWarning,
+                ),
+                const SizedBox(height: 10),
+                _AccountMiniMetric(
+                  label: 'Manual list',
+                  value: summary.manualListSales.money,
+                  color: _adminViolet,
                 ),
                 const SizedBox(height: 10),
                 _AccountMiniMetric(
@@ -2774,16 +2861,22 @@ class _AccountKpiGrid extends StatelessWidget {
         color: _adminPrimary,
       ),
       _AccountKpiTile(
-        label: 'List/manual',
-        value: summary.manualSales.money,
-        icon: Icons.edit_note,
+        label: 'Photo list',
+        value: summary.photoListSales.money,
+        icon: Icons.image_outlined,
         color: _adminWarning,
+      ),
+      _AccountKpiTile(
+        label: 'Manual list',
+        value: summary.manualListSales.money,
+        icon: Icons.edit_note,
+        color: _adminViolet,
       ),
       _AccountKpiTile(
         label: 'Delivery/service',
         value: summary.charges.money,
         icon: Icons.local_shipping_outlined,
-        color: _adminViolet,
+        color: _adminBlue,
       ),
       _AccountKpiTile(
         label: 'Costs',
@@ -2900,6 +2993,14 @@ class _AccountsSummary {
         0,
         (sum, record) => sum + record.manualSalesAmount,
       );
+  double get photoListSales => records.fold<double>(
+        0,
+        (sum, record) => sum + record.photoListSalesAmount,
+      );
+  double get manualListSales => records.fold<double>(
+        0,
+        (sum, record) => sum + record.manualListSalesAmount,
+      );
   double get charges => records.fold<double>(
         0,
         (sum, record) => sum + record.chargeAmount,
@@ -2948,8 +3049,12 @@ class _AccountReportCard extends StatelessWidget {
             value: summary.cartSales.money,
           ),
           _AccountReportRow(
-            label: 'Manual sales',
-            value: summary.manualSales.money,
+            label: 'Photo list sales',
+            value: summary.photoListSales.money,
+          ),
+          _AccountReportRow(
+            label: 'Manual list sales',
+            value: summary.manualListSales.money,
           ),
           _AccountReportRow(
             label: 'Delivery/service',
@@ -2960,7 +3065,7 @@ class _AccountReportCard extends StatelessWidget {
             value: summary.costs.money,
           ),
           _AccountReportRow(
-            label: 'Pending manual',
+            label: 'Pending list',
             value: summary.pendingManualCount.toString(),
           ),
           const Divider(height: 22),
@@ -3122,14 +3227,21 @@ class _AccountSaleTile extends StatelessWidget {
               ),
               if (record.needsManualSalesAmount)
                 const _AdminPill(
-                  label: 'Manual pending',
+                  label: 'List pending',
                   color: _adminWarning,
                   icon: Icons.edit_note,
                 )
-              else if (record.hasShoppingList || record.hasManualSales)
+              else if (record.hasPhotoList || record.photoListSalesAmount > 0)
                 _AdminPill(
-                  label: 'Manual ${record.manualSalesAmount.money}',
+                  label: 'Photo ${record.photoListSalesAmount.money}',
                   color: _adminWarning,
+                  icon: Icons.image_outlined,
+                ),
+              if (!record.needsManualSalesAmount &&
+                  (record.hasManualList || record.manualListSalesAmount > 0))
+                _AdminPill(
+                  label: 'Manual ${record.manualListSalesAmount.money}',
+                  color: _adminViolet,
                   icon: Icons.edit_note,
                 ),
             ],
@@ -3151,7 +3263,8 @@ class _AccountSaleEditorDialog extends StatefulWidget {
 }
 
 class _AccountSaleEditorDialogState extends State<_AccountSaleEditorDialog> {
-  late final TextEditingController _manualSales;
+  late final TextEditingController _photoListSales;
+  late final TextEditingController _manualListSales;
   late final TextEditingController _cost;
   late final TextEditingController _expense;
   late final TextEditingController _notes;
@@ -3160,8 +3273,11 @@ class _AccountSaleEditorDialogState extends State<_AccountSaleEditorDialog> {
   @override
   void initState() {
     super.initState();
-    _manualSales = TextEditingController(
-      text: widget.record.manualSalesAmount.toStringAsFixed(2),
+    _photoListSales = TextEditingController(
+      text: widget.record.photoListSalesAmount.toStringAsFixed(2),
+    );
+    _manualListSales = TextEditingController(
+      text: widget.record.manualListSalesAmount.toStringAsFixed(2),
     );
     _cost = TextEditingController(
       text: widget.record.costAmount.toStringAsFixed(2),
@@ -3174,7 +3290,8 @@ class _AccountSaleEditorDialogState extends State<_AccountSaleEditorDialog> {
 
   @override
   void dispose() {
-    _manualSales.dispose();
+    _photoListSales.dispose();
+    _manualListSales.dispose();
     _cost.dispose();
     _expense.dispose();
     _notes.dispose();
@@ -3183,11 +3300,13 @@ class _AccountSaleEditorDialogState extends State<_AccountSaleEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final projectedManual = _amountFrom(_manualSales.text);
+    final projectedPhotoList = _amountFrom(_photoListSales.text);
+    final projectedManualList = _amountFrom(_manualListSales.text);
     final projectedCost = _amountFrom(_cost.text);
     final projectedExpense = _amountFrom(_expense.text);
     final projectedSales = widget.record.cartSalesAmount +
-        projectedManual +
+        projectedPhotoList +
+        projectedManualList +
         widget.record.deliveryCharge +
         widget.record.serviceCharge;
     final projectedProfit = projectedSales - projectedCost - projectedExpense;
@@ -3220,10 +3339,20 @@ class _AccountSaleEditorDialogState extends State<_AccountSaleEditorDialog> {
                   'Delivery/service', widget.record.chargeAmount.money),
               const Divider(height: 22),
               TextField(
-                controller: _manualSales,
+                controller: _photoListSales,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Shopping list/manual sales',
+                  labelText: 'Photo list sales',
+                  prefixIcon: Icon(Icons.image_outlined),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _manualListSales,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Manual list sales',
                   prefixIcon: Icon(Icons.edit_note),
                 ),
                 onChanged: (_) => setState(() {}),
@@ -3308,7 +3437,8 @@ class _AccountSaleEditorDialogState extends State<_AccountSaleEditorDialog> {
     try {
       await context.read<AppState>().firestoreService.updateAccountSaleManuals(
             record: widget.record,
-            manualSalesAmount: _amountFrom(_manualSales.text),
+            photoListSalesAmount: _amountFrom(_photoListSales.text),
+            manualListSalesAmount: _amountFrom(_manualListSales.text),
             costAmount: _amountFrom(_cost.text),
             expenseAmount: _amountFrom(_expense.text),
             accountNotes: _notes.text,

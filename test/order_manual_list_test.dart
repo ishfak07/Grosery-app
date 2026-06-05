@@ -69,6 +69,21 @@ void main() {
     expect(restored.hasManualList, isFalse);
   });
 
+  test('old cart-only orders keep their stored subtotal as cart amount', () {
+    final map = _order(subtotal: 1150, totalAmount: 1400).toMap()
+      ..remove('cartItemsAmount')
+      ..remove('photoListAmount')
+      ..remove('manualListAmount')
+      ..remove('listAmountsReviewed');
+
+    final restored = OrderModel.fromMap(map, 'order-1');
+
+    expect(restored.cartItemsAmount, 1150);
+    expect(restored.photoListAmount, 0);
+    expect(restored.manualListAmount, 0);
+    expect(restored.subtotal, 1150);
+  });
+
   test('typed manual list orders need manual sales review in accounts', () {
     final order = _order(manualListText: '1 packet sugar');
 
@@ -82,11 +97,47 @@ void main() {
     expect(record.needsManualSalesAmount, isTrue);
     expect(record.orderMethod, 'Typed Shopping List');
   });
+
+  test('order subtotal is split into cart, photo, and manual list amounts', () {
+    final order = _order(
+      manualListText: '1 packet sugar',
+      uploadedImageUrl: 'https://example.com/list.jpg',
+      cartItemsAmount: 400,
+      photoListAmount: 250,
+      manualListAmount: 100,
+      listAmountsReviewed: true,
+      subtotal: 750,
+      totalAmount: 1000,
+    );
+
+    final restored = OrderModel.fromMap(order.toMap(), order.orderId);
+    final record = AccountSaleRecord.fromOrder(
+      restored,
+      deliveredAt: DateTime(2026),
+      now: DateTime(2026),
+    );
+
+    expect(restored.cartItemsAmount, 400);
+    expect(restored.photoListAmount, 250);
+    expect(restored.manualListAmount, 100);
+    expect(restored.subtotal, 750);
+    expect(record.cartSalesAmount, 400);
+    expect(record.photoListSalesAmount, 250);
+    expect(record.manualListSalesAmount, 100);
+    expect(record.needsManualSalesAmount, isFalse);
+  });
 }
 
 OrderModel _order({
   String orderNotes = '',
   String manualListText = '',
+  String uploadedImageUrl = '',
+  double cartItemsAmount = 0,
+  double photoListAmount = 0,
+  double manualListAmount = 0,
+  bool listAmountsReviewed = false,
+  double subtotal = 0,
+  double totalAmount = 250,
 }) {
   final now = DateTime(2026);
   return OrderModel(
@@ -96,14 +147,18 @@ OrderModel _order({
     customerPhone: '+94712345678',
     customerAddress: 'Puttalam',
     items: const <OrderItem>[],
-    uploadedImageUrl: '',
+    uploadedImageUrl: uploadedImageUrl,
     manualListText: manualListText,
     paymentReceiptImageUrl: '',
     orderNotes: orderNotes,
-    subtotal: 0,
+    cartItemsAmount: cartItemsAmount,
+    photoListAmount: photoListAmount,
+    manualListAmount: manualListAmount,
+    listAmountsReviewed: listAmountsReviewed,
+    subtotal: subtotal,
     deliveryCharge: 250,
     serviceCharge: 0,
-    totalAmount: 250,
+    totalAmount: totalAmount,
     paymentMethod: 'COD',
     paymentStatus: 'pending',
     orderStatus: 'Pending',

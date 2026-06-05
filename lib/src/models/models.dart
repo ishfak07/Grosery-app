@@ -36,6 +36,16 @@ DateTime? _readOptionalDate(dynamic value) {
 
 Object _writeDate(DateTime value) => Timestamp.fromDate(value);
 
+double _readNonNegativeDouble(dynamic value, [double fallback = 0]) {
+  if (value is num) {
+    final amount = value.toDouble();
+    if (!amount.isNaN && !amount.isInfinite && amount >= 0) {
+      return amount;
+    }
+  }
+  return fallback;
+}
+
 class CheckoutChargeSettings {
   const CheckoutChargeSettings({
     required this.deliveryCharge,
@@ -774,6 +784,10 @@ class OrderModel {
     required this.manualListText,
     required this.paymentReceiptImageUrl,
     required this.orderNotes,
+    required this.cartItemsAmount,
+    required this.photoListAmount,
+    required this.manualListAmount,
+    required this.listAmountsReviewed,
     required this.subtotal,
     required this.deliveryCharge,
     required this.serviceCharge,
@@ -797,6 +811,10 @@ class OrderModel {
   final String manualListText;
   final String paymentReceiptImageUrl;
   final String orderNotes;
+  final double cartItemsAmount;
+  final double photoListAmount;
+  final double manualListAmount;
+  final bool listAmountsReviewed;
   final double subtotal;
   final double deliveryCharge;
   final double serviceCharge;
@@ -820,6 +838,8 @@ class OrderModel {
   }
 
   bool get hasManualList => effectiveManualListText.isNotEmpty;
+  double get splitSubtotal =>
+      cartItemsAmount + photoListAmount + manualListAmount;
   List<String> get manualListLines => effectiveManualListText
       .split(RegExp(r'\r?\n'))
       .map((line) => line.trim())
@@ -834,6 +854,10 @@ class OrderModel {
     String? orderStatus,
     String? adminNotes,
     String? assignedDeliveryPerson,
+    double? cartItemsAmount,
+    double? photoListAmount,
+    double? manualListAmount,
+    bool? listAmountsReviewed,
     double? subtotal,
     double? deliveryCharge,
     double? serviceCharge,
@@ -852,6 +876,10 @@ class OrderModel {
       paymentReceiptImageUrl:
           paymentReceiptImageUrl ?? this.paymentReceiptImageUrl,
       orderNotes: orderNotes,
+      cartItemsAmount: cartItemsAmount ?? this.cartItemsAmount,
+      photoListAmount: photoListAmount ?? this.photoListAmount,
+      manualListAmount: manualListAmount ?? this.manualListAmount,
+      listAmountsReviewed: listAmountsReviewed ?? this.listAmountsReviewed,
       subtotal: subtotal ?? this.subtotal,
       deliveryCharge: deliveryCharge ?? this.deliveryCharge,
       serviceCharge: serviceCharge ?? this.serviceCharge,
@@ -881,6 +909,10 @@ class OrderModel {
         orderNotes: customerNotes,
         manualListText: effectiveManualListText,
       ),
+      'cartItemsAmount': cartItemsAmount,
+      'photoListAmount': photoListAmount,
+      'manualListAmount': manualListAmount,
+      'listAmountsReviewed': listAmountsReviewed,
       'subtotal': subtotal,
       'deliveryCharge': deliveryCharge,
       'serviceCharge': serviceCharge,
@@ -898,22 +930,62 @@ class OrderModel {
   factory OrderModel.fromMap(Map<String, dynamic> map, String id) {
     final rawOrderNotes = map['orderNotes'] as String? ?? '';
     final storedManualListText = map['manualListText'] as String?;
+    final manualListText =
+        storedManualListText ?? _manualListTextFromNotes(rawOrderNotes);
+    final items = (map['items'] as List<dynamic>? ?? const <dynamic>[])
+        .whereType<Map<String, dynamic>>()
+        .map(OrderItem.fromMap)
+        .toList();
+    final uploadedImageUrl = map['uploadedImageUrl'] as String? ?? '';
+    final storedSubtotal = _readNonNegativeDouble(map['subtotal']);
+    final derivedCartAmount = items.fold<double>(
+      0.0,
+      (total, item) => total + item.lineTotal,
+    );
+    final hasPhotoList = uploadedImageUrl.isNotEmpty;
+    final hasManualList = manualListText.trim().isNotEmpty;
+    final hasShoppingList = hasPhotoList || hasManualList;
+    final hasSplitAmounts = map.containsKey('cartItemsAmount') ||
+        map.containsKey('photoListAmount') ||
+        map.containsKey('manualListAmount');
+    final cartItemsAmount = hasSplitAmounts
+        ? _readNonNegativeDouble(map['cartItemsAmount'], derivedCartAmount)
+        : hasShoppingList
+            ? derivedCartAmount
+            : storedSubtotal;
+    final unsplitListAmount = storedSubtotal > cartItemsAmount
+        ? storedSubtotal - cartItemsAmount
+        : 0.0;
+    final photoListAmount = hasSplitAmounts
+        ? _readNonNegativeDouble(map['photoListAmount'])
+        : hasPhotoList
+            ? unsplitListAmount
+            : 0.0;
+    final manualListAmount = hasSplitAmounts
+        ? _readNonNegativeDouble(map['manualListAmount'])
+        : !hasPhotoList && hasManualList
+            ? unsplitListAmount
+            : 0.0;
+    final splitSubtotal = cartItemsAmount + photoListAmount + manualListAmount;
+    final subtotal = hasSplitAmounts ? splitSubtotal : storedSubtotal;
     return OrderModel(
       orderId: map['orderId'] as String? ?? id,
       userId: map['userId'] as String? ?? '',
       customerName: map['customerName'] as String? ?? '',
       customerPhone: map['customerPhone'] as String? ?? '',
       customerAddress: map['customerAddress'] as String? ?? '',
-      items: (map['items'] as List<dynamic>? ?? const <dynamic>[])
-          .whereType<Map<String, dynamic>>()
-          .map(OrderItem.fromMap)
-          .toList(),
-      uploadedImageUrl: map['uploadedImageUrl'] as String? ?? '',
-      manualListText:
-          storedManualListText ?? _manualListTextFromNotes(rawOrderNotes),
+      items: items,
+      uploadedImageUrl: uploadedImageUrl,
+      manualListText: manualListText,
       paymentReceiptImageUrl: map['paymentReceiptImageUrl'] as String? ?? '',
       orderNotes: _orderNotesWithoutManualList(rawOrderNotes),
-      subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0,
+      cartItemsAmount: cartItemsAmount,
+      photoListAmount: photoListAmount,
+      manualListAmount: manualListAmount,
+      listAmountsReviewed: map['listAmountsReviewed'] as bool? ??
+          ((!hasPhotoList && !hasManualList) ||
+              photoListAmount + manualListAmount > 0),
+      subtotal: subtotal,
       deliveryCharge: (map['deliveryCharge'] as num?)?.toDouble() ?? 0,
       serviceCharge: (map['serviceCharge'] as num?)?.toDouble() ?? 0,
       totalAmount: (map['totalAmount'] as num?)?.toDouble() ?? 0,
@@ -970,10 +1042,13 @@ class AccountSaleRecord {
     required this.customerAddress,
     required this.orderMethod,
     required this.hasCartItems,
+    required this.hasPhotoList,
+    required this.hasManualList,
     required this.hasShoppingList,
     required this.itemCount,
     required this.cartSalesAmount,
-    required this.manualSalesAmount,
+    required this.photoListSalesAmount,
+    required this.manualListSalesAmount,
     required this.manualSalesReviewed,
     required this.deliveryCharge,
     required this.serviceCharge,
@@ -998,10 +1073,13 @@ class AccountSaleRecord {
   final String customerAddress;
   final String orderMethod;
   final bool hasCartItems;
+  final bool hasPhotoList;
+  final bool hasManualList;
   final bool hasShoppingList;
   final int itemCount;
   final double cartSalesAmount;
-  final double manualSalesAmount;
+  final double photoListSalesAmount;
+  final double manualListSalesAmount;
   final bool manualSalesReviewed;
   final double deliveryCharge;
   final double serviceCharge;
@@ -1017,6 +1095,7 @@ class AccountSaleRecord {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  double get manualSalesAmount => photoListSalesAmount + manualListSalesAmount;
   double get itemSalesAmount => cartSalesAmount + manualSalesAmount;
   double get chargeAmount => deliveryCharge + serviceCharge;
   double get totalSalesAmount => itemSalesAmount + chargeAmount;
@@ -1027,7 +1106,8 @@ class AccountSaleRecord {
   bool get hasProfitInputs => costAmount > 0 || expenseAmount > 0;
 
   AccountSaleRecord copyWith({
-    double? manualSalesAmount,
+    double? photoListSalesAmount,
+    double? manualListSalesAmount,
     bool? manualSalesReviewed,
     double? costAmount,
     double? expenseAmount,
@@ -1045,10 +1125,14 @@ class AccountSaleRecord {
       customerAddress: customerAddress,
       orderMethod: orderMethod,
       hasCartItems: hasCartItems,
+      hasPhotoList: hasPhotoList,
+      hasManualList: hasManualList,
       hasShoppingList: hasShoppingList,
       itemCount: itemCount,
       cartSalesAmount: cartSalesAmount,
-      manualSalesAmount: manualSalesAmount ?? this.manualSalesAmount,
+      photoListSalesAmount: photoListSalesAmount ?? this.photoListSalesAmount,
+      manualListSalesAmount:
+          manualListSalesAmount ?? this.manualListSalesAmount,
       manualSalesReviewed: manualSalesReviewed ?? this.manualSalesReviewed,
       deliveryCharge: deliveryCharge,
       serviceCharge: serviceCharge,
@@ -1076,9 +1160,13 @@ class AccountSaleRecord {
       'customerAddress': customerAddress,
       'orderMethod': orderMethod,
       'hasCartItems': hasCartItems,
+      'hasPhotoList': hasPhotoList,
+      'hasManualList': hasManualList,
       'hasShoppingList': hasShoppingList,
       'itemCount': itemCount,
       'cartSalesAmount': cartSalesAmount,
+      'photoListSalesAmount': photoListSalesAmount,
+      'manualListSalesAmount': manualListSalesAmount,
       'manualSalesAmount': manualSalesAmount,
       'manualSalesReviewed': manualSalesReviewed,
       'deliveryCharge': deliveryCharge,
@@ -1113,17 +1201,17 @@ class AccountSaleRecord {
     final hasPhotoList = order.hasUpload;
     final hasManualList = order.hasManualList;
     final hasShoppingList = order.hasShoppingList;
-    final cartSalesAmount = order.items.fold<double>(
-      0,
-      (total, item) => total + item.lineTotal,
-    );
-    final derivedManualSalesAmount =
-        order.subtotal > cartSalesAmount ? order.subtotal - cartSalesAmount : 0;
-    final manualSalesAmount = preserveManualSalesAmount && existing != null
-        ? existing.manualSalesAmount
-        : derivedManualSalesAmount.toDouble();
-    final manualSalesReviewed =
-        existing?.manualSalesReviewed == true || manualSalesAmount > 0;
+    final cartSalesAmount = order.cartItemsAmount;
+    final photoListSalesAmount = preserveManualSalesAmount && existing != null
+        ? existing.photoListSalesAmount
+        : order.photoListAmount;
+    final manualListSalesAmount = preserveManualSalesAmount && existing != null
+        ? existing.manualListSalesAmount
+        : order.manualListAmount;
+    final manualSalesAmount = photoListSalesAmount + manualListSalesAmount;
+    final manualSalesReviewed = existing?.manualSalesReviewed == true ||
+        order.listAmountsReviewed ||
+        manualSalesAmount > 0;
 
     return AccountSaleRecord(
       recordId: order.orderId,
@@ -1138,11 +1226,14 @@ class AccountSaleRecord {
         hasManualList: hasManualList,
       ),
       hasCartItems: hasCartItems,
+      hasPhotoList: hasPhotoList,
+      hasManualList: hasManualList,
       hasShoppingList: hasShoppingList,
       itemCount:
           order.items.fold<int>(0, (total, item) => total + item.quantity),
       cartSalesAmount: cartSalesAmount,
-      manualSalesAmount: manualSalesAmount,
+      photoListSalesAmount: photoListSalesAmount,
+      manualListSalesAmount: manualListSalesAmount,
       manualSalesReviewed: !hasShoppingList || manualSalesReviewed,
       deliveryCharge: order.deliveryCharge,
       serviceCharge: order.serviceCharge,
@@ -1161,6 +1252,28 @@ class AccountSaleRecord {
   }
 
   factory AccountSaleRecord.fromMap(Map<String, dynamic> map, String id) {
+    final orderMethod = map['orderMethod'] as String? ?? 'Cart checkout';
+    final hasPhotoList = (map['hasPhotoList'] as bool?) ??
+        orderMethod.toLowerCase().contains('photo');
+    final hasManualList = (map['hasManualList'] as bool?) ??
+        (orderMethod.toLowerCase().contains('typed') ||
+            orderMethod.toLowerCase().contains('manual'));
+    final hasShoppingList =
+        (map['hasShoppingList'] as bool?) ?? (hasPhotoList || hasManualList);
+    final legacyManualSalesAmount =
+        _readNonNegativeDouble(map['manualSalesAmount']);
+    final hasSplitSalesAmounts = map.containsKey('photoListSalesAmount') ||
+        map.containsKey('manualListSalesAmount');
+    final photoListSalesAmount = hasSplitSalesAmounts
+        ? _readNonNegativeDouble(map['photoListSalesAmount'])
+        : hasPhotoList
+            ? legacyManualSalesAmount
+            : 0.0;
+    final manualListSalesAmount = hasSplitSalesAmounts
+        ? _readNonNegativeDouble(map['manualListSalesAmount'])
+        : !hasPhotoList && hasManualList
+            ? legacyManualSalesAmount
+            : 0.0;
     return AccountSaleRecord(
       recordId: map['recordId'] as String? ?? id,
       orderId: map['orderId'] as String? ?? id,
@@ -1168,15 +1281,17 @@ class AccountSaleRecord {
       customerName: map['customerName'] as String? ?? '',
       customerPhone: map['customerPhone'] as String? ?? '',
       customerAddress: map['customerAddress'] as String? ?? '',
-      orderMethod: map['orderMethod'] as String? ?? 'Cart checkout',
+      orderMethod: orderMethod,
       hasCartItems: map['hasCartItems'] as bool? ?? true,
-      hasShoppingList: map['hasShoppingList'] as bool? ?? false,
+      hasPhotoList: hasPhotoList,
+      hasManualList: hasManualList,
+      hasShoppingList: hasShoppingList,
       itemCount: (map['itemCount'] as num?)?.toInt() ?? 0,
       cartSalesAmount: (map['cartSalesAmount'] as num?)?.toDouble() ?? 0,
-      manualSalesAmount: (map['manualSalesAmount'] as num?)?.toDouble() ?? 0,
+      photoListSalesAmount: photoListSalesAmount,
+      manualListSalesAmount: manualListSalesAmount,
       manualSalesReviewed: map['manualSalesReviewed'] as bool? ??
-          (map['hasShoppingList'] != true ||
-              ((map['manualSalesAmount'] as num?)?.toDouble() ?? 0) > 0),
+          (!hasShoppingList || legacyManualSalesAmount > 0),
       deliveryCharge: (map['deliveryCharge'] as num?)?.toDouble() ?? 0,
       serviceCharge: (map['serviceCharge'] as num?)?.toDouble() ?? 0,
       costAmount: (map['costAmount'] as num?)?.toDouble() ?? 0,

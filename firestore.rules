@@ -73,7 +73,7 @@ service cloud.firestore {
       ];
     }
 
-    function orderCreateKeys() {
+    function legacyOrderCreateKeys() {
       return [
         'orderId',
         'userId',
@@ -98,10 +98,37 @@ service cloud.firestore {
       ];
     }
 
+    function orderCreateKeys() {
+      return [
+        'orderId',
+        'userId',
+        'customerName',
+        'customerPhone',
+        'customerAddress',
+        'items',
+        'uploadedImageUrl',
+        'paymentReceiptImageUrl',
+        'orderNotes',
+        'cartItemsAmount',
+        'photoListAmount',
+        'manualListAmount',
+        'listAmountsReviewed',
+        'subtotal',
+        'deliveryCharge',
+        'serviceCharge',
+        'totalAmount',
+        'paymentMethod',
+        'paymentStatus',
+        'orderStatus',
+        'adminNotes',
+        'assignedDeliveryPerson',
+        'createdAt',
+        'updatedAt'
+      ];
+    }
+
     function isValidOrderCreate() {
-      return request.resource.data.keys().hasOnly(orderCreateKeys()) &&
-        request.resource.data.keys().hasAll(orderCreateKeys()) &&
-        request.resource.data.userId == request.auth.uid &&
+      return request.resource.data.userId == request.auth.uid &&
         request.resource.data.orderStatus == 'Pending' &&
         request.resource.data.adminNotes == '' &&
         request.resource.data.assignedDeliveryPerson == '' &&
@@ -111,7 +138,21 @@ service cloud.firestore {
         request.resource.data.subtotal >= 0 &&
         request.resource.data.deliveryCharge >= 0 &&
         request.resource.data.serviceCharge >= 0 &&
-        request.resource.data.totalAmount >= 0;
+        request.resource.data.totalAmount >= 0 &&
+        (
+          (
+            request.resource.data.keys().hasOnly(orderCreateKeys()) &&
+            request.resource.data.keys().hasAll(orderCreateKeys()) &&
+            request.resource.data.cartItemsAmount >= 0 &&
+            request.resource.data.photoListAmount >= 0 &&
+            request.resource.data.manualListAmount >= 0 &&
+            request.resource.data.listAmountsReviewed == false
+          ) ||
+          (
+            request.resource.data.keys().hasOnly(legacyOrderCreateKeys()) &&
+            request.resource.data.keys().hasAll(legacyOrderCreateKeys())
+          )
+        );
     }
 
     function validUserAdminNotification() {
