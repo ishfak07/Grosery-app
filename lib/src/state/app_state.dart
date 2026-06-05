@@ -205,11 +205,6 @@ class AppState extends ChangeNotifier {
       _notificationsConfiguredForProfileKey = profileKey;
       await notificationService.configureForUser(
         uid: profile.uid,
-        role: profile.role,
-        notifications: firestoreService.watchNotifications(
-          userId: profile.uid,
-          role: profile.role,
-        ),
       );
     }
   }

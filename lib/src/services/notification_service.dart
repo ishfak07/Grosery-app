@@ -51,10 +51,7 @@ class NotificationService {
 
   final bool _firebaseAvailable;
   String? _configuredUserId;
-  String? _configuredNotificationListenerKey;
   StreamSubscription<String>? _tokenRefreshSubscription;
-  StreamSubscription<List<AppNotification>>? _appNotificationSubscription;
-  final _knownAppNotificationIds = <String>{};
   var _foregroundListenerConfigured = false;
 
   static void registerBackgroundHandler() {
@@ -80,8 +77,6 @@ class NotificationService {
 
   Future<void> configureForUser({
     required String uid,
-    required String role,
-    required Stream<List<AppNotification>> notifications,
   }) async {
     if (!_firebaseAvailable) {
       return;
@@ -102,11 +97,6 @@ class NotificationService {
     }
 
     await _trySaveCurrentToken(uid);
-    await _configureAppNotificationListener(
-      uid: uid,
-      role: role,
-      notifications: notifications,
-    );
   }
 
   Future<void> clearTokenForUser(String uid) async {
@@ -158,12 +148,8 @@ class NotificationService {
 
   Future<void> detachUser() async {
     _configuredUserId = null;
-    _configuredNotificationListenerKey = null;
-    _knownAppNotificationIds.clear();
     await _tokenRefreshSubscription?.cancel();
     _tokenRefreshSubscription = null;
-    await _appNotificationSubscription?.cancel();
-    _appNotificationSubscription = null;
   }
 
   static Future<void> _configureLocalNotifications() async {
@@ -317,48 +303,6 @@ class NotificationService {
     } catch (_) {
       // Token persistence is best-effort and should never block app usage.
     }
-  }
-
-  Future<void> _configureAppNotificationListener({
-    required String uid,
-    required String role,
-    required Stream<List<AppNotification>> notifications,
-  }) async {
-    final listenerKey = '$uid:$role';
-    if (_configuredNotificationListenerKey == listenerKey) {
-      return;
-    }
-
-    _configuredNotificationListenerKey = listenerKey;
-    _knownAppNotificationIds.clear();
-    await _appNotificationSubscription?.cancel();
-    var hasLoadedInitialSnapshot = false;
-
-    _appNotificationSubscription = notifications.listen(
-      (items) {
-        if (!hasLoadedInitialSnapshot) {
-          _knownAppNotificationIds
-            ..clear()
-            ..addAll(items.map((item) => item.notificationId));
-          hasLoadedInitialSnapshot = true;
-          return;
-        }
-
-        final newItems = items
-            .where(
-              (item) => _knownAppNotificationIds.add(item.notificationId),
-            )
-            .toList()
-          ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-
-        for (final notification in newItems) {
-          unawaited(showAppNotification(notification));
-        }
-      },
-      onError: (_) {
-        // Firestore streams recover automatically when connectivity returns.
-      },
-    );
   }
 
   static Future<void> showLocalNotification(RemoteMessage message) async {
