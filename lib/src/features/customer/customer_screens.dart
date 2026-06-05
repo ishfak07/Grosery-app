@@ -559,7 +559,7 @@ class CustomerHomeScreen extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _HomeActionTile(
-                      icon: Icons.storefront,
+                      icon: Icons.shopping_bag_outlined,
                       title: 'Items',
                       subtitle: 'Pick the items you need.',
                       accent: _customerPrimary,
@@ -572,10 +572,10 @@ class CustomerHomeScreen extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _HomeActionTile(
-                      icon: Icons.receipt_long,
+                      icon: Icons.document_scanner_outlined,
                       title: 'Photo list',
                       subtitle: 'Send any grocery list',
-                      accent: _customerAccent,
+                      accent: _customerBlue,
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(
                             builder: (_) => const UploadBillScreen()),
@@ -1451,48 +1451,146 @@ class _HomeActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _CustomerCard(
-      padding: const EdgeInsets.all(14),
-      onTap: onTap,
-      child: SizedBox(
-        height: 112,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: accent.withOpacity(0.11),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: accent, size: 24),
-            ),
-            const Spacer(),
-            Text(
-              context.t(title),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: _customerInk,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              context.t(subtitle),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: _customerMuted,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                height: 1.2,
-              ),
+    final radius = BorderRadius.circular(8);
+    return _Pressable(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        height: 144,
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          border: Border.all(color: const Color(0xFFDCE8DF)),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white,
+              Color.lerp(Colors.white, accent, 0.055)!,
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF163526).withOpacity(0.08),
+              blurRadius: 22,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: radius,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: radius,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: const BorderRadius.horizontal(
+                        left: Radius.circular(8),
+                      ),
+                    ),
+                    child: const SizedBox(width: 5),
+                  ),
+                ),
+                Positioned(
+                  right: -16,
+                  bottom: -18,
+                  child: Icon(
+                    icon,
+                    color: accent.withOpacity(0.065),
+                    size: 92,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(15, 14, 13, 13),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          _HomeActionIconBadge(icon: icon, accent: accent),
+                          const Spacer(),
+                          Container(
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.72),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: accent.withOpacity(0.18),
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.arrow_forward,
+                              color: accent,
+                              size: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                      Text(
+                        context.t(title),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: _customerInk,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0,
+                                ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        context.t(subtitle),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _customerMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          height: 1.22,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
+    );
+  }
+}
+
+class _HomeActionIconBadge extends StatelessWidget {
+  const _HomeActionIconBadge({
+    required this.icon,
+    required this.accent,
+  });
+
+  final IconData icon;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        color: accent.withOpacity(0.12),
+        border: Border.all(color: accent.withOpacity(0.16)),
+      ),
+      child: Icon(icon, color: accent, size: 25),
     );
   }
 }
