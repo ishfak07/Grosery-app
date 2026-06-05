@@ -4398,6 +4398,11 @@ class OrderTrackingScreen extends StatelessWidget {
                   ],
                 ),
               ),
+              if (_shouldShowFinalBillBreakdown(order)) ...[
+                const SizedBox(height: 16),
+                const _CustomerSectionHeader(title: 'Bill details'),
+                _OrderBillBreakdown(order: order),
+              ],
               const SizedBox(height: 16),
               _TrackingSteps(status: order.orderStatus),
               const SizedBox(height: 16),
@@ -4452,6 +4457,45 @@ class OrderTrackingScreen extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+bool _shouldShowFinalBillBreakdown(OrderModel order) {
+  const finalBillStatuses = <String>{
+    'Bill Updated',
+    'Out for Delivery',
+    'Delivered',
+  };
+  return finalBillStatuses.contains(order.orderStatus) ||
+      (order.hasShoppingList && order.listAmountsReviewed);
+}
+
+class _OrderBillBreakdown extends StatelessWidget {
+  const _OrderBillBreakdown({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerCard(
+      child: Column(
+        children: [
+          _AmountRow('Cart items', order.cartItemsAmount.money),
+          _AmountRow('Photo list items', order.photoListAmount.money),
+          _AmountRow('Manual list items', order.manualListAmount.money),
+          const Divider(height: 20),
+          _AmountRow('Order subtotal', order.subtotal.money),
+          _AmountRow('Delivery charge', order.deliveryCharge.money),
+          _AmountRow('Service charge', order.serviceCharge.money),
+          const Divider(height: 20),
+          _AmountRow(
+            'Grand total',
+            order.totalAmount.money,
+            isStrong: true,
+          ),
+        ],
       ),
     );
   }
