@@ -797,6 +797,7 @@ class OrderModel {
     required this.orderStatus,
     required this.adminNotes,
     required this.assignedDeliveryPerson,
+    required this.assignedDeliveryPhone,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -824,6 +825,7 @@ class OrderModel {
   final String orderStatus;
   final String adminNotes;
   final String assignedDeliveryPerson;
+  final String assignedDeliveryPhone;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -847,6 +849,9 @@ class OrderModel {
       .toList();
   bool get hasShoppingList => hasUpload || hasManualList;
   bool get hasPaymentReceipt => paymentReceiptImageUrl.isNotEmpty;
+  bool get hasAssignedDeliveryContact =>
+      assignedDeliveryPerson.trim().isNotEmpty ||
+      assignedDeliveryPhone.trim().isNotEmpty;
 
   OrderModel copyWith({
     List<OrderItem>? items,
@@ -854,6 +859,7 @@ class OrderModel {
     String? orderStatus,
     String? adminNotes,
     String? assignedDeliveryPerson,
+    String? assignedDeliveryPhone,
     double? cartItemsAmount,
     double? photoListAmount,
     double? manualListAmount,
@@ -890,6 +896,8 @@ class OrderModel {
       adminNotes: adminNotes ?? this.adminNotes,
       assignedDeliveryPerson:
           assignedDeliveryPerson ?? this.assignedDeliveryPerson,
+      assignedDeliveryPhone:
+          assignedDeliveryPhone ?? this.assignedDeliveryPhone,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
     );
@@ -922,6 +930,7 @@ class OrderModel {
       'orderStatus': orderStatus,
       'adminNotes': adminNotes,
       'assignedDeliveryPerson': assignedDeliveryPerson,
+      'assignedDeliveryPhone': assignedDeliveryPhone,
       'createdAt': _writeDate(createdAt),
       'updatedAt': _writeDate(updatedAt),
     };
@@ -994,6 +1003,7 @@ class OrderModel {
       orderStatus: map['orderStatus'] as String? ?? 'Pending',
       adminNotes: map['adminNotes'] as String? ?? '',
       assignedDeliveryPerson: map['assignedDeliveryPerson'] as String? ?? '',
+      assignedDeliveryPhone: map['assignedDeliveryPhone'] as String? ?? '',
       createdAt: _readDate(map['createdAt']),
       updatedAt: _readDate(map['updatedAt']),
     );

@@ -122,6 +122,7 @@ service cloud.firestore {
         'orderStatus',
         'adminNotes',
         'assignedDeliveryPerson',
+        'assignedDeliveryPhone',
         'createdAt',
         'updatedAt'
       ];
@@ -132,6 +133,7 @@ service cloud.firestore {
         request.resource.data.orderStatus == 'Pending' &&
         request.resource.data.adminNotes == '' &&
         request.resource.data.assignedDeliveryPerson == '' &&
+        request.resource.data.get('assignedDeliveryPhone', '') == '' &&
         request.resource.data.paymentMethod in ['COD', 'Bank Transfer'] &&
         isPaymentMethodEnabled(request.resource.data.paymentMethod) &&
         request.resource.data.paymentStatus in ['pending', 'receipt uploaded'] &&

@@ -126,12 +126,27 @@ void main() {
     expect(record.manualListSalesAmount, 100);
     expect(record.needsManualSalesAmount, isFalse);
   });
+
+  test('order stores assigned delivery contact details', () {
+    final order = _order(
+      assignedDeliveryPerson: 'Nimal',
+      assignedDeliveryPhone: '+94712345678',
+    );
+
+    final restored = OrderModel.fromMap(order.toMap(), order.orderId);
+
+    expect(restored.assignedDeliveryPerson, 'Nimal');
+    expect(restored.assignedDeliveryPhone, '+94712345678');
+    expect(restored.hasAssignedDeliveryContact, isTrue);
+  });
 }
 
 OrderModel _order({
   String orderNotes = '',
   String manualListText = '',
   String uploadedImageUrl = '',
+  String assignedDeliveryPerson = '',
+  String assignedDeliveryPhone = '',
   double cartItemsAmount = 0,
   double photoListAmount = 0,
   double manualListAmount = 0,
@@ -163,7 +178,8 @@ OrderModel _order({
     paymentStatus: 'pending',
     orderStatus: 'Pending',
     adminNotes: '',
-    assignedDeliveryPerson: '',
+    assignedDeliveryPerson: assignedDeliveryPerson,
+    assignedDeliveryPhone: assignedDeliveryPhone,
     createdAt: now,
     updatedAt: now,
   );

@@ -4371,6 +4371,10 @@ class OrderTrackingScreen extends StatelessWidget {
                       'Payment',
                       '${context.t(order.paymentMethod)} (${context.t(order.paymentStatus)})',
                     ),
+                    if (order.hasAssignedDeliveryContact) ...[
+                      const Divider(height: 24),
+                      _DeliveryContactSummary(order: order),
+                    ],
                     if (order.adminNotes.isNotEmpty) ...[
                       const Divider(height: 24),
                       Row(
@@ -4457,6 +4461,94 @@ class OrderTrackingScreen extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _DeliveryContactSummary extends StatelessWidget {
+  const _DeliveryContactSummary({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = order.assignedDeliveryPerson.trim();
+    final phone = order.assignedDeliveryPhone.trim();
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(
+          Icons.delivery_dining,
+          color: _customerAccent,
+          size: 22,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.t('Delivery boy details'),
+                style: const TextStyle(
+                  color: _customerInk,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (name.isNotEmpty)
+                _DeliveryContactLine(
+                  label: 'Name',
+                  value: name,
+                ),
+              if (phone.isNotEmpty)
+                _DeliveryContactLine(
+                  label: 'Phone number',
+                  value: phone,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DeliveryContactLine extends StatelessWidget {
+  const _DeliveryContactLine({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 104,
+            child: Text(
+              context.t(label),
+              style: const TextStyle(
+                color: _customerMuted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: const TextStyle(
+                color: _customerInk,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

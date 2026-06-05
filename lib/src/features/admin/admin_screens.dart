@@ -1652,6 +1652,7 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
   final _service = TextEditingController();
   final _adminNotes = TextEditingController();
   final _deliveryPerson = TextEditingController();
+  final _deliveryPhone = TextEditingController();
   String _status = 'Pending';
   String _paymentStatus = 'pending';
   String? _loadedOrderId;
@@ -1679,6 +1680,7 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
     _service.dispose();
     _adminNotes.dispose();
     _deliveryPerson.dispose();
+    _deliveryPhone.dispose();
     super.dispose();
   }
 
@@ -1695,6 +1697,7 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
     _service.text = order.serviceCharge.toStringAsFixed(2);
     _adminNotes.text = order.adminNotes;
     _deliveryPerson.text = order.assignedDeliveryPerson;
+    _deliveryPhone.text = order.assignedDeliveryPhone;
     _status = order.orderStatus;
     _paymentStatus = order.paymentStatus;
   }
@@ -2103,8 +2106,17 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                       TextField(
                         controller: _deliveryPerson,
                         decoration: const InputDecoration(
-                          labelText: 'Assigned delivery person',
+                          labelText: 'Delivery boy name',
                           prefixIcon: Icon(Icons.delivery_dining),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _deliveryPhone,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'Delivery boy phone number',
+                          prefixIcon: Icon(Icons.phone_outlined),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -2190,13 +2202,24 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
   }
 
   Future<void> _updateStatus(OrderModel order) async {
+    final deliveryPhoneText = _deliveryPhone.text.trim();
+    final deliveryPhoneError =
+        deliveryPhoneText.isEmpty ? null : Validators.phone(deliveryPhoneText);
+    if (deliveryPhoneError != null) {
+      showSnack(context, deliveryPhoneError);
+      return;
+    }
+    final deliveryPhone = deliveryPhoneText.isEmpty
+        ? ''
+        : PhoneUtils.normalizeSriLankanPhone(deliveryPhoneText);
     setState(() => _isUpdatingStatus = true);
     try {
       await context.read<AppState>().firestoreService.updateOrderStatus(
             order: order,
             status: _status,
-            adminNotes: _adminNotes.text,
-            assignedDeliveryPerson: _deliveryPerson.text,
+            adminNotes: _adminNotes.text.trim(),
+            assignedDeliveryPerson: _deliveryPerson.text.trim(),
+            assignedDeliveryPhone: deliveryPhone,
           );
       if (mounted) {
         showSnack(context, 'Status updated and notification recorded.');

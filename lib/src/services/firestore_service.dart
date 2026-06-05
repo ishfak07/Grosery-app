@@ -384,7 +384,8 @@ class FirestoreService {
       ..remove('cartItemsAmount')
       ..remove('photoListAmount')
       ..remove('manualListAmount')
-      ..remove('listAmountsReviewed');
+      ..remove('listAmountsReviewed')
+      ..remove('assignedDeliveryPhone');
   }
 
   Stream<List<OrderModel>> watchOrdersForUser(String userId) {
@@ -449,6 +450,7 @@ class FirestoreService {
     required String status,
     String? adminNotes,
     String? assignedDeliveryPerson,
+    String? assignedDeliveryPhone,
   }) async {
     if (status == 'Delivered' &&
         order.orderStatus != 'Out for Delivery' &&
@@ -461,6 +463,7 @@ class FirestoreService {
       orderStatus: status,
       adminNotes: adminNotes,
       assignedDeliveryPerson: assignedDeliveryPerson,
+      assignedDeliveryPhone: assignedDeliveryPhone,
     );
     final accountRecord = status == 'Delivered'
         ? await _accountSaleRecordForOrder(
@@ -476,6 +479,8 @@ class FirestoreService {
       if (adminNotes != null) 'adminNotes': adminNotes,
       if (assignedDeliveryPerson != null)
         'assignedDeliveryPerson': assignedDeliveryPerson,
+      if (assignedDeliveryPhone != null)
+        'assignedDeliveryPhone': assignedDeliveryPhone,
       'updatedAt': FieldValue.serverTimestamp(),
     });
     if (accountRecord != null) {
