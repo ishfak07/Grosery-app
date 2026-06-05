@@ -1705,6 +1705,8 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
               );
             }
             _syncControllers(order);
+            final customerNotes = order.customerNotes;
+            final manualListLines = order.manualListLines;
             return ListView(
               physics: appRefreshScrollPhysics,
               padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
@@ -1738,11 +1740,11 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                         const SizedBox(height: 12),
                         _OrderInfoRow('Phone', order.customerPhone),
                         _OrderInfoRow('Address', order.customerAddress),
-                        if (order.orderNotes.isNotEmpty)
+                        if (customerNotes.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: _AdminPill(
-                              label: 'Notes: ${order.orderNotes}',
+                              label: 'Notes: $customerNotes',
                               color: _adminWarning,
                               icon: Icons.sticky_note_2_outlined,
                             ),
@@ -1868,22 +1870,46 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                       ),
                     ),
                 ],
-                if (order.hasManualList) ...[
+                if (manualListLines.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   const _AdminSectionHeader(
                     title: 'Manual grocery list',
                     icon: Icons.edit_note,
                   ),
-                  _AdminCard(
-                    child: SelectableText(
-                      order.manualListText.trim(),
-                      style: const TextStyle(
-                        color: _adminInk,
-                        fontWeight: FontWeight.w700,
-                        height: 1.35,
+                  for (var index = 0; index < manualListLines.length; index++)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: index == manualListLines.length - 1 ? 0 : 8,
+                      ),
+                      child: _AdminCard(
+                        child: CheckboxListTile(
+                          enabled: true,
+                          value: true,
+                          onChanged: null,
+                          title: SelectableText(
+                            manualListLines[index],
+                            style: const TextStyle(
+                              color: _adminInk,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          subtitle: const Text(
+                            'Manual list item',
+                            style: TextStyle(
+                              color: _adminMuted,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          secondary: Text(
+                            '#${index + 1}',
+                            style: const TextStyle(
+                              color: _adminMuted,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
                 ],
                 if (order.hasUpload) ...[
                   const SizedBox(height: 12),

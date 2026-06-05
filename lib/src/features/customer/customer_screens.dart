@@ -2325,9 +2325,11 @@ class CartScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final items = appState.cartItems;
+    final hasCheckoutDraft =
+        items.isNotEmpty || appState.hasBillImage || appState.hasManualList;
     return _CustomerScaffold(
       title: 'Cart',
-      body: items.isEmpty && !appState.hasBillImage && !appState.hasManualList
+      body: !hasCheckoutDraft
           ? RefreshableCenteredContent(
               child: EmptyState(
                 icon: Icons.shopping_cart_outlined,
@@ -2397,6 +2399,14 @@ class CartScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            OutlinedButton.icon(
+              onPressed: hasCheckoutDraft
+                  ? () => _confirmClearCheckoutDraft(context)
+                  : null,
+              icon: const Icon(Icons.delete_sweep_outlined),
+              label: Text(context.t('Clear cart')),
+            ),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
@@ -2432,9 +2442,7 @@ class CartScreen extends StatelessWidget {
             PrimaryActionButton(
               label: 'Checkout',
               icon: Icons.payments,
-              onPressed: items.isNotEmpty ||
-                      appState.hasBillImage ||
-                      appState.hasManualList
+              onPressed: hasCheckoutDraft
                   ? () => Navigator.of(context).push(
                         MaterialPageRoute(
                             builder: (_) => const CheckoutScreen()),
@@ -2445,6 +2453,44 @@ class CartScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmClearCheckoutDraft(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              title: Text(context.t('Clear cart')),
+              content: Text(
+                context.t(
+                  'Remove all cart items, attached photo, and manual list?',
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: Text(context.t('Cancel')),
+                ),
+                FilledButton.icon(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  icon: const Icon(Icons.delete_sweep_outlined),
+                  label: Text(context.t('Clear')),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+    if (!confirmed || !context.mounted) {
+      return;
+    }
+    await context.read<AppState>().clearCheckoutDraft();
+    if (context.mounted) {
+      showSnack(context, 'Cart cleared.');
+    }
   }
 }
 
@@ -4362,7 +4408,7 @@ class OrderTrackingScreen extends StatelessWidget {
               if (order.hasManualList) ...[
                 if (order.items.isNotEmpty) const SizedBox(height: 12),
                 const _CustomerSectionHeader(title: 'Manual list'),
-                _ManualListPreview(text: order.manualListText),
+                _ManualListPreview(text: order.effectiveManualListText),
               ],
               if (order.hasUpload) ...[
                 const SizedBox(height: 12),

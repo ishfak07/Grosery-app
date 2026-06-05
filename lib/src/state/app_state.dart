@@ -507,6 +507,18 @@ class AppState extends ChangeNotifier {
     await localStorageService.saveCart(_cartItems);
   }
 
+  Future<void> clearCheckoutDraft() async {
+    _cartItems = const <CartItem>[];
+    _billImagePath = null;
+    _manualListText = '';
+    notifyListeners();
+    await Future.wait([
+      localStorageService.saveCart(_cartItems),
+      localStorageService.saveBillImagePath(null),
+      localStorageService.saveManualListText(''),
+    ]);
+  }
+
   Future<void> setBillImagePath(String? path) async {
     _billImagePath = path;
     notifyListeners();
@@ -596,9 +608,7 @@ class AppState extends ChangeNotifier {
     );
 
     await firestoreService.createOrder(order);
-    await clearCart();
-    await setBillImagePath(null);
-    await setManualListText('');
+    await clearCheckoutDraft();
     return order;
   }
 

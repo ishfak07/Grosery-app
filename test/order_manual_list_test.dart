@@ -17,8 +17,10 @@ void main() {
     final restored = OrderModel.fromMap(map, order.orderId);
 
     expect(restored.manualListText, '2 kg rice\n6 eggs');
+    expect(restored.effectiveManualListText, '2 kg rice\n6 eggs');
     expect(restored.hasManualList, isTrue);
     expect(restored.orderNotes, '');
+    expect(restored.customerNotes, '');
   });
 
   test('manual list can be stored alongside normal order notes', () {
@@ -30,7 +32,32 @@ void main() {
     final restored = OrderModel.fromMap(order.toMap(), order.orderId);
 
     expect(restored.orderNotes, 'Please call before delivery.');
+    expect(restored.customerNotes, 'Please call before delivery.');
     expect(restored.manualListText, '1 packet sugar');
+  });
+
+  test('splits manual grocery list out of raw notes for admin display', () {
+    final order = _order(
+      orderNotes: 'Notes from customer\n\nManual grocery list:\nit 1\nit 2',
+    );
+
+    expect(order.customerNotes, 'Notes from customer');
+    expect(order.effectiveManualListText, 'it 1\nit 2');
+    expect(order.manualListLines, ['it 1', 'it 2']);
+    expect(order.hasManualList, isTrue);
+    expect(order.toMap()['orderNotes'],
+        'Notes from customer\n\nManual grocery list:\nit 1\nit 2');
+  });
+
+  test('splits manual grocery list heading with extra spaces', () {
+    final order = _order(
+      orderNotes:
+          'Customer note\r\n\r\n  MANUAL grocery list :\r\n it 1\r\n\r\nit 2',
+    );
+
+    expect(order.customerNotes, 'Customer note');
+    expect(order.effectiveManualListText, 'it 1\r\n\r\nit 2');
+    expect(order.manualListLines, ['it 1', 'it 2']);
   });
 
   test('old orders without manual list text remain readable', () {

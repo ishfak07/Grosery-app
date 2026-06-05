@@ -758,6 +758,10 @@ class OrderItem {
 
 class OrderModel {
   static const _manualListNotesHeader = 'Manual grocery list:';
+  static final _manualListNotesHeaderPattern = RegExp(
+    r'(^|\r?\n)\s*manual\s+grocery\s+list\s*:',
+    caseSensitive: false,
+  );
 
   const OrderModel({
     required this.orderId,
@@ -806,7 +810,21 @@ class OrderModel {
   final DateTime updatedAt;
 
   bool get hasUpload => uploadedImageUrl.isNotEmpty;
-  bool get hasManualList => manualListText.trim().isNotEmpty;
+  String get customerNotes => _orderNotesWithoutManualList(orderNotes);
+  String get effectiveManualListText {
+    final cleanedManualListText = manualListText.trim();
+    if (cleanedManualListText.isNotEmpty) {
+      return cleanedManualListText;
+    }
+    return _manualListTextFromNotes(orderNotes);
+  }
+
+  bool get hasManualList => effectiveManualListText.isNotEmpty;
+  List<String> get manualListLines => effectiveManualListText
+      .split(RegExp(r'\r?\n'))
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty)
+      .toList();
   bool get hasShoppingList => hasUpload || hasManualList;
   bool get hasPaymentReceipt => paymentReceiptImageUrl.isNotEmpty;
 
@@ -860,8 +878,8 @@ class OrderModel {
       'uploadedImageUrl': uploadedImageUrl,
       'paymentReceiptImageUrl': paymentReceiptImageUrl,
       'orderNotes': _orderNotesForStorage(
-        orderNotes: orderNotes,
-        manualListText: manualListText,
+        orderNotes: customerNotes,
+        manualListText: effectiveManualListText,
       ),
       'subtotal': subtotal,
       'deliveryCharge': deliveryCharge,
@@ -926,21 +944,19 @@ class OrderModel {
   }
 
   static String _manualListTextFromNotes(String orderNotes) {
-    final headerIndex = orderNotes.indexOf(_manualListNotesHeader);
-    if (headerIndex < 0) {
+    final headerMatch = _manualListNotesHeaderPattern.firstMatch(orderNotes);
+    if (headerMatch == null) {
       return '';
     }
-    return orderNotes
-        .substring(headerIndex + _manualListNotesHeader.length)
-        .trim();
+    return orderNotes.substring(headerMatch.end).trim();
   }
 
   static String _orderNotesWithoutManualList(String orderNotes) {
-    final headerIndex = orderNotes.indexOf(_manualListNotesHeader);
-    if (headerIndex < 0) {
+    final headerMatch = _manualListNotesHeaderPattern.firstMatch(orderNotes);
+    if (headerMatch == null) {
       return orderNotes.trim();
     }
-    return orderNotes.substring(0, headerIndex).trim();
+    return orderNotes.substring(0, headerMatch.start).trim();
   }
 }
 
