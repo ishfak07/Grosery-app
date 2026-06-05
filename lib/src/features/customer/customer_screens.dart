@@ -3178,6 +3178,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           children: [
             _CheckoutSummary(total: total),
             const SizedBox(height: 14),
+            _CheckoutOrderReview(
+              items: appState.cartItems,
+              billImagePath: appState.billImagePath,
+              manualListText: appState.manualListText,
+              onEditItems: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CartScreen()),
+              ),
+              onEditPhotoList: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const UploadBillScreen()),
+              ),
+              onEditManualList: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ManualListScreen()),
+              ),
+            ),
+            const SizedBox(height: 14),
             _CustomerCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -3369,6 +3384,341 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
     setState(() => _receiptImagePath = imageFile.path);
+  }
+}
+
+class _CheckoutOrderReview extends StatelessWidget {
+  const _CheckoutOrderReview({
+    required this.items,
+    required this.billImagePath,
+    required this.manualListText,
+    required this.onEditItems,
+    required this.onEditPhotoList,
+    required this.onEditManualList,
+  });
+
+  final List<CartItem> items;
+  final String? billImagePath;
+  final String manualListText;
+  final VoidCallback onEditItems;
+  final VoidCallback onEditPhotoList;
+  final VoidCallback onEditManualList;
+
+  @override
+  Widget build(BuildContext context) {
+    final languageCode = context.watch<AppState>().effectiveLanguageCode;
+    final hasPhotoList = billImagePath != null && billImagePath!.isNotEmpty;
+    final hasManualList = manualListText.trim().isNotEmpty;
+    return _CustomerCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _customerPrimaryLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.fact_check_outlined,
+                  color: _customerPrimary,
+                  size: 21,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  context.t('Order review'),
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (items.isNotEmpty) ...[
+            _CheckoutReviewHeader(
+              title: items.length == 1 ? 'Catalog item' : 'Catalog items',
+              trailing: items.length == 1
+                  ? '1 item'
+                  : context.t(
+                      '{count} items',
+                      values: {'count': items.length},
+                    ),
+              onEdit: onEditItems,
+            ),
+            const SizedBox(height: 6),
+            for (var index = 0; index < items.length; index++) ...[
+              _CheckoutItemRow(
+                item: items[index],
+                languageCode: languageCode,
+              ),
+              if (index != items.length - 1) const Divider(height: 14),
+            ],
+          ],
+          if (hasPhotoList) ...[
+            if (items.isNotEmpty) const Divider(height: 22),
+            _CheckoutPhotoListReview(
+              imagePath: billImagePath!,
+              onEdit: onEditPhotoList,
+            ),
+          ],
+          if (hasManualList) ...[
+            if (items.isNotEmpty || hasPhotoList) const Divider(height: 22),
+            _CheckoutManualListReview(
+              text: manualListText,
+              onEdit: onEditManualList,
+            ),
+          ],
+          if (items.isEmpty && !hasPhotoList && !hasManualList)
+            Text(
+              context.t('No checkout items selected.'),
+              style: const TextStyle(
+                color: _customerMuted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckoutReviewHeader extends StatelessWidget {
+  const _CheckoutReviewHeader({
+    required this.title,
+    required this.trailing,
+    required this.onEdit,
+  });
+
+  final String title;
+  final String trailing;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            context.t(title),
+            style: const TextStyle(
+              color: _customerInk,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        Text(
+          trailing,
+          style: const TextStyle(
+            color: _customerMuted,
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(width: 8),
+        TextButton.icon(
+          onPressed: onEdit,
+          icon: const Icon(Icons.edit_outlined, size: 16),
+          label: Text(context.t('Edit')),
+          style: TextButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CheckoutItemRow extends StatelessWidget {
+  const _CheckoutItemRow({
+    required this.item,
+    required this.languageCode,
+  });
+
+  final CartItem item;
+  final String languageCode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 54,
+          height: 54,
+          child: ProductImage(url: item.imageUrl),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.localizedName(languageCode),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _customerInk,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${item.quantity} x ${item.price.money} / ${context.t(item.unit)}',
+                style: const TextStyle(
+                  color: _customerMuted,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          item.lineTotal.money,
+          textAlign: TextAlign.right,
+          style: const TextStyle(
+            color: _customerPrimary,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CheckoutPhotoListReview extends StatelessWidget {
+  const _CheckoutPhotoListReview({
+    required this.imagePath,
+    required this.onEdit,
+  });
+
+  final String imagePath;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            width: 58,
+            height: 58,
+            child: Image.file(
+              File(imagePath),
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const ColoredBox(
+                color: Color(0xFFEAF0EA),
+                child: Center(child: Icon(Icons.broken_image_outlined)),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.t('Photo list attached'),
+                style: const TextStyle(
+                  color: _customerInk,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                context.t('Admin will review this photo with your order.'),
+                style: const TextStyle(
+                  color: _customerMuted,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+        TextButton.icon(
+          onPressed: onEdit,
+          icon: const Icon(Icons.edit_outlined, size: 16),
+          label: Text(context.t('Edit')),
+          style: TextButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CheckoutManualListReview extends StatelessWidget {
+  const _CheckoutManualListReview({
+    required this.text,
+    required this.onEdit,
+  });
+
+  final String text;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                context.t('Manual list'),
+                style: const TextStyle(
+                  color: _customerInk,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_outlined, size: 16),
+              label: Text(context.t('Edit')),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7FAF5),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _customerLine),
+          ),
+          child: Text(
+            text.trim(),
+            style: const TextStyle(
+              color: _customerInk,
+              fontWeight: FontWeight.w700,
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
