@@ -301,14 +301,10 @@ class _CustomerSectionHeader extends StatelessWidget {
   const _CustomerSectionHeader({
     required this.title,
     this.subtitle,
-    this.actionLabel,
-    this.onAction,
   });
 
   final String title;
   final String? subtitle;
-  final String? actionLabel;
-  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -343,11 +339,6 @@ class _CustomerSectionHeader extends StatelessWidget {
               ],
             ),
           ),
-          if (actionLabel != null)
-            TextButton(
-              onPressed: onAction,
-              child: Text(context.t(actionLabel!)),
-            ),
         ],
       ),
     );
@@ -538,7 +529,7 @@ class CustomerHomeScreen extends StatelessWidget {
       body: _CustomerBackdrop(
         child: AppRefreshIndicator(
           child: _CustomerScrollView(
-            padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
+            padding: const EdgeInsets.fromLTRB(0, 10, 0, 28),
             safeAreaTop: true,
             children: [
               FirebaseSetupBanner(appState: appState),
@@ -546,15 +537,15 @@ class CustomerHomeScreen extends StatelessWidget {
                 profile: profile,
                 cartCount: appState.cartCount,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               _HomeSearchCallout(
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const ProductListScreen()),
                 ),
               ),
-              const SizedBox(height: 14),
-              const _HomeOffersCarousel(),
               const SizedBox(height: 16),
+              const _HomeOffersCarousel(),
+              const SizedBox(height: 18),
               _HomeActionGrid(
                 actions: [
                   _HomeActionSpec(
@@ -590,11 +581,8 @@ class CustomerHomeScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 22),
-              _CustomerSectionHeader(
-                title: 'Fresh picks',
-                subtitle: 'Recently added to the catalog',
-                actionLabel: 'View all',
+              const SizedBox(height: 24),
+              _HomeFreshPicksHeader(
                 onAction: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const ProductListScreen()),
                 ),
@@ -623,59 +611,173 @@ class _HomeHeader extends StatelessWidget {
     final firstName = profile.fullName.trim().isEmpty
         ? context.t('there')
         : profile.fullName.trim().split(' ').first;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final radius = BorderRadius.circular(8);
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: [
+          BoxShadow(
+            color: _customerPrimary.withOpacity(0.22),
+            blurRadius: 28,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF0D4C33),
+                Color(0xFF176B45),
+                Color(0xFF2E8758),
+              ],
+            ),
+          ),
+          child: Stack(
             children: [
-              const AppLogoMark(size: 44, padding: 2),
-              const SizedBox(width: 10),
-              Expanded(
+              Positioned(
+                right: -34,
+                bottom: -46,
+                child: Icon(
+                  Icons.shopping_basket_outlined,
+                  size: 168,
+                  color: Colors.white.withOpacity(0.07),
+                ),
+              ),
+              Positioned(
+                left: -44,
+                top: 72,
+                child: Transform.rotate(
+                  angle: -0.34,
+                  child: Container(
+                    width: 210,
+                    height: 42,
+                    color: Colors.white.withOpacity(0.055),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 15),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
-                      AppConstants.appName,
-                      style: TextStyle(
-                        color: _customerMuted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      context.t('Hi {name}', values: {'name': firstName}),
-                      style:
-                          Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                color: _customerInk,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0,
-                              ),
-                    ),
-                    const SizedBox(height: 8),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
-                          Icons.location_on_outlined,
-                          size: 18,
-                          color: _customerAccent,
+                        SizedBox(
+                          width: 52,
+                          height: 52,
+                          child: Image.asset(
+                            AppConstants.appLogoAsset,
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
+                          ),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: Text(
-                            profile.address,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: _customerMuted,
-                              height: 1.25,
-                              fontWeight: FontWeight.w600,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                AppConstants.appName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.78),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                context.t(
+                                  'Hi {name}',
+                                  values: {'name': firstName},
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall
+                                    ?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0,
+                                      height: 1.05,
+                                    ),
+                              ),
+                              const SizedBox(height: 7),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    Icons.location_on_outlined,
+                                    size: 17,
+                                    color: Colors.white.withOpacity(0.86),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Expanded(
+                                    child: Text(
+                                      profile.address,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.white.withOpacity(0.82),
+                                        height: 1.24,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _HomeHeaderActionButton(
+                          tooltip: 'Notifications',
+                          icon: Icons.notifications_outlined,
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const NotificationsScreen(),
                             ),
                           ),
+                        ),
+                        const SizedBox(width: 8),
+                        _HomeHeaderActionButton(
+                          tooltip: 'Cart',
+                          icon: Icons.shopping_bag_outlined,
+                          badgeCount: cartCount,
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const CartScreen(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    const Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _HomeHeaderPill(
+                          icon: Icons.eco_outlined,
+                          label: 'Fresh',
+                        ),
+                        _HomeHeaderPill(
+                          icon: Icons.flash_on_outlined,
+                          label: 'Fast',
+                        ),
+                        _HomeHeaderPill(
+                          icon: Icons.verified_user_outlined,
+                          label: 'Trusted',
                         ),
                       ],
                     ),
@@ -685,22 +787,88 @@ class _HomeHeader extends StatelessWidget {
             ],
           ),
         ),
-        _CustomerIconButton(
-          tooltip: 'Notifications',
-          icon: Icons.notifications_outlined,
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+      ),
+    );
+  }
+}
+
+class _HomeHeaderActionButton extends StatelessWidget {
+  const _HomeHeaderActionButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.badgeCount = 0,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final int badgeCount;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget child = Icon(icon, color: _customerInk, size: 21);
+    if (badgeCount > 0) {
+      child = Badge.count(count: badgeCount, child: child);
+    }
+    return Tooltip(
+      message: context.t(tooltip),
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: Material(
+          color: Colors.white.withOpacity(0.94),
+          borderRadius: BorderRadius.circular(8),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(8),
+            child: Center(child: child),
           ),
         ),
-        _CustomerIconButton(
-          tooltip: 'Cart',
-          icon: Icons.shopping_bag_outlined,
-          badgeCount: cartCount,
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const CartScreen()),
+      ),
+    );
+  }
+}
+
+class _HomeHeaderPill extends StatelessWidget {
+  const _HomeHeaderPill({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 120),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withOpacity(0.16)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 15),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              context.t(label),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -712,24 +880,76 @@ class _HomeSearchCallout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _CustomerCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      onTap: onTap,
-      child: Row(
-        children: [
-          const Icon(Icons.search, color: _customerPrimary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              context.t('Search groceries and shops'),
-              style: const TextStyle(
-                color: _customerMuted,
-                fontWeight: FontWeight.w700,
+    final radius = BorderRadius.circular(8);
+    return _Pressable(
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          border: Border.all(color: Colors.white),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF10231A).withOpacity(0.09),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.white,
+          borderRadius: radius,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: radius,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: _customerPrimaryLight,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.search,
+                      color: _customerPrimary,
+                      size: 21,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      context.t('Search groceries and shops'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _customerInk,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7FAF5),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: _customerLine),
+                    ),
+                    child: const Icon(
+                      Icons.tune,
+                      color: _customerMuted,
+                      size: 18,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          const Icon(Icons.tune, color: _customerMuted, size: 20),
-        ],
+        ),
       ),
     );
   }
@@ -740,19 +960,10 @@ class _HomePromoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(8);
     return Container(
-      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF145C3B),
-            Color(0xFF1E8E5A),
-            Color(0xFFE86F4A),
-          ],
-        ),
+        borderRadius: radius,
         boxShadow: [
           BoxShadow(
             color: _customerPrimary.withOpacity(0.22),
@@ -761,94 +972,113 @@ class _HomePromoBanner extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.16),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white.withOpacity(0.18)),
-                  ),
-                  child: Text(
-                    context.t('Fast local delivery'),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  context.t(
-                    'Fresh groceries, photo lists, and COD in one smooth order.',
-                  ),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    height: 1.15,
-                    letterSpacing: 0,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  context.t(
-                    'We shop from trusted partners and keep you updated.',
-                  ),
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.84),
-                    fontWeight: FontWeight.w600,
-                    height: 1.3,
-                  ),
-                ),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF123E2C),
+                Color(0xFF176B45),
+                Color(0xFFE86F4A),
               ],
             ),
           ),
-          const SizedBox(width: 14),
-          Stack(
-            alignment: Alignment.center,
+          child: Stack(
             children: [
-              Container(
-                width: 88,
-                height: 88,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.13),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white.withOpacity(0.15)),
+              Positioned(
+                right: -38,
+                bottom: -46,
+                child: Icon(
+                  Icons.delivery_dining,
+                  size: 172,
+                  color: Colors.white.withOpacity(0.09),
                 ),
               ),
-              const Icon(
-                Icons.shopping_basket_outlined,
-                size: 52,
-                color: Colors.white,
-              ),
-              Positioned(
-                right: 4,
-                bottom: 8,
-                child: Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: _customerGold,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.flash_on,
-                    size: 17,
-                    color: _customerInk,
-                  ),
+              Padding(
+                padding: const EdgeInsets.all(18),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _customerGold,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              context.t('Fast local delivery'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: _customerInk,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            context.t(
+                              'Fresh groceries, photo lists, and COD in one smooth order.',
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              height: 1.12,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            context.t(
+                              'We shop from trusted partners and keep you updated.',
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.84),
+                              fontWeight: FontWeight.w700,
+                              height: 1.28,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      width: 78,
+                      height: 98,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.18),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.shopping_basket_outlined,
+                        size: 44,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -906,7 +1136,7 @@ class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
         final activeOffer = offers[activePage];
         return LayoutBuilder(
           builder: (context, constraints) {
-            final height = constraints.maxWidth < 380 ? 178.0 : 204.0;
+            final height = constraints.maxWidth < 380 ? 190.0 : 214.0;
             return Column(
               children: [
                 SizedBox(
@@ -965,7 +1195,7 @@ class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
                   ),
                 ),
                 if (offers.length > 1) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -1101,110 +1331,147 @@ class _HomeOfferBanner extends StatelessWidget {
     final title = offer.localizedTitle(languageCode);
     final caption = offer.localizedCaption(languageCode);
     final dateLabel = _offerDateLabel(offer);
+    final radius = BorderRadius.circular(8);
     return _Pressable(
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              ProductImage(url: offer.imageUrl, radius: 8),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withOpacity(0.08),
-                      Colors.black.withOpacity(0.72),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF10231A).withOpacity(0.20),
+              blurRadius: 30,
+              offset: const Offset(0, 16),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: radius,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ProductImage(url: offer.imageUrl, radius: 8),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withOpacity(0.05),
+                        Colors.black.withOpacity(0.34),
+                        Colors.black.withOpacity(0.82),
+                      ],
+                      stops: const [0.0, 0.45, 1.0],
+                    ),
+                  ),
+                ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    border: Border.all(color: Colors.white.withOpacity(0.18)),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Align(
+                        alignment: Alignment.topLeft,
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 240),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _customerGold,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            context.t('New offer'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _customerInk,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0,
+                              height: 1.06,
+                            ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        caption,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.9),
+                          fontWeight: FontWeight.w700,
+                          height: 1.24,
+                        ),
+                      ),
+                      if (dateLabel != null) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          constraints: const BoxConstraints(maxWidth: 230),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.16),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.18),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.event_available_outlined,
+                                color: Colors.white,
+                                size: 15,
+                              ),
+                              const SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  dateLabel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.92),
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Align(
-                      alignment: Alignment.topLeft,
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 240),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _customerGold,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          context.t('New offer'),
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: _customerInk,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0,
-                            height: 1.1,
-                          ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      caption,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.88),
-                        fontWeight: FontWeight.w700,
-                        height: 1.25,
-                      ),
-                    ),
-                    if (dateLabel != null) ...[
-                      const SizedBox(height: 9),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.event_available_outlined,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 5),
-                          Flexible(
-                            child: Text(
-                              dateLabel,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.9),
-                                fontWeight: FontWeight.w800,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1218,7 +1485,7 @@ class _OfferCarouselSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const SizedBox(
-      height: 204,
+      height: 214,
       child: _ShimmerBox(width: double.infinity, radius: 8),
     );
   }
@@ -1376,6 +1643,84 @@ class _CustomerBottomNavigation extends StatelessWidget {
   }
 }
 
+class _HomeFreshPicksHeader extends StatelessWidget {
+  const _HomeFreshPicksHeader({required this.onAction});
+
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: _customerPrimaryLight,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: _customerPrimary.withOpacity(0.12)),
+            ),
+            child: const Icon(
+              Icons.local_florist_outlined,
+              color: _customerPrimary,
+              size: 21,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.t('Fresh picks'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: _customerInk,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
+                      ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  context.t('Recently added to the catalog'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _customerMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 120),
+            child: TextButton.icon(
+              onPressed: onAction,
+              icon: const Icon(Icons.arrow_forward, size: 16),
+              label: Text(
+                context.t('View all'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: _customerPrimary,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                textStyle: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RecentProductsGrid extends StatefulWidget {
   const _RecentProductsGrid();
 
@@ -1515,13 +1860,13 @@ class _HomeActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(8);
-    final tileHeight = compact ? 132.0 : 144.0;
+    final tileHeight = compact ? 140.0 : 150.0;
     final contentPadding = compact
-        ? const EdgeInsets.fromLTRB(10, 12, 8, 11)
-        : const EdgeInsets.fromLTRB(15, 14, 13, 13);
-    final badgeSize = compact ? 38.0 : 46.0;
+        ? const EdgeInsets.fromLTRB(10, 12, 9, 12)
+        : const EdgeInsets.fromLTRB(15, 15, 14, 14);
+    final badgeSize = compact ? 40.0 : 48.0;
     final arrowSize = compact ? 26.0 : 30.0;
-    final backgroundIconSize = compact ? 76.0 : 92.0;
+    final backgroundIconSize = compact ? 82.0 : 96.0;
 
     return _Pressable(
       child: AnimatedContainer(
@@ -1530,20 +1875,22 @@ class _HomeActionTile extends StatelessWidget {
         height: tileHeight,
         decoration: BoxDecoration(
           borderRadius: radius,
-          border: Border.all(color: const Color(0xFFDCE8DF)),
+          border: Border.all(color: accent.withOpacity(0.20)),
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
               Colors.white,
-              Color.lerp(Colors.white, accent, 0.055)!,
+              Color.lerp(Colors.white, accent, 0.065)!,
+              Color.lerp(Colors.white, accent, 0.11)!,
             ],
+            stops: const [0.0, 0.62, 1.0],
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF163526).withOpacity(0.08),
-              blurRadius: 22,
-              offset: const Offset(0, 10),
+              color: accent.withOpacity(0.13),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
             ),
           ],
         ),
@@ -1562,7 +1909,14 @@ class _HomeActionTile extends StatelessWidget {
                   bottom: 0,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: accent,
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          accent,
+                          Color.lerp(accent, Colors.black, 0.18)!,
+                        ],
+                      ),
                       borderRadius: const BorderRadius.horizontal(
                         left: Radius.circular(8),
                       ),
@@ -1596,10 +1950,10 @@ class _HomeActionTile extends StatelessWidget {
                             width: arrowSize,
                             height: arrowSize,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.72),
+                              color: Colors.white.withOpacity(0.86),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: accent.withOpacity(0.18),
+                                color: accent.withOpacity(0.20),
                               ),
                             ),
                             child: Icon(
@@ -1631,7 +1985,7 @@ class _HomeActionTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: _customerMuted,
-                          fontSize: compact ? 10.5 : 12,
+                          fontSize: compact ? 10.8 : 12,
                           fontWeight: FontWeight.w700,
                           height: compact ? 1.18 : 1.22,
                         ),
@@ -1666,10 +2020,17 @@ class _HomeActionIconBadge extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        color: accent.withOpacity(0.12),
-        border: Border.all(color: accent.withOpacity(0.16)),
+        color: Colors.white.withOpacity(0.88),
+        border: Border.all(color: accent.withOpacity(0.18)),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
-      child: Icon(icon, color: accent, size: size <= 38 ? 22 : 25),
+      child: Icon(icon, color: accent, size: size <= 40 ? 22 : 25),
     );
   }
 }
