@@ -1465,30 +1465,29 @@ class _HomeActionGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final useThreeColumns = constraints.maxWidth >= 640;
-        final spacing = useThreeColumns ? 12.0 : 10.0;
-        final compactTileWidth = (constraints.maxWidth - spacing) / 2;
-        final wideTileWidth = (constraints.maxWidth - spacing * 2) / 3;
+        final compact = constraints.maxWidth < 520;
+        final spacing = constraints.maxWidth < 360
+            ? 7.0
+            : compact
+                ? 8.0
+                : 12.0;
 
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (var i = 0; i < actions.length; i++)
-              SizedBox(
-                width: useThreeColumns
-                    ? wideTileWidth
-                    : i == actions.length - 1
-                        ? constraints.maxWidth
-                        : compactTileWidth,
+            for (var i = 0; i < actions.length; i++) ...[
+              Expanded(
                 child: _HomeActionTile(
                   icon: actions[i].icon,
                   title: actions[i].title,
                   subtitle: actions[i].subtitle,
                   accent: actions[i].accent,
                   onTap: actions[i].onTap,
+                  compact: compact,
                 ),
               ),
+              if (i != actions.length - 1) SizedBox(width: spacing),
+            ],
           ],
         );
       },
@@ -1503,6 +1502,7 @@ class _HomeActionTile extends StatelessWidget {
     required this.subtitle,
     required this.accent,
     required this.onTap,
+    this.compact = false,
   });
 
   final IconData icon;
@@ -1510,15 +1510,24 @@ class _HomeActionTile extends StatelessWidget {
   final String subtitle;
   final Color accent;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(8);
+    final tileHeight = compact ? 132.0 : 144.0;
+    final contentPadding = compact
+        ? const EdgeInsets.fromLTRB(10, 12, 8, 11)
+        : const EdgeInsets.fromLTRB(15, 14, 13, 13);
+    final badgeSize = compact ? 38.0 : 46.0;
+    final arrowSize = compact ? 26.0 : 30.0;
+    final backgroundIconSize = compact ? 76.0 : 92.0;
+
     return _Pressable(
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
-        height: 144,
+        height: tileHeight,
         decoration: BoxDecoration(
           borderRadius: radius,
           border: Border.all(color: const Color(0xFFDCE8DF)),
@@ -1567,21 +1576,25 @@ class _HomeActionTile extends StatelessWidget {
                   child: Icon(
                     icon,
                     color: accent.withOpacity(0.065),
-                    size: 92,
+                    size: backgroundIconSize,
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(15, 14, 13, 13),
+                  padding: contentPadding,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          _HomeActionIconBadge(icon: icon, accent: accent),
+                          _HomeActionIconBadge(
+                            icon: icon,
+                            accent: accent,
+                            size: badgeSize,
+                          ),
                           const Spacer(),
                           Container(
-                            width: 30,
-                            height: 30,
+                            width: arrowSize,
+                            height: arrowSize,
                             decoration: BoxDecoration(
                               color: Colors.white.withOpacity(0.72),
                               borderRadius: BorderRadius.circular(8),
@@ -1592,7 +1605,7 @@ class _HomeActionTile extends StatelessWidget {
                             child: Icon(
                               Icons.arrow_forward,
                               color: accent,
-                              size: 16,
+                              size: compact ? 15 : 16,
                             ),
                           ),
                         ],
@@ -1600,11 +1613,13 @@ class _HomeActionTile extends StatelessWidget {
                       const Spacer(),
                       Text(
                         context.t(title),
-                        maxLines: 1,
+                        maxLines: compact ? 2 : 1,
                         overflow: TextOverflow.ellipsis,
                         style:
                             Theme.of(context).textTheme.titleMedium?.copyWith(
                                   color: _customerInk,
+                                  fontSize: compact ? 13 : null,
+                                  height: compact ? 1.05 : null,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 0,
                                 ),
@@ -1614,11 +1629,11 @@ class _HomeActionTile extends StatelessWidget {
                         context.t(subtitle),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: _customerMuted,
-                          fontSize: 12,
+                          fontSize: compact ? 10.5 : 12,
                           fontWeight: FontWeight.w700,
-                          height: 1.22,
+                          height: compact ? 1.18 : 1.22,
                         ),
                       ),
                     ],
@@ -1637,22 +1652,24 @@ class _HomeActionIconBadge extends StatelessWidget {
   const _HomeActionIconBadge({
     required this.icon,
     required this.accent,
+    this.size = 46,
   });
 
   final IconData icon;
   final Color accent;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 46,
-      height: 46,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
         color: accent.withOpacity(0.12),
         border: Border.all(color: accent.withOpacity(0.16)),
       ),
-      child: Icon(icon, color: accent, size: 25),
+      child: Icon(icon, color: accent, size: size <= 38 ? 22 : 25),
     );
   }
 }
