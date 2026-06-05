@@ -1450,6 +1450,7 @@ class AdminOrdersScreen extends StatefulWidget {
 
 class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
   var _filter = 'All';
+  DateTime? _selectedDate;
 
   @override
   Widget build(BuildContext context) {
@@ -1472,6 +1473,13 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
               selected: _filter,
               onSelected: (filter) => setState(() => _filter = filter),
             ),
+            _AdminOrderDateFilter(
+              selectedDate: _selectedDate,
+              onPickDate: _pickOrderDate,
+              onClear: _selectedDate == null
+                  ? null
+                  : () => setState(() => _selectedDate = null),
+            ),
             Expanded(
               child: StreamBuilder<List<OrderModel>>(
                 stream: appState.firestoreService.watchAllOrders(),
@@ -1481,19 +1489,19 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
                       child: LoadingView(),
                     );
                   }
-                  final orders = (snapshot.data ?? const <OrderModel>[])
-                      .where(
-                        (order) =>
-                            _filter == 'All' || order.orderStatus == _filter,
-                      )
-                      .toList();
+                  final orders = _filteredOrders(
+                    snapshot.data ?? const <OrderModel>[],
+                  );
                   if (orders.isEmpty) {
-                    return const RefreshableCenteredContent(
+                    return RefreshableCenteredContent(
                       child: EmptyState(
                         icon: Icons.receipt_long,
-                        title: 'No orders',
-                        message:
-                            'Orders matching this filter will appear here.',
+                        title: _selectedDate == null
+                            ? 'No orders'
+                            : 'No orders on this date',
+                        message: _selectedDate == null
+                            ? 'Orders matching this filter will appear here.'
+                            : 'Orders created on the selected date will appear here.',
                       ),
                     );
                   }
@@ -1514,6 +1522,101 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  List<OrderModel> _filteredOrders(List<OrderModel> orders) {
+    return orders.where((order) {
+      final matchesStatus = _filter == 'All' || order.orderStatus == _filter;
+      final selectedDate = _selectedDate;
+      final matchesDate =
+          selectedDate == null || _isSameDate(order.createdAt, selectedDate);
+      return matchesStatus && matchesDate;
+    }).toList();
+  }
+
+  Future<void> _pickOrderDate() async {
+    final now = DateTime.now();
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? now,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 1),
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+    setState(() => _selectedDate = _dateOnly(selected));
+  }
+
+  DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  bool _isSameDate(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+}
+
+class _AdminOrderDateFilter extends StatelessWidget {
+  const _AdminOrderDateFilter({
+    required this.selectedDate,
+    required this.onPickDate,
+    required this.onClear,
+  });
+
+  final DateTime? selectedDate;
+  final VoidCallback onPickDate;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final date = selectedDate;
+    final label =
+        date == null ? 'Select order date' : DateFormat.yMMMd().format(date);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: onPickDate,
+              icon: const Icon(Icons.calendar_month_outlined),
+              label: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+              ),
+              style: OutlinedButton.styleFrom(
+                alignment: Alignment.centerLeft,
+                foregroundColor: date == null ? _adminInk : _adminPrimary,
+                side: BorderSide(
+                  color: date == null ? _adminLine : _adminPrimary,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton.outlined(
+            tooltip: 'Clear date',
+            onPressed: onClear,
+            icon: const Icon(Icons.close),
+            style: IconButton.styleFrom(
+              foregroundColor: _adminInk,
+              disabledForegroundColor: _adminMuted.withOpacity(0.45),
+              side: BorderSide(
+                color:
+                    onClear == null ? _adminLine.withOpacity(0.6) : _adminLine,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
