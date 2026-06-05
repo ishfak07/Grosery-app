@@ -27,6 +27,7 @@ const _adminAccent = Color(0xFFE86F4A);
 const _adminBlue = Color(0xFF356DAA);
 const _adminViolet = Color(0xFF7656A6);
 const _adminWarning = Color(0xFFD88413);
+const _minimumOrderSearchLength = 4;
 
 Color _adminStatusColor(String status) {
   switch (status) {
@@ -655,6 +656,18 @@ class AdminDashboardScreen extends StatelessWidget {
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => const AdminOrdersScreen(),
+                    ),
+                  ),
+                ),
+                _AdminTile(
+                  icon: Icons.manage_search,
+                  title: 'Find order',
+                  subtitle: 'Search by number',
+                  accent: _adminBlue,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const AdminOrdersScreen(autofocusSearch: true),
                     ),
                   ),
                 ),
@@ -1442,15 +1455,25 @@ class _AdminTileState extends State<_AdminTile> {
 }
 
 class AdminOrdersScreen extends StatefulWidget {
-  const AdminOrdersScreen({super.key});
+  const AdminOrdersScreen({super.key, this.autofocusSearch = false});
+
+  final bool autofocusSearch;
 
   @override
   State<AdminOrdersScreen> createState() => _AdminOrdersScreenState();
 }
 
 class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
+  final _orderSearch = TextEditingController();
   var _filter = 'All';
   DateTime? _selectedDate;
+  String _submittedOrderSearch = '';
+
+  @override
+  void dispose() {
+    _orderSearch.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1466,64 +1489,92 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     return _AdminScaffold(
       title: 'Orders',
       body: _AdminPage(
-        child: Column(
-          children: [
-            _AdminFilterBar(
+        child: StreamBuilder<List<OrderModel>>(
+          stream: appState.firestoreService.watchAllOrders(),
+          builder: (context, snapshot) {
+            final allOrders = snapshot.data ?? const <OrderModel>[];
+            final isLoading =
+                snapshot.connectionState == ConnectionState.waiting &&
+                    allOrders.isEmpty;
+            final orders = _filteredOrders(allOrders);
+            final searchQuery =
+                _normalizeOrderSearchInput(_submittedOrderSearch);
+            final searchResults = _matchingOrderSearchResults(
+              allOrders,
+              searchQuery,
+            );
+
+            return _AdminOrdersContent(
+              orderSearchController: _orderSearch,
+              autofocusSearch: widget.autofocusSearch,
+              hasSearch: _submittedOrderSearch.isNotEmpty,
+              isLoading: isLoading,
+              searchQuery: searchQuery,
+              searchResults: searchResults,
               filters: filters,
-              selected: _filter,
-              onSelected: (filter) => setState(() => _filter = filter),
-            ),
-            _AdminOrderDateFilter(
+              selectedFilter: _filter,
               selectedDate: _selectedDate,
+              orders: orders,
+              onSearch: () => _submitOrderSearch(
+                allOrders,
+                isLoading: isLoading,
+              ),
+              onClearSearch: _clearOrderSearch,
+              onFilterSelected: (filter) => setState(() => _filter = filter),
               onPickDate: _pickOrderDate,
-              onClear: _selectedDate == null
+              onClearDate: _selectedDate == null
                   ? null
                   : () => setState(() => _selectedDate = null),
-            ),
-            Expanded(
-              child: StreamBuilder<List<OrderModel>>(
-                stream: appState.firestoreService.watchAllOrders(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const RefreshableCenteredContent(
-                      child: LoadingView(),
-                    );
-                  }
-                  final orders = _filteredOrders(
-                    snapshot.data ?? const <OrderModel>[],
-                  );
-                  if (orders.isEmpty) {
-                    return RefreshableCenteredContent(
-                      child: EmptyState(
-                        icon: Icons.receipt_long,
-                        title: _selectedDate == null
-                            ? 'No orders'
-                            : 'No orders on this date',
-                        message: _selectedDate == null
-                            ? 'Orders matching this filter will appear here.'
-                            : 'Orders created on the selected date will appear here.',
-                      ),
-                    );
-                  }
-                  return ListView.separated(
-                    physics: appRefreshScrollPhysics,
-                    padding: const EdgeInsets.fromLTRB(0, 14, 0, 28),
-                    itemCount: orders.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      return _AdminReveal(
-                        index: index,
-                        child: AdminOrderTile(order: orders[index]),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
+  }
+
+  Future<void> _submitOrderSearch(
+    List<OrderModel> allOrders, {
+    required bool isLoading,
+  }) async {
+    FocusScope.of(context).unfocus();
+    final query = _normalizeOrderSearchInput(_orderSearch.text);
+    setState(() => _submittedOrderSearch = query);
+    if (query.isEmpty) {
+      showSnack(context, 'Enter an order number.');
+      return;
+    }
+    if (query.length < _minimumOrderSearchLength) {
+      showSnack(
+        context,
+        'Enter at least $_minimumOrderSearchLength characters.',
+      );
+      return;
+    }
+    if (isLoading) {
+      showSnack(context, 'Orders are still loading.');
+      return;
+    }
+    final matches = _matchingOrderSearchResults(allOrders, query);
+    if (matches.length == 1) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => AdminOrderDetailsScreen(
+            orderId: matches.single.orderId,
+          ),
+        ),
+      );
+      return;
+    }
+    if (matches.isEmpty) {
+      showSnack(context, 'No order found for this number.');
+      return;
+    }
+    showSnack(context, 'Multiple orders matched. Select the correct order.');
+  }
+
+  void _clearOrderSearch() {
+    _orderSearch.clear();
+    setState(() => _submittedOrderSearch = '');
   }
 
   List<OrderModel> _filteredOrders(List<OrderModel> orders) {
@@ -1556,6 +1607,272 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
 
   bool _isSameDate(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+}
+
+class _AdminOrdersContent extends StatelessWidget {
+  const _AdminOrdersContent({
+    required this.orderSearchController,
+    required this.autofocusSearch,
+    required this.hasSearch,
+    required this.isLoading,
+    required this.searchQuery,
+    required this.searchResults,
+    required this.filters,
+    required this.selectedFilter,
+    required this.selectedDate,
+    required this.orders,
+    required this.onSearch,
+    required this.onClearSearch,
+    required this.onFilterSelected,
+    required this.onPickDate,
+    required this.onClearDate,
+  });
+
+  final TextEditingController orderSearchController;
+  final bool autofocusSearch;
+  final bool hasSearch;
+  final bool isLoading;
+  final String searchQuery;
+  final List<OrderModel> searchResults;
+  final List<String> filters;
+  final String selectedFilter;
+  final DateTime? selectedDate;
+  final List<OrderModel> orders;
+  final VoidCallback onSearch;
+  final VoidCallback onClearSearch;
+  final ValueChanged<String> onFilterSelected;
+  final VoidCallback onPickDate;
+  final VoidCallback? onClearDate;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomScrollView(
+      physics: appRefreshScrollPhysics,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      slivers: [
+        SliverToBoxAdapter(
+          child: _AdminOrderSearchSection(
+            controller: orderSearchController,
+            autofocus: autofocusSearch,
+            hasSearch: hasSearch,
+            isLoading: isLoading,
+            onSearch: onSearch,
+            onClear: onClearSearch,
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: _AdminOrderSearchResults(
+            query: searchQuery,
+            visible: hasSearch && !isLoading,
+            matches: searchResults,
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: _AdminFilterBar(
+            filters: filters,
+            selected: selectedFilter,
+            onSelected: onFilterSelected,
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: _AdminOrderDateFilter(
+            selectedDate: selectedDate,
+            onPickDate: onPickDate,
+            onClear: onClearDate,
+          ),
+        ),
+        if (isLoading)
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: LoadingView(),
+          )
+        else if (orders.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: EmptyState(
+              icon: Icons.receipt_long,
+              title:
+                  selectedDate == null ? 'No orders' : 'No orders on this date',
+              message: selectedDate == null
+                  ? 'Orders matching this filter will appear here.'
+                  : 'Orders created on the selected date will appear here.',
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(0, 14, 0, 28),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  if (index.isOdd) {
+                    return const SizedBox(height: 10);
+                  }
+                  final orderIndex = index ~/ 2;
+                  return _AdminReveal(
+                    index: orderIndex,
+                    child: AdminOrderTile(order: orders[orderIndex]),
+                  );
+                },
+                childCount: orders.length * 2 - 1,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _AdminOrderSearchSection extends StatelessWidget {
+  const _AdminOrderSearchSection({
+    required this.controller,
+    required this.autofocus,
+    required this.hasSearch,
+    required this.isLoading,
+    required this.onSearch,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final bool autofocus;
+  final bool hasSearch;
+  final bool isLoading;
+  final VoidCallback onSearch;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 16, 0, 10),
+      child: _AdminCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _AdminSectionHeader(
+              title: 'Find order by number',
+              icon: Icons.manage_search,
+            ),
+            TextField(
+              controller: controller,
+              autofocus: autofocus,
+              autocorrect: false,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                labelText: 'Order number',
+                hintText: '#a1b2c3d4',
+                prefixIcon: const Icon(Icons.receipt_long),
+                suffixIcon: hasSearch
+                    ? IconButton(
+                        tooltip: 'Clear search',
+                        onPressed: onClear,
+                        icon: const Icon(Icons.close),
+                      )
+                    : null,
+              ),
+              onSubmitted: (_) => onSearch(),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: isLoading ? null : onSearch,
+                    icon: isLoading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.search),
+                    label: Text(isLoading ? 'Loading orders' : 'Search order'),
+                  ),
+                ),
+                if (hasSearch) ...[
+                  const SizedBox(width: 10),
+                  IconButton.outlined(
+                    tooltip: 'Clear search',
+                    onPressed: onClear,
+                    icon: const Icon(Icons.close),
+                    style: IconButton.styleFrom(
+                      foregroundColor: _adminInk,
+                      side: const BorderSide(color: _adminLine),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminOrderSearchResults extends StatelessWidget {
+  const _AdminOrderSearchResults({
+    required this.query,
+    required this.visible,
+    required this.matches,
+  });
+
+  final String query;
+  final bool visible;
+  final List<OrderModel> matches;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!visible) {
+      return const SizedBox.shrink();
+    }
+    if (query.length < _minimumOrderSearchLength) {
+      return const Padding(
+        padding: EdgeInsets.only(bottom: 10),
+        child: _AdminNotice(
+          icon: Icons.info_outline,
+          color: _adminWarning,
+          message: 'Enter at least 4 characters from the order number.',
+        ),
+      );
+    }
+    if (matches.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: _AdminNotice(
+          icon: Icons.search_off,
+          color: _adminWarning,
+          message: 'No order found for #$query.',
+        ),
+      );
+    }
+
+    final visibleMatches = matches.take(2).toList();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _AdminNotice(
+            icon: matches.length == 1
+                ? Icons.check_circle_outline
+                : Icons.rule_folder_outlined,
+            color: matches.length == 1 ? _adminPrimary : _adminBlue,
+            message: matches.length == 1
+                ? 'Order found. Open it below for full details.'
+                : matches.length == visibleMatches.length
+                    ? '${matches.length} orders matched. Select the correct order.'
+                    : '${matches.length} orders matched. Showing the first ${visibleMatches.length}. Enter more characters to narrow it down.',
+          ),
+          const SizedBox(height: 8),
+          for (var index = 0; index < visibleMatches.length; index++) ...[
+            AdminOrderTile(order: visibleMatches[index]),
+            if (index != visibleMatches.length - 1) const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
   }
 }
 
@@ -1694,7 +2011,7 @@ class AdminOrderTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${order.customerName} - ${order.orderId.substring(0, 8)}',
+                  '${order.customerName} - ${_shortId(order.orderId)}',
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _adminInk,
@@ -1886,6 +2203,15 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
+                        _OrderInfoRow(
+                          'Order number',
+                          '#${_shortId(order.orderId)}',
+                        ),
+                        _OrderInfoRow('Full order ID', order.orderId),
+                        _OrderInfoRow(
+                          'Placed',
+                          DateFormat.yMMMd().add_jm().format(order.createdAt),
+                        ),
                         _OrderInfoRow('Phone', order.customerPhone),
                         _OrderInfoRow('Address', order.customerAddress),
                         if (customerNotes.isNotEmpty)
@@ -3614,6 +3940,42 @@ String _shortId(String value) {
   return value.substring(0, 8);
 }
 
+String _normalizeOrderSearchInput(String value) {
+  return value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'\border\b'), '')
+      .replaceAll(RegExp(r'\bid\b'), '')
+      .replaceAll(RegExp(r'[^a-z0-9-]'), '');
+}
+
+List<OrderModel> _matchingOrderSearchResults(
+  List<OrderModel> orders,
+  String query,
+) {
+  if (query.length < _minimumOrderSearchLength) {
+    return const <OrderModel>[];
+  }
+  final compactQuery = query.replaceAll('-', '');
+  final exactMatches = <OrderModel>[];
+  final prefixMatches = <OrderModel>[];
+
+  for (final order in orders) {
+    final orderId = order.orderId.toLowerCase();
+    final compactOrderId = orderId.replaceAll('-', '');
+    final isExact = orderId == query || compactOrderId == compactQuery;
+    final isPrefix =
+        orderId.startsWith(query) || compactOrderId.startsWith(compactQuery);
+    if (isExact) {
+      exactMatches.add(order);
+    } else if (isPrefix) {
+      prefixMatches.add(order);
+    }
+  }
+
+  return <OrderModel>[...exactMatches, ...prefixMatches];
+}
+
 class AdminOfferManagementScreen extends StatelessWidget {
   const AdminOfferManagementScreen({super.key});
 
@@ -5281,6 +5643,17 @@ class AdminSupportScreen extends StatelessWidget {
     final appState = context.read<AppState>();
     return _AdminScaffold(
       title: 'Support tickets',
+      actions: [
+        _AdminAppBarButton(
+          tooltip: 'Find order',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const AdminOrdersScreen(autofocusSearch: true),
+            ),
+          ),
+          icon: Icons.manage_search,
+        ),
+      ],
       body: _AdminPage(
         child: StreamBuilder<List<SupportTicket>>(
           stream: appState.firestoreService.watchTickets(allTickets: true),
