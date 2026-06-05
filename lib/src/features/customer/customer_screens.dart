@@ -4206,8 +4206,15 @@ class OrderSuccessScreen extends StatelessWidget {
   }
 }
 
-class OrderHistoryScreen extends StatelessWidget {
+class OrderHistoryScreen extends StatefulWidget {
   const OrderHistoryScreen({super.key});
+
+  @override
+  State<OrderHistoryScreen> createState() => _OrderHistoryScreenState();
+}
+
+class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
+  var _selectedFilter = _OrderHistoryFilters.all;
 
   @override
   Widget build(BuildContext context) {
@@ -4233,18 +4240,289 @@ class OrderHistoryScreen extends StatelessWidget {
           }
           return _CustomerScrollView(
             children: [
-              const _CustomerSectionHeader(
-                title: 'Recent orders',
-                subtitle: 'Track progress and review previous baskets',
+              _OrderHistoryHeading(
+                filter: _selectedFilter,
+                shownCount: _selectedFilter.countIn(orders),
+                totalCount: orders.length,
               ),
-              for (var index = 0; index < orders.length; index++) ...[
-                _FadeSlideIn(
-                  index: index,
-                  child: OrderTile(order: orders[index]),
-                ),
-                if (index != orders.length - 1) const SizedBox(height: 12),
-              ],
+              _OrderHistoryFilterBar(
+                selected: _selectedFilter,
+                orders: orders,
+                onSelected: (filter) {
+                  setState(() => _selectedFilter = filter);
+                },
+              ),
+              const SizedBox(height: 14),
+              ..._buildOrderList(_selectedFilter.apply(orders)),
             ],
+          );
+        },
+      ),
+    );
+  }
+
+  List<Widget> _buildOrderList(List<OrderModel> orders) {
+    if (orders.isEmpty) {
+      return [
+        EmptyState(
+          icon: _selectedFilter.emptyIcon,
+          title: _selectedFilter.emptyTitle,
+          message: _selectedFilter.emptyMessage,
+        ),
+      ];
+    }
+
+    return [
+      for (var index = 0; index < orders.length; index++) ...[
+        _FadeSlideIn(
+          index: index,
+          child: OrderTile(order: orders[index]),
+        ),
+        if (index != orders.length - 1) const SizedBox(height: 12),
+      ],
+    ];
+  }
+}
+
+class _OrderHistoryFilter {
+  const _OrderHistoryFilter({
+    required this.id,
+    required this.label,
+    required this.icon,
+    required this.heading,
+    required this.subtitle,
+    required this.emptyIcon,
+    required this.emptyTitle,
+    required this.emptyMessage,
+    this.statuses,
+  });
+
+  final String id;
+  final String label;
+  final IconData icon;
+  final String heading;
+  final String subtitle;
+  final IconData emptyIcon;
+  final String emptyTitle;
+  final String emptyMessage;
+  final Set<String>? statuses;
+
+  bool matches(OrderModel order) {
+    final filterStatuses = statuses;
+    return filterStatuses == null || filterStatuses.contains(order.orderStatus);
+  }
+
+  int countIn(List<OrderModel> orders) {
+    return orders.where(matches).length;
+  }
+
+  List<OrderModel> apply(List<OrderModel> orders) {
+    return orders.where(matches).toList();
+  }
+}
+
+class _OrderHistoryFilters {
+  const _OrderHistoryFilters._();
+
+  static const all = _OrderHistoryFilter(
+    id: 'all',
+    label: 'All',
+    icon: Icons.receipt_long_outlined,
+    heading: 'Recent orders',
+    subtitle: 'Track progress and review previous baskets',
+    emptyIcon: Icons.history,
+    emptyTitle: 'No orders yet',
+    emptyMessage: 'Your order history will appear here.',
+  );
+
+  static const active = _OrderHistoryFilter(
+    id: 'active',
+    label: 'Active',
+    icon: Icons.local_shipping_outlined,
+    heading: 'Active orders',
+    subtitle: 'Orders being prepared, shopped, or delivered.',
+    emptyIcon: Icons.local_shipping_outlined,
+    emptyTitle: 'No active orders',
+    emptyMessage: 'Orders in progress will appear here.',
+    statuses: {
+      'Pending',
+      'Accepted',
+      'Shopping Started',
+      'Out for Delivery',
+    },
+  );
+
+  static const attention = _OrderHistoryFilter(
+    id: 'attention',
+    label: 'Needs attention',
+    icon: Icons.priority_high_rounded,
+    heading: 'Needs attention',
+    subtitle: 'Orders with questions, item changes, or updated bills.',
+    emptyIcon: Icons.mark_chat_read_outlined,
+    emptyTitle: 'Nothing needs attention',
+    emptyMessage: 'Orders that need your review will appear here.',
+    statuses: {
+      'Need Clarification',
+      'Item Unavailable',
+      'Bill Updated',
+    },
+  );
+
+  static const delivered = _OrderHistoryFilter(
+    id: 'delivered',
+    label: 'Delivered',
+    icon: Icons.check_circle_outline,
+    heading: 'Delivered orders',
+    subtitle: 'Completed baskets are saved for quick review.',
+    emptyIcon: Icons.check_circle_outline,
+    emptyTitle: 'No delivered orders',
+    emptyMessage: 'Completed orders will appear here.',
+    statuses: {'Delivered'},
+  );
+
+  static const rejected = _OrderHistoryFilter(
+    id: 'rejected',
+    label: 'Rejected',
+    icon: Icons.cancel_outlined,
+    heading: 'Rejected orders',
+    subtitle: 'Orders that could not be completed.',
+    emptyIcon: Icons.cancel_outlined,
+    emptyTitle: 'No rejected orders',
+    emptyMessage: 'Rejected or cancelled orders will appear here.',
+    statuses: {'Rejected', 'Cancelled'},
+  );
+
+  static const values = [
+    all,
+    active,
+    attention,
+    delivered,
+    rejected,
+  ];
+}
+
+class _OrderHistoryHeading extends StatelessWidget {
+  const _OrderHistoryHeading({
+    required this.filter,
+    required this.shownCount,
+    required this.totalCount,
+  });
+
+  final _OrderHistoryFilter filter;
+  final int shownCount;
+  final int totalCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final isShowingAll = filter.id == _OrderHistoryFilters.all.id;
+    final countLabel = isShowingAll
+        ? context.t('{count} orders', values: {'count': totalCount})
+        : context.t(
+            '{count} of {total} orders',
+            values: {'count': shownCount, 'total': totalCount},
+          );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.t(filter.heading),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: _customerInk,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
+                      ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  context.t(filter.subtitle),
+                  style: const TextStyle(
+                    color: _customerMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: _customerPrimaryLight,
+              border: Border.all(color: _customerLine),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              countLabel,
+              style: const TextStyle(
+                color: _customerPrimary,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderHistoryFilterBar extends StatelessWidget {
+  const _OrderHistoryFilterBar({
+    required this.selected,
+    required this.orders,
+    required this.onSelected,
+  });
+
+  final _OrderHistoryFilter selected;
+  final List<OrderModel> orders;
+  final ValueChanged<_OrderHistoryFilter> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _OrderHistoryFilters.values.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final filter = _OrderHistoryFilters.values[index];
+          final isSelected = selected.id == filter.id;
+          final accent = isSelected ? _customerPrimary : _customerMuted;
+          return ChoiceChip(
+            avatar: Icon(
+              isSelected ? Icons.check : filter.icon,
+              size: 17,
+              color: isSelected ? Colors.white : accent,
+            ),
+            label: Text(
+              '${context.t(filter.label)} (${filter.countIn(orders)})',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            selected: isSelected,
+            onSelected: (_) => onSelected(filter),
+            labelStyle: TextStyle(
+              color: isSelected ? Colors.white : _customerInk,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+            selectedColor: _customerPrimary,
+            backgroundColor: Colors.white,
+            side: BorderSide(
+              color: isSelected ? _customerPrimary : _customerLine,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
           );
         },
       ),
