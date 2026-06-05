@@ -555,30 +555,36 @@ class CustomerHomeScreen extends StatelessWidget {
               const SizedBox(height: 14),
               const _HomeOffersCarousel(),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _HomeActionTile(
-                      icon: Icons.shopping_bag_outlined,
-                      title: 'Items',
-                      subtitle: 'Pick the items you need.',
-                      accent: _customerPrimary,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) => const ShopListScreen()),
+              _HomeActionGrid(
+                actions: [
+                  _HomeActionSpec(
+                    icon: Icons.shopping_bag_outlined,
+                    title: 'Items',
+                    subtitle: 'Pick the items you need.',
+                    accent: _customerPrimary,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ShopListScreen()),
+                    ),
+                  ),
+                  _HomeActionSpec(
+                    icon: Icons.document_scanner_outlined,
+                    title: 'Photo list',
+                    subtitle: 'Send list photo',
+                    accent: _customerBlue,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const UploadBillScreen(),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _HomeActionTile(
-                      icon: Icons.document_scanner_outlined,
-                      title: 'Photo list',
-                      subtitle: 'Send any grocery list',
-                      accent: _customerBlue,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) => const UploadBillScreen()),
+                  _HomeActionSpec(
+                    icon: Icons.edit_note,
+                    title: 'Manual list',
+                    subtitle: 'Type your grocery list',
+                    accent: _customerAccent,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ManualListScreen(),
                       ),
                     ),
                   ),
@@ -1434,6 +1440,62 @@ class _RecentProductsGridState extends State<_RecentProductsGrid> {
   }
 }
 
+class _HomeActionSpec {
+  const _HomeActionSpec({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.accent,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color accent;
+  final VoidCallback onTap;
+}
+
+class _HomeActionGrid extends StatelessWidget {
+  const _HomeActionGrid({required this.actions});
+
+  final List<_HomeActionSpec> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useThreeColumns = constraints.maxWidth >= 640;
+        final spacing = useThreeColumns ? 12.0 : 10.0;
+        final compactTileWidth = (constraints.maxWidth - spacing) / 2;
+        final wideTileWidth = (constraints.maxWidth - spacing * 2) / 3;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (var i = 0; i < actions.length; i++)
+              SizedBox(
+                width: useThreeColumns
+                    ? wideTileWidth
+                    : i == actions.length - 1
+                        ? constraints.maxWidth
+                        : compactTileWidth,
+                child: _HomeActionTile(
+                  icon: actions[i].icon,
+                  title: actions[i].title,
+                  subtitle: actions[i].subtitle,
+                  accent: actions[i].accent,
+                  onTap: actions[i].onTap,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _HomeActionTile extends StatelessWidget {
   const _HomeActionTile({
     required this.icon,
@@ -2265,13 +2327,13 @@ class CartScreen extends StatelessWidget {
     final items = appState.cartItems;
     return _CustomerScaffold(
       title: 'Cart',
-      body: items.isEmpty && !appState.hasBillImage
+      body: items.isEmpty && !appState.hasBillImage && !appState.hasManualList
           ? RefreshableCenteredContent(
               child: EmptyState(
                 icon: Icons.shopping_cart_outlined,
                 title: 'Your cart is empty',
                 message:
-                    'Add catalog products or upload a shopping list photo.',
+                    'Add catalog products, upload a list photo, or type a manual list.',
                 action: ElevatedButton.icon(
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(
@@ -2288,6 +2350,7 @@ class CartScreen extends StatelessWidget {
                   itemCount: appState.cartCount,
                   subtotal: appState.cartSubtotal,
                   hasBillImage: appState.hasBillImage,
+                  hasManualList: appState.hasManualList,
                 ),
                 const SizedBox(height: 16),
                 if (items.isNotEmpty)
@@ -2312,6 +2375,20 @@ class CartScreen extends StatelessWidget {
                   const SizedBox(height: 10),
                   const _AttachedListPriceNotice(),
                 ],
+                if (appState.hasManualList) ...[
+                  if (items.isNotEmpty || appState.hasBillImage)
+                    const SizedBox(height: 16),
+                  const _CustomerSectionHeader(
+                    title: 'Manual list',
+                    subtitle: 'Admin will review this with your order',
+                  ),
+                  _ManualListPreview(
+                    text: appState.manualListText,
+                    onRemove: () => appState.setManualListText(''),
+                  ),
+                  const SizedBox(height: 10),
+                  if (!appState.hasBillImage) const _AttachedListPriceNotice(),
+                ],
                 const SizedBox(height: 88),
               ],
             ),
@@ -2320,20 +2397,44 @@ class CartScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const UploadBillScreen()),
-              ),
-              icon: const Icon(Icons.upload_file),
-              label: Text(appState.hasBillImage
-                  ? context.t('Change list photo')
-                  : context.t('Upload list photo')),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const UploadBillScreen(),
+                      ),
+                    ),
+                    icon: const Icon(Icons.upload_file),
+                    label: Text(appState.hasBillImage
+                        ? context.t('Change photo')
+                        : context.t('Upload photo')),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ManualListScreen(),
+                      ),
+                    ),
+                    icon: const Icon(Icons.edit_note),
+                    label: Text(appState.hasManualList
+                        ? context.t('Edit list')
+                        : context.t('Type list')),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             PrimaryActionButton(
               label: 'Checkout',
               icon: Icons.payments,
-              onPressed: items.isNotEmpty || appState.hasBillImage
+              onPressed: items.isNotEmpty ||
+                      appState.hasBillImage ||
+                      appState.hasManualList
                   ? () => Navigator.of(context).push(
                         MaterialPageRoute(
                             builder: (_) => const CheckoutScreen()),
@@ -2352,14 +2453,17 @@ class _CartSummaryPanel extends StatelessWidget {
     required this.itemCount,
     required this.subtotal,
     required this.hasBillImage,
+    required this.hasManualList,
   });
 
   final int itemCount;
   final double subtotal;
   final bool hasBillImage;
+  final bool hasManualList;
 
   @override
   Widget build(BuildContext context) {
+    final hasAttachedList = hasBillImage || hasManualList;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -2388,12 +2492,14 @@ class _CartSummaryPanel extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  itemCount == 1
-                      ? context.t('1 catalog item')
-                      : context.t(
-                          '{count} catalog items',
-                          values: {'count': itemCount},
-                        ),
+                  itemCount == 0 && hasAttachedList
+                      ? context.t('Shopping list attached')
+                      : itemCount == 1
+                          ? context.t('1 catalog item')
+                          : context.t(
+                              '{count} catalog items',
+                              values: {'count': itemCount},
+                            ),
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.82),
                     fontWeight: FontWeight.w800,
@@ -2410,8 +2516,8 @@ class _CartSummaryPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  hasBillImage
-                      ? context.t('Photo list attached for admin pricing')
+                  hasAttachedList
+                      ? context.t('Attached list for admin pricing')
                       : context.t('Catalog subtotal before delivery'),
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.8),
@@ -2695,6 +2801,184 @@ class UploadBillScreen extends StatelessWidget {
   }
 }
 
+class ManualListScreen extends StatefulWidget {
+  const ManualListScreen({super.key});
+
+  @override
+  State<ManualListScreen> createState() => _ManualListScreenState();
+}
+
+class _ManualListScreenState extends State<ManualListScreen> {
+  static const _draftSaveDelay = Duration(milliseconds: 450);
+
+  late final TextEditingController _list;
+  late final AppState _appState;
+  Timer? _saveDebounce;
+  String _lastSavedText = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _appState = context.read<AppState>();
+    final initialText = _appState.manualListText;
+    _list = TextEditingController(text: initialText);
+    _lastSavedText = initialText;
+    _list.addListener(_handleListChanged);
+  }
+
+  @override
+  void dispose() {
+    _saveDebounce?.cancel();
+    if (_list.text != _lastSavedText) {
+      unawaited(_appState.setManualListText(_list.text));
+    }
+    _list.removeListener(_handleListChanged);
+    _list.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasList = _list.text.trim().isNotEmpty;
+    return _CustomerScaffold(
+      title: 'Manual list',
+      body: _CustomerScrollView(
+        children: [
+          _CustomerCard(
+            child: Row(
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: _customerPrimaryLight,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.edit_note,
+                    color: _customerPrimary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    context.t(
+                      'Type your grocery items with quantities. Admin will review the list and update your final bill.',
+                    ),
+                    style: const TextStyle(
+                      color: _customerMuted,
+                      fontWeight: FontWeight.w700,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _CustomerCard(
+            child: TextFormField(
+              controller: _list,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
+              minLines: 9,
+              maxLines: 14,
+              decoration: InputDecoration(
+                labelText: context.t('Grocery list'),
+                alignLabelWithHint: true,
+                prefixIcon: const Icon(Icons.playlist_add),
+                hintText: context.t(
+                  'Example:\n2 kg rice\n1 packet baking powder\n6 eggs',
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const _AttachedListPriceNotice(),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: hasList ? _clearList : null,
+                  icon: const Icon(Icons.delete_outline),
+                  label: Text(context.t('Clear list')),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saveNow,
+                  icon: const Icon(Icons.save_outlined),
+                  label: Text(context.t('Save draft')),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          PrimaryActionButton(
+            label: 'Continue to checkout',
+            icon: Icons.payments,
+            onPressed: hasList ? _continueToCheckout : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleListChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(_draftSaveDelay, () {
+      unawaited(_persistList());
+    });
+  }
+
+  Future<void> _persistList() async {
+    final text = _list.text;
+    if (text == _lastSavedText) {
+      return;
+    }
+    _lastSavedText = text;
+    await _appState.setManualListText(text);
+  }
+
+  Future<void> _saveNow() async {
+    _saveDebounce?.cancel();
+    await _persistList();
+    if (mounted) {
+      showSnack(context, 'Manual list saved.');
+    }
+  }
+
+  Future<void> _clearList() async {
+    _saveDebounce?.cancel();
+    _list.clear();
+    _lastSavedText = '';
+    await _appState.setManualListText('');
+    if (mounted) {
+      showSnack(context, 'Manual list cleared.');
+    }
+  }
+
+  Future<void> _continueToCheckout() async {
+    if (_list.text.trim().isEmpty) {
+      showSnack(context, 'Type at least one grocery item.');
+      return;
+    }
+    _saveDebounce?.cancel();
+    await _persistList();
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const CheckoutScreen()),
+    );
+  }
+}
+
 class _BillImagePreview extends StatelessWidget {
   const _BillImagePreview({required this.path});
 
@@ -2746,6 +3030,78 @@ class _BillImagePreview extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ManualListPreview extends StatelessWidget {
+  const _ManualListPreview({
+    required this.text,
+    this.onRemove,
+  });
+
+  final String text;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: _customerPrimaryLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.edit_note,
+                  color: _customerPrimary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  context.t('Typed grocery list'),
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (onRemove != null)
+                IconButton(
+                  tooltip: context.t('Remove list'),
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.delete_outline),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7FAF5),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: _customerLine),
+            ),
+            child: Text(
+              text.trim(),
+              style: const TextStyle(
+                color: _customerInk,
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+              ),
             ),
           ),
         ],
@@ -2891,7 +3247,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     _AmountRow('Delivery charge', charges.deliveryCharge.money),
                   if (charges.serviceCharge > 0)
                     _AmountRow('Service charge', charges.serviceCharge.money),
-                  if (appState.hasBillImage) ...[
+                  if (appState.hasBillImage || appState.hasManualList) ...[
                     const SizedBox(height: 10),
                     const _AttachedListPriceNotice(),
                   ],
@@ -3144,7 +3500,7 @@ class _AttachedListPriceNotice extends StatelessWidget {
           Expanded(
             child: Text(
               context.t(
-                'The prices of attached list items are not calculated in this estimate. Admin will review the photo and update the final bill.',
+                'The prices of attached list items are not calculated in this estimate. Admin will review the photo or typed list and update the final bill.',
               ),
               style: const TextStyle(
                 color: danger,
@@ -3652,6 +4008,11 @@ class OrderTrackingScreen extends StatelessWidget {
               if (order.items.isNotEmpty) ...[
                 const _CustomerSectionHeader(title: 'Items'),
                 for (final item in order.items) _OrderItemRow(item: item),
+              ],
+              if (order.hasManualList) ...[
+                if (order.items.isNotEmpty) const SizedBox(height: 12),
+                const _CustomerSectionHeader(title: 'Manual list'),
+                _ManualListPreview(text: order.manualListText),
               ],
               if (order.hasUpload) ...[
                 const SizedBox(height: 12),

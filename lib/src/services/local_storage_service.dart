@@ -6,6 +6,7 @@ import '../models/models.dart';
 class LocalStorageService {
   static const _cartKey = 'cart_items';
   static const _billImageKey = 'bill_image_path';
+  static const _manualListKey = 'manual_list_text';
   static const _onboardingKey = 'has_seen_onboarding';
   static const _addressDraftKey = 'address_draft';
   static const _preferredLanguageKey = 'preferred_language_code';
@@ -39,6 +40,20 @@ class LocalStorageService {
       return;
     }
     await prefs.setString(_billImageKey, path);
+  }
+
+  Future<String> loadManualListText() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_manualListKey) ?? '';
+  }
+
+  Future<void> saveManualListText(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (value.trim().isEmpty) {
+      await prefs.remove(_manualListKey);
+      return;
+    }
+    await prefs.setString(_manualListKey, value);
   }
 
   Future<bool> hasSeenOnboarding() async {

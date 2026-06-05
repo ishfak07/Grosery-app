@@ -757,6 +757,8 @@ class OrderItem {
 }
 
 class OrderModel {
+  static const _manualListNotesHeader = 'Manual grocery list:';
+
   const OrderModel({
     required this.orderId,
     required this.userId,
@@ -765,6 +767,7 @@ class OrderModel {
     required this.customerAddress,
     required this.items,
     required this.uploadedImageUrl,
+    required this.manualListText,
     required this.paymentReceiptImageUrl,
     required this.orderNotes,
     required this.subtotal,
@@ -787,6 +790,7 @@ class OrderModel {
   final String customerAddress;
   final List<OrderItem> items;
   final String uploadedImageUrl;
+  final String manualListText;
   final String paymentReceiptImageUrl;
   final String orderNotes;
   final double subtotal;
@@ -802,6 +806,8 @@ class OrderModel {
   final DateTime updatedAt;
 
   bool get hasUpload => uploadedImageUrl.isNotEmpty;
+  bool get hasManualList => manualListText.trim().isNotEmpty;
+  bool get hasShoppingList => hasUpload || hasManualList;
   bool get hasPaymentReceipt => paymentReceiptImageUrl.isNotEmpty;
 
   OrderModel copyWith({
@@ -824,6 +830,7 @@ class OrderModel {
       customerAddress: customerAddress,
       items: items ?? this.items,
       uploadedImageUrl: uploadedImageUrl,
+      manualListText: manualListText,
       paymentReceiptImageUrl:
           paymentReceiptImageUrl ?? this.paymentReceiptImageUrl,
       orderNotes: orderNotes,
@@ -852,7 +859,10 @@ class OrderModel {
       'items': items.map((item) => item.toMap()).toList(),
       'uploadedImageUrl': uploadedImageUrl,
       'paymentReceiptImageUrl': paymentReceiptImageUrl,
-      'orderNotes': orderNotes,
+      'orderNotes': _orderNotesForStorage(
+        orderNotes: orderNotes,
+        manualListText: manualListText,
+      ),
       'subtotal': subtotal,
       'deliveryCharge': deliveryCharge,
       'serviceCharge': serviceCharge,
@@ -868,6 +878,8 @@ class OrderModel {
   }
 
   factory OrderModel.fromMap(Map<String, dynamic> map, String id) {
+    final rawOrderNotes = map['orderNotes'] as String? ?? '';
+    final storedManualListText = map['manualListText'] as String?;
     return OrderModel(
       orderId: map['orderId'] as String? ?? id,
       userId: map['userId'] as String? ?? '',
@@ -879,8 +891,10 @@ class OrderModel {
           .map(OrderItem.fromMap)
           .toList(),
       uploadedImageUrl: map['uploadedImageUrl'] as String? ?? '',
+      manualListText:
+          storedManualListText ?? _manualListTextFromNotes(rawOrderNotes),
       paymentReceiptImageUrl: map['paymentReceiptImageUrl'] as String? ?? '',
-      orderNotes: map['orderNotes'] as String? ?? '',
+      orderNotes: _orderNotesWithoutManualList(rawOrderNotes),
       subtotal: (map['subtotal'] as num?)?.toDouble() ?? 0,
       deliveryCharge: (map['deliveryCharge'] as num?)?.toDouble() ?? 0,
       serviceCharge: (map['serviceCharge'] as num?)?.toDouble() ?? 0,
@@ -893,6 +907,40 @@ class OrderModel {
       createdAt: _readDate(map['createdAt']),
       updatedAt: _readDate(map['updatedAt']),
     );
+  }
+
+  static String _orderNotesForStorage({
+    required String orderNotes,
+    required String manualListText,
+  }) {
+    final cleanedNotes = _orderNotesWithoutManualList(orderNotes).trim();
+    final cleanedList = manualListText.trim();
+    if (cleanedList.isEmpty) {
+      return cleanedNotes;
+    }
+    final manualListSection = '$_manualListNotesHeader\n$cleanedList';
+    if (cleanedNotes.isEmpty) {
+      return manualListSection;
+    }
+    return '$cleanedNotes\n\n$manualListSection';
+  }
+
+  static String _manualListTextFromNotes(String orderNotes) {
+    final headerIndex = orderNotes.indexOf(_manualListNotesHeader);
+    if (headerIndex < 0) {
+      return '';
+    }
+    return orderNotes
+        .substring(headerIndex + _manualListNotesHeader.length)
+        .trim();
+  }
+
+  static String _orderNotesWithoutManualList(String orderNotes) {
+    final headerIndex = orderNotes.indexOf(_manualListNotesHeader);
+    if (headerIndex < 0) {
+      return orderNotes.trim();
+    }
+    return orderNotes.substring(0, headerIndex).trim();
   }
 }
 
@@ -1046,7 +1094,9 @@ class AccountSaleRecord {
     bool preserveManualSalesAmount = false,
   }) {
     final hasCartItems = order.items.isNotEmpty;
-    final hasShoppingList = order.hasUpload;
+    final hasPhotoList = order.hasUpload;
+    final hasManualList = order.hasManualList;
+    final hasShoppingList = order.hasShoppingList;
     final cartSalesAmount = order.items.fold<double>(
       0,
       (total, item) => total + item.lineTotal,
@@ -1068,7 +1118,8 @@ class AccountSaleRecord {
       customerAddress: order.customerAddress,
       orderMethod: orderMethodLabel(
         hasCartItems: hasCartItems,
-        hasShoppingList: hasShoppingList,
+        hasPhotoList: hasPhotoList,
+        hasManualList: hasManualList,
       ),
       hasCartItems: hasCartItems,
       hasShoppingList: hasShoppingList,
@@ -1128,13 +1179,26 @@ class AccountSaleRecord {
 
   static String orderMethodLabel({
     required bool hasCartItems,
-    required bool hasShoppingList,
+    required bool hasPhotoList,
+    required bool hasManualList,
   }) {
-    if (hasCartItems && hasShoppingList) {
+    if (hasCartItems && hasPhotoList && hasManualList) {
+      return 'Cart + Photo + Typed List';
+    }
+    if (hasCartItems && hasPhotoList) {
       return 'Cart + Shopping List Photo';
     }
-    if (hasShoppingList) {
+    if (hasCartItems && hasManualList) {
+      return 'Cart + Typed List';
+    }
+    if (hasPhotoList && hasManualList) {
+      return 'Photo + Typed List';
+    }
+    if (hasPhotoList) {
       return 'Shopping List Photo';
+    }
+    if (hasManualList) {
+      return 'Typed Shopping List';
     }
     return 'Cart Checkout';
   }

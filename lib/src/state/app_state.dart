@@ -52,6 +52,7 @@ class AppState extends ChangeNotifier {
   UserProfile? _profile;
   List<CartItem> _cartItems = const <CartItem>[];
   String? _billImagePath;
+  String _manualListText = '';
   CheckoutChargeSettings _checkoutChargeSettings =
       CheckoutChargeSettings.defaults;
   bool _hasLoadedCheckoutChargeSettings = false;
@@ -72,6 +73,8 @@ class AppState extends ChangeNotifier {
   List<CartItem> get cartItems => List.unmodifiable(_cartItems);
   String? get billImagePath => _billImagePath;
   bool get hasBillImage => _billImagePath != null && _billImagePath!.isNotEmpty;
+  String get manualListText => _manualListText;
+  bool get hasManualList => _manualListText.trim().isNotEmpty;
   CheckoutChargeSettings get checkoutChargeSettings => _checkoutChargeSettings;
   bool get hasLoadedCheckoutChargeSettings => _hasLoadedCheckoutChargeSettings;
   PaymentSettings get paymentSettings => _paymentSettings;
@@ -87,6 +90,7 @@ class AppState extends ChangeNotifier {
     );
     _cartItems = await localStorageService.loadCart();
     _billImagePath = await localStorageService.loadBillImagePath();
+    _manualListText = await localStorageService.loadManualListText();
     _hasSeenOnboarding = await localStorageService.hasSeenOnboarding();
     _preferredLanguageCode =
         await localStorageService.loadPreferredLanguageCode();
@@ -509,6 +513,12 @@ class AppState extends ChangeNotifier {
     await localStorageService.saveBillImagePath(path);
   }
 
+  Future<void> setManualListText(String value) async {
+    _manualListText = value;
+    notifyListeners();
+    await localStorageService.saveManualListText(value);
+  }
+
   Future<OrderModel> createOrder({
     required String customerName,
     required String customerPhone,
@@ -524,9 +534,10 @@ class AppState extends ChangeNotifier {
     if (current.isBlocked) {
       throw StateError('Blocked users cannot place orders.');
     }
-    if (_cartItems.isEmpty && !hasBillImage) {
+    if (_cartItems.isEmpty && !hasBillImage && !hasManualList) {
       throw StateError(
-          'Add products or upload a shopping list before checkout.');
+        'Add products, upload a shopping list, or type a manual list before checkout.',
+      );
     }
     if (!_paymentSettings.hasAvailablePaymentMethod) {
       throw StateError('Payment methods are temporarily unavailable.');
@@ -566,6 +577,7 @@ class AppState extends ChangeNotifier {
       customerAddress: customerAddress.trim(),
       items: _cartItems.map(OrderItem.fromCart).toList(),
       uploadedImageUrl: uploadedImageUrl,
+      manualListText: _manualListText.trim(),
       paymentReceiptImageUrl: paymentReceiptImageUrl,
       orderNotes: orderNotes.trim(),
       subtotal: subtotal,
@@ -586,6 +598,7 @@ class AppState extends ChangeNotifier {
     await firestoreService.createOrder(order);
     await clearCart();
     await setBillImagePath(null);
+    await setManualListText('');
     return order;
   }
 

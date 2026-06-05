@@ -1868,6 +1868,23 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                       ),
                     ),
                 ],
+                if (order.hasManualList) ...[
+                  const SizedBox(height: 12),
+                  const _AdminSectionHeader(
+                    title: 'Manual grocery list',
+                    icon: Icons.edit_note,
+                  ),
+                  _AdminCard(
+                    child: SelectableText(
+                      order.manualListText.trim(),
+                      style: const TextStyle(
+                        color: _adminInk,
+                        fontWeight: FontWeight.w700,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
                 if (order.hasUpload) ...[
                   const SizedBox(height: 12),
                   const _AdminSectionHeader(
