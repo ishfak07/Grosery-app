@@ -5728,6 +5728,7 @@ class NotificationsScreen extends StatelessWidget {
         stream: appState.firestoreService.watchNotifications(
           userId: profile.uid,
           role: profile.role,
+          accountCreatedAt: profile.createdAt,
         ),
         builder: (context, snapshot) {
           if (snapshot.hasError) {

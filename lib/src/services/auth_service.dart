@@ -158,8 +158,7 @@ class AuthService {
       updatedAt: now,
       isPhoneVerified: true,
       isBlocked: false,
-      preferredLanguageCode:
-          AppLanguageCodes.normalize(preferredLanguageCode),
+      preferredLanguageCode: AppLanguageCodes.normalize(preferredLanguageCode),
     );
 
     await _firestoreService.saveUserProfile(profile);
@@ -183,6 +182,9 @@ class AuthService {
       );
     } on FirebaseAuthException catch (error) {
       throw AuthServiceException(_authErrorMessage(error));
+    }
+    if (isBootstrapAdminUser(credential.user!)) {
+      return _saveBootstrapAdminProfile(credential.user!.uid);
     }
     final profile = await _firestoreService.fetchUserProfile(
       credential.user!.uid,
@@ -226,7 +228,11 @@ class AuthService {
       }
     }
 
-    final profile = bootstrapAdminProfile(credential.user!.uid);
+    return _saveBootstrapAdminProfile(credential.user!.uid);
+  }
+
+  Future<UserProfile> _saveBootstrapAdminProfile(String uid) async {
+    final profile = bootstrapAdminProfile(uid);
     try {
       await _firestoreService.saveUserProfile(profile);
     } catch (error) {

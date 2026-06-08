@@ -113,10 +113,19 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _handleAuthUser(User? user) async {
+    if (!_isCurrentAuthUser(user)) {
+      return;
+    }
     await _profileSubscription?.cancel();
+    if (!_isCurrentAuthUser(user)) {
+      return;
+    }
     if (user == null) {
       await _checkoutChargeSettingsSubscription?.cancel();
       await _paymentSettingsSubscription?.cancel();
+      if (!_isCurrentAuthUser(user)) {
+        return;
+      }
       _profile = null;
       _checkoutChargeSettings = CheckoutChargeSettings.defaults;
       _hasLoadedCheckoutChargeSettings = false;
@@ -142,13 +151,27 @@ class AppState extends ChangeNotifier {
 
     _profileSubscription = firestoreService.watchUserProfile(user.uid).listen(
       (profile) async {
+        if (!_isCurrentAuthUser(user)) {
+          return;
+        }
         _profile = profile;
         await _applyProfileLanguage(profile);
+        if (!_isCurrentAuthUser(user)) {
+          return;
+        }
         _isInitializing = false;
         notifyListeners();
         await _configureNotificationsForProfile(profile);
       },
     );
+  }
+
+  bool _isCurrentAuthUser(User? expectedUser) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (expectedUser == null) {
+      return currentUser == null;
+    }
+    return currentUser?.uid == expectedUser.uid;
   }
 
   void _watchCheckoutChargeSettings() {

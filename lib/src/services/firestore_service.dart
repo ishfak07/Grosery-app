@@ -819,6 +819,7 @@ class FirestoreService {
   Stream<List<AppNotification>> watchNotifications({
     required String userId,
     required String role,
+    required DateTime accountCreatedAt,
   }) {
     if (!_firebaseAvailable) {
       return Stream<List<AppNotification>>.value(const <AppNotification>[]);
@@ -833,11 +834,23 @@ class FirestoreService {
     final userNotifications = _notifications
         .where('userId', isEqualTo: userId)
         .snapshots()
-        .map(_userNotificationsFromSnapshot);
+        .map(_userNotificationsFromSnapshot)
+        .map(
+          (notifications) => notificationsCreatedOnOrAfter(
+            notifications,
+            accountCreatedAt,
+          ),
+        );
     final broadcastNotifications = _notifications
         .where('recipientRole', isEqualTo: 'broadcast')
         .snapshots()
-        .map(_notificationsFromSnapshot);
+        .map(_notificationsFromSnapshot)
+        .map(
+          (notifications) => notificationsCreatedOnOrAfter(
+            notifications,
+            accountCreatedAt,
+          ),
+        );
     return _mergeNotificationStreams(
       userNotifications,
       broadcastNotifications,
@@ -858,6 +871,17 @@ class FirestoreService {
   ) {
     return _notificationsFromSnapshot(snapshot)
         .where((notification) => notification.recipientRole == 'user')
+        .toList();
+  }
+
+  static List<AppNotification> notificationsCreatedOnOrAfter(
+    List<AppNotification> notifications,
+    DateTime accountCreatedAt,
+  ) {
+    return notifications
+        .where(
+          (notification) => !notification.createdAt.isBefore(accountCreatedAt),
+        )
         .toList();
   }
 
