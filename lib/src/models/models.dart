@@ -269,9 +269,13 @@ class UserProfile {
   final List<String> fcmTokens;
 
   bool get isAdmin => role == 'admin';
+  bool get isDeliveryBoy =>
+      role == 'delivery_boy' || role == 'deliveryBoy' || role == 'delivery';
 
   UserProfile copyWith({
     String? fullName,
+    String? phone,
+    String? hiddenEmail,
     String? address,
     String? role,
     bool? isBlocked,
@@ -282,8 +286,8 @@ class UserProfile {
     return UserProfile(
       uid: uid,
       fullName: fullName ?? this.fullName,
-      phone: phone,
-      hiddenEmail: hiddenEmail,
+      phone: phone ?? this.phone,
+      hiddenEmail: hiddenEmail ?? this.hiddenEmail,
       role: role ?? this.role,
       address: address ?? this.address,
       createdAt: createdAt,
@@ -797,6 +801,7 @@ class OrderModel {
     required this.orderStatus,
     required this.adminNotes,
     required this.rejectionReason,
+    required this.assignedDeliveryBoyId,
     required this.assignedDeliveryPerson,
     required this.assignedDeliveryPhone,
     required this.createdAt,
@@ -826,6 +831,7 @@ class OrderModel {
   final String orderStatus;
   final String adminNotes;
   final String rejectionReason;
+  final String assignedDeliveryBoyId;
   final String assignedDeliveryPerson;
   final String assignedDeliveryPhone;
   final DateTime createdAt;
@@ -852,8 +858,9 @@ class OrderModel {
   bool get hasShoppingList => hasUpload || hasManualList;
   bool get hasPaymentReceipt => paymentReceiptImageUrl.isNotEmpty;
   bool get hasAssignedDeliveryContact =>
-      assignedDeliveryPerson.trim().isNotEmpty ||
-      assignedDeliveryPhone.trim().isNotEmpty;
+      (orderStatus == 'Out for Delivery' || orderStatus == 'Delivered') &&
+      (assignedDeliveryPerson.trim().isNotEmpty ||
+          assignedDeliveryPhone.trim().isNotEmpty);
 
   OrderModel copyWith({
     List<OrderItem>? items,
@@ -861,6 +868,7 @@ class OrderModel {
     String? orderStatus,
     String? adminNotes,
     String? rejectionReason,
+    String? assignedDeliveryBoyId,
     String? assignedDeliveryPerson,
     String? assignedDeliveryPhone,
     double? cartItemsAmount,
@@ -898,6 +906,8 @@ class OrderModel {
       orderStatus: orderStatus ?? this.orderStatus,
       adminNotes: adminNotes ?? this.adminNotes,
       rejectionReason: rejectionReason ?? this.rejectionReason,
+      assignedDeliveryBoyId:
+          assignedDeliveryBoyId ?? this.assignedDeliveryBoyId,
       assignedDeliveryPerson:
           assignedDeliveryPerson ?? this.assignedDeliveryPerson,
       assignedDeliveryPhone:
@@ -934,6 +944,7 @@ class OrderModel {
       'orderStatus': orderStatus,
       'adminNotes': adminNotes,
       'rejectionReason': rejectionReason,
+      'assignedDeliveryBoyId': assignedDeliveryBoyId,
       'assignedDeliveryPerson': assignedDeliveryPerson,
       'assignedDeliveryPhone': assignedDeliveryPhone,
       'createdAt': _writeDate(createdAt),
@@ -1008,6 +1019,7 @@ class OrderModel {
       orderStatus: map['orderStatus'] as String? ?? 'Pending',
       adminNotes: map['adminNotes'] as String? ?? '',
       rejectionReason: map['rejectionReason'] as String? ?? '',
+      assignedDeliveryBoyId: map['assignedDeliveryBoyId'] as String? ?? '',
       assignedDeliveryPerson: map['assignedDeliveryPerson'] as String? ?? '',
       assignedDeliveryPhone: map['assignedDeliveryPhone'] as String? ?? '',
       createdAt: _readDate(map['createdAt']),

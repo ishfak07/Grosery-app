@@ -129,6 +129,7 @@ void main() {
 
   test('order stores assigned delivery contact details', () {
     final order = _order(
+      orderStatus: 'Out for Delivery',
       assignedDeliveryPerson: 'Nimal',
       assignedDeliveryPhone: '+94712345678',
     );
@@ -161,6 +162,7 @@ OrderModel _order({
   String orderNotes = '',
   String manualListText = '',
   String uploadedImageUrl = '',
+  String assignedDeliveryBoyId = '',
   String assignedDeliveryPerson = '',
   String assignedDeliveryPhone = '',
   String orderStatus = 'Pending',
@@ -197,6 +199,7 @@ OrderModel _order({
     orderStatus: orderStatus,
     adminNotes: '',
     rejectionReason: rejectionReason,
+    assignedDeliveryBoyId: assignedDeliveryBoyId,
     assignedDeliveryPerson: assignedDeliveryPerson,
     assignedDeliveryPhone: assignedDeliveryPhone,
     createdAt: now,

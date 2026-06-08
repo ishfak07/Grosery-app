@@ -147,6 +147,27 @@ class FirestoreService {
     });
   }
 
+  Stream<List<UserProfile>> watchDeliveryBoys({bool activeOnly = false}) {
+    if (!_firebaseAvailable) {
+      return Stream<List<UserProfile>>.value(const <UserProfile>[]);
+    }
+    return _users.snapshots().map(
+      (snapshot) {
+        final users = snapshot.docs
+            .map((doc) => UserProfile.fromMap(doc.data(), doc.id))
+            .where((user) => _isDeliveryBoyRole(user.role))
+            .where((user) => !activeOnly || !user.isBlocked)
+            .toList()
+          ..sort((a, b) => a.fullName.compareTo(b.fullName));
+        return users;
+      },
+    );
+  }
+
+  bool _isDeliveryBoyRole(String role) {
+    return role == 'delivery_boy' || role == 'deliveryBoy' || role == 'delivery';
+  }
+
   Stream<List<Shop>> watchShops({bool activeOnly = true}) {
     if (!_firebaseAvailable) {
       return Stream<List<Shop>>.value(const <Shop>[]);
@@ -170,6 +191,10 @@ class FirestoreService {
     }
     if (profile.isAdmin) {
       await _refreshAdminData();
+      return;
+    }
+    if (profile.isDeliveryBoy) {
+      await _refreshDeliveryBoyData(profile.uid);
       return;
     }
     await _refreshCustomerData(profile.uid);
@@ -242,6 +267,24 @@ class FirestoreService {
       _fromServer(
         _notifications
             .where('recipientRole', isEqualTo: 'broadcast')
+            .get(const GetOptions(source: Source.server)),
+      ),
+    ]);
+  }
+
+  Future<void> _refreshDeliveryBoyData(String userId) async {
+    await Future.wait([
+      _fromServer(_users.doc(userId).get(
+            const GetOptions(source: Source.server),
+          )),
+      _fromServer(
+        _orders
+            .where('assignedDeliveryBoyId', isEqualTo: userId)
+            .get(const GetOptions(source: Source.server)),
+      ),
+      _fromServer(
+        _notifications
+            .where('userId', isEqualTo: userId)
             .get(const GetOptions(source: Source.server)),
       ),
     ]);
@@ -386,6 +429,7 @@ class FirestoreService {
       ..remove('manualListAmount')
       ..remove('listAmountsReviewed')
       ..remove('rejectionReason')
+      ..remove('assignedDeliveryBoyId')
       ..remove('assignedDeliveryPhone');
   }
 
@@ -394,6 +438,24 @@ class FirestoreService {
       return Stream<List<OrderModel>>.value(const <OrderModel>[]);
     }
     return _orders.where('userId', isEqualTo: userId).snapshots().map(
+      (snapshot) {
+        final orders = snapshot.docs
+            .map((doc) => OrderModel.fromMap(doc.data(), doc.id))
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return orders;
+      },
+    );
+  }
+
+  Stream<List<OrderModel>> watchOrdersForDeliveryBoy(String deliveryBoyId) {
+    if (!_firebaseAvailable) {
+      return Stream<List<OrderModel>>.value(const <OrderModel>[]);
+    }
+    return _orders
+        .where('assignedDeliveryBoyId', isEqualTo: deliveryBoyId)
+        .snapshots()
+        .map(
       (snapshot) {
         final orders = snapshot.docs
             .map((doc) => OrderModel.fromMap(doc.data(), doc.id))
@@ -451,6 +513,7 @@ class FirestoreService {
     required String status,
     String? adminNotes,
     String? rejectionReason,
+    String? assignedDeliveryBoyId,
     String? assignedDeliveryPerson,
     String? assignedDeliveryPhone,
   }) async {
@@ -464,12 +527,24 @@ class FirestoreService {
     if (status == 'Rejected' && normalizedRejectionReason.isEmpty) {
       throw StateError('Enter the rejection reason before rejecting.');
     }
+    if (status == 'Out for Delivery') {
+      if ((assignedDeliveryBoyId ?? order.assignedDeliveryBoyId).isEmpty ||
+          (assignedDeliveryPerson ?? order.assignedDeliveryPerson)
+              .trim()
+              .isEmpty ||
+          (assignedDeliveryPhone ?? order.assignedDeliveryPhone)
+              .trim()
+              .isEmpty) {
+        throw StateError('Select a delivery boy before sending delivery.');
+      }
+    }
 
     final now = DateTime.now();
     final updatedOrder = order.copyWith(
       orderStatus: status,
       adminNotes: adminNotes,
       rejectionReason: normalizedRejectionReason,
+      assignedDeliveryBoyId: assignedDeliveryBoyId,
       assignedDeliveryPerson: assignedDeliveryPerson,
       assignedDeliveryPhone: assignedDeliveryPhone,
     );
@@ -490,6 +565,8 @@ class FirestoreService {
         'assignedDeliveryPerson': assignedDeliveryPerson,
       if (assignedDeliveryPhone != null)
         'assignedDeliveryPhone': assignedDeliveryPhone,
+      if (assignedDeliveryBoyId != null)
+        'assignedDeliveryBoyId': assignedDeliveryBoyId,
       'updatedAt': FieldValue.serverTimestamp(),
     });
     if (accountRecord != null) {
@@ -517,6 +594,24 @@ class FirestoreService {
         createdAt: DateTime.now(),
       ).toMap(),
     );
+    final deliveryBoyId = assignedDeliveryBoyId ?? order.assignedDeliveryBoyId;
+    if (status == 'Out for Delivery' && deliveryBoyId.isNotEmpty) {
+      final deliveryNotificationId = _uuid.v4();
+      batch.set(
+        _notifications.doc(deliveryNotificationId),
+        AppNotification(
+          notificationId: deliveryNotificationId,
+          userId: deliveryBoyId,
+          recipientRole: 'delivery_boy',
+          title: 'Order assigned',
+          body: '${order.customerName} - ${order.totalAmount.toStringAsFixed(2)}',
+          type: 'order',
+          relatedId: order.orderId,
+          isRead: false,
+          createdAt: DateTime.now(),
+        ).toMap(),
+      );
+    }
     await batch.commit();
   }
 
@@ -830,11 +925,23 @@ class FirestoreService {
           .snapshots()
           .map(_notificationsFromSnapshot);
     }
+    if (role == 'delivery_boy') {
+      return _notifications
+          .where('userId', isEqualTo: userId)
+          .snapshots()
+          .map(_notificationsFromSnapshot)
+          .map(
+            (notifications) => notificationsCreatedOnOrAfter(
+              notifications,
+              accountCreatedAt,
+            ),
+          );
+    }
 
     final userNotifications = _notifications
         .where('userId', isEqualTo: userId)
         .snapshots()
-        .map(_userNotificationsFromSnapshot)
+        .map((snapshot) => _roleNotificationsFromSnapshot(snapshot, role))
         .map(
           (notifications) => notificationsCreatedOnOrAfter(
             notifications,
@@ -866,11 +973,12 @@ class FirestoreService {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
-  List<AppNotification> _userNotificationsFromSnapshot(
+  List<AppNotification> _roleNotificationsFromSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot,
+    String role,
   ) {
     return _notificationsFromSnapshot(snapshot)
-        .where((notification) => notification.recipientRole == 'user')
+        .where((notification) => notification.recipientRole == role)
         .toList();
   }
 

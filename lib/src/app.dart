@@ -8,6 +8,7 @@ import 'core/widgets/common_widgets.dart';
 import 'features/admin/admin_screens.dart';
 import 'features/auth/auth_screens.dart';
 import 'features/customer/customer_screens.dart';
+import 'features/delivery/delivery_boy_screens.dart';
 import 'state/app_state.dart';
 
 class GroceryDeliveryApp extends StatelessWidget {
@@ -45,9 +46,13 @@ class HomeGate extends StatelessWidget {
     if (appState.profile?.isBlocked ?? false) {
       return BlockedAccountScreen(onLogout: appState.logout);
     }
-    return appState.isAdmin
-        ? const AdminDashboardScreen()
-        : const CustomerHomeScreen();
+    if (appState.isAdmin) {
+      return const AdminDashboardScreen();
+    }
+    if (appState.isDeliveryBoy) {
+      return const DeliveryBoyDashboardScreen();
+    }
+    return const CustomerHomeScreen();
   }
 }
 

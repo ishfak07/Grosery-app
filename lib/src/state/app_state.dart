@@ -67,6 +67,7 @@ class AppState extends ChangeNotifier {
   UserProfile? get profile => _profile;
   bool get isLoggedIn => _profile != null;
   bool get isAdmin => _profile?.isAdmin ?? false;
+  bool get isDeliveryBoy => _profile?.isDeliveryBoy ?? false;
   String get preferredLanguageCode => _preferredLanguageCode;
   String get effectiveLanguageCode =>
       isAdmin ? AppLanguageCodes.english : _preferredLanguageCode;
@@ -625,6 +626,7 @@ class AppState extends ChangeNotifier {
       orderStatus: 'Pending',
       adminNotes: '',
       rejectionReason: '',
+      assignedDeliveryBoyId: '',
       assignedDeliveryPerson: '',
       assignedDeliveryPhone: '',
       createdAt: now,

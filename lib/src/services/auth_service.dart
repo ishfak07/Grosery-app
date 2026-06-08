@@ -289,6 +289,122 @@ class AuthService {
     }
   }
 
+  Future<void> createDeliveryBoyAccount({
+    required String fullName,
+    required String phone,
+    required String password,
+  }) async {
+    await _callFirstAvailableDeliveryFunction(
+      primaryName: 'createDeliveryBoyAccount',
+      fallbackName: 'createDeliveryBoy',
+      data: {
+        'fullName': fullName.trim(),
+        'phone': PhoneUtils.normalizeSriLankanPhone(phone),
+        'password': password,
+      },
+    );
+  }
+
+  Future<void> updateDeliveryBoyAccount({
+    required String uid,
+    required String fullName,
+    required String phone,
+    String password = '',
+    bool? isActive,
+  }) async {
+    final data = <String, Object?>{
+      'uid': uid,
+      'fullName': fullName.trim(),
+      'phone': PhoneUtils.normalizeSriLankanPhone(phone),
+      'password': password,
+    };
+    if (isActive != null) {
+      data['isActive'] = isActive;
+      data['isBlocked'] = !isActive;
+    }
+    await _callFirstAvailableDeliveryFunction(
+      primaryName: 'updateDeliveryBoyAccount',
+      fallbackName: 'updateDeliveryBoy',
+      data: data,
+    );
+  }
+
+  Future<void> setDeliveryBoyActive({
+    required String uid,
+    required bool isActive,
+  }) async {
+    try {
+      await _functions.httpsCallable('setDeliveryBoyActive').call({
+        'uid': uid,
+        'isActive': isActive,
+      });
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
+  Future<void> createDeliveryBoy({
+    required String fullName,
+    required String phone,
+    required String password,
+  }) async {
+    await createDeliveryBoyAccount(
+      fullName: fullName,
+      phone: phone,
+      password: password,
+    );
+  }
+
+  Future<void> updateDeliveryBoy({
+    required String uid,
+    required String fullName,
+    required String phone,
+    String? password,
+    required bool isBlocked,
+  }) async {
+    await updateDeliveryBoyAccount(
+      uid: uid,
+      fullName: fullName,
+      phone: phone,
+      password: password ?? '',
+      isActive: !isBlocked,
+    );
+  }
+
+  Future<void> markAssignedOrderDelivered(String orderId) async {
+    try {
+      await _functions.httpsCallable('markAssignedOrderDelivered').call({
+        'orderId': orderId,
+      });
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
+  Future<void> _callFirstAvailableDeliveryFunction({
+    required String primaryName,
+    required String fallbackName,
+    required Map<String, Object?> data,
+  }) async {
+    try {
+      await _functions.httpsCallable(primaryName).call(data);
+    } on FirebaseFunctionsException catch (error) {
+      if (error.code != 'not-found') {
+        throw AuthServiceException(_functionsErrorMessage(error));
+      }
+      try {
+        await _functions.httpsCallable(fallbackName).call(data);
+      } on FirebaseFunctionsException catch (fallbackError) {
+        if (fallbackError.code == 'not-found') {
+          throw const AuthServiceException(
+            'Delivery boy account service is not deployed. Deploy Firebase Functions and try again.',
+          );
+        }
+        throw AuthServiceException(_functionsErrorMessage(fallbackError));
+      }
+    }
+  }
+
   Future<PasswordResetStatusResult> _callPasswordResetFunction(
     String name,
     Map<String, Object?> data,
@@ -332,9 +448,9 @@ class AuthService {
       case 'unauthenticated':
         return message ?? 'You are not allowed to perform this action.';
       case 'unavailable':
-        return 'Password reset service is unavailable. Try again shortly.';
+        return message ?? 'Service is unavailable. Try again shortly.';
       default:
-        return message ?? 'Password reset failed. Try again.';
+        return message ?? 'Request failed. Try again.';
     }
   }
 
@@ -354,6 +470,8 @@ class AuthService {
         return 'Phone number or password is incorrect.';
       case 'operation-not-allowed':
         return 'Firebase sign-in is disabled. Enable Email/Password in Authentication > Sign-in method.';
+      case 'user-disabled':
+        return 'This account is deactivated. Contact admin support.';
       default:
         return error.message ?? 'Firebase authentication failed. Try again.';
     }

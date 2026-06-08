@@ -738,6 +738,17 @@ class AdminDashboardScreen extends StatelessWidget {
                   ),
                 ),
                 _AdminTile(
+                  icon: Icons.delivery_dining,
+                  title: 'Delivery boys',
+                  subtitle: 'Create and assign',
+                  accent: _adminBlue,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AdminDeliveryBoyManagementScreen(),
+                    ),
+                  ),
+                ),
+                _AdminTile(
                   icon: Icons.lock_reset,
                   title: 'Password resets',
                   subtitle: 'Approve requests',
@@ -2077,6 +2088,7 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
   final _deliveryPhone = TextEditingController();
   String _status = 'Pending';
   String _paymentStatus = 'pending';
+  String? _selectedDeliveryBoyId;
   String? _loadedOrderId;
   var _isSavingBill = false;
   var _isUpdatingStatus = false;
@@ -2122,6 +2134,9 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
     _rejectionReason.text = order.rejectionReason;
     _deliveryPerson.text = order.assignedDeliveryPerson;
     _deliveryPhone.text = order.assignedDeliveryPhone;
+    _selectedDeliveryBoyId = order.assignedDeliveryBoyId.isEmpty
+        ? null
+        : order.assignedDeliveryBoyId;
     _status = order.orderStatus;
     _paymentStatus = order.paymentStatus;
   }
@@ -2547,23 +2562,118 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                           ),
                         ),
                       ],
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _deliveryPerson,
-                        decoration: const InputDecoration(
-                          labelText: 'Delivery boy name',
-                          prefixIcon: Icon(Icons.delivery_dining),
+                      if (_status == 'Out for Delivery') ...[
+                        const SizedBox(height: 10),
+                        StreamBuilder<List<UserProfile>>(
+                          stream: appState.firestoreService.watchDeliveryBoys(
+                            activeOnly: true,
+                          ),
+                          builder: (context, snapshot) {
+                            final deliveryBoys =
+                                snapshot.data ?? const <UserProfile>[];
+                            final selectedId = deliveryBoys.any(
+                              (deliveryBoy) =>
+                                  deliveryBoy.uid == _selectedDeliveryBoyId,
+                            )
+                                ? _selectedDeliveryBoyId
+                                : null;
+                            return DropdownButtonFormField<String>(
+                              value: selectedId,
+                              decoration: const InputDecoration(
+                                labelText: 'Assign delivery boy',
+                                prefixIcon: Icon(Icons.delivery_dining),
+                              ),
+                              hint: Text(
+                                deliveryBoys.isEmpty
+                                    ? 'No active delivery boys'
+                                    : 'Select delivery boy',
+                              ),
+                              items: deliveryBoys
+                                  .map(
+                                    (deliveryBoy) => DropdownMenuItem(
+                                      value: deliveryBoy.uid,
+                                      child: Text(
+                                        deliveryBoy.fullName,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: deliveryBoys.isEmpty
+                                  ? null
+                                  : (value) {
+                                      UserProfile? selected;
+                                      for (final deliveryBoy
+                                          in deliveryBoys) {
+                                        if (deliveryBoy.uid == value) {
+                                          selected = deliveryBoy;
+                                          break;
+                                        }
+                                      }
+                                      if (selected == null) {
+                                        return;
+                                      }
+                                      final selectedDeliveryBoy = selected;
+                                      setState(() {
+                                        _selectedDeliveryBoyId =
+                                            selectedDeliveryBoy.uid;
+                                        _deliveryPerson.text =
+                                            selectedDeliveryBoy.fullName;
+                                        _deliveryPhone.text =
+                                            selectedDeliveryBoy.phone;
+                                      });
+                                    },
+                            );
+                          },
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: _deliveryPhone,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          labelText: 'Delivery boy phone number',
-                          prefixIcon: Icon(Icons.phone_outlined),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _deliveryPerson,
+                          readOnly: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Delivery boy name',
+                            prefixIcon: Icon(Icons.badge_outlined),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _deliveryPhone,
+                          readOnly: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Delivery boy phone number',
+                            prefixIcon: Icon(Icons.phone_outlined),
+                          ),
+                        ),
+                      ] else if (order.hasAssignedDeliveryContact) ...[
+                        const SizedBox(height: 10),
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: _adminBackground,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: _adminLine),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const _AdminSectionHeader(
+                                title: 'Assigned delivery boy',
+                                icon: Icons.delivery_dining,
+                              ),
+                              _OrderInfoRow(
+                                'Name',
+                                order.assignedDeliveryPerson,
+                              ),
+                              _OrderInfoRow(
+                                'Phone',
+                                order.assignedDeliveryPhone,
+                              ),
+                            ],
+                          ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       TextField(
                         controller: _adminNotes,
@@ -2659,6 +2769,11 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
       showSnack(context, 'Enter the rejection reason before rejecting.');
       return;
     }
+    if (_status == 'Out for Delivery' &&
+        (_selectedDeliveryBoyId == null || _selectedDeliveryBoyId!.isEmpty)) {
+      showSnack(context, 'Select a delivery boy before sending delivery.');
+      return;
+    }
     final deliveryPhone = deliveryPhoneText.isEmpty
         ? ''
         : PhoneUtils.normalizeSriLankanPhone(deliveryPhoneText);
@@ -2669,6 +2784,8 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
             status: _status,
             adminNotes: _adminNotes.text.trim(),
             rejectionReason: _status == 'Rejected' ? rejectionReason : '',
+            assignedDeliveryBoyId:
+                _status == 'Out for Delivery' ? _selectedDeliveryBoyId : null,
             assignedDeliveryPerson: _deliveryPerson.text.trim(),
             assignedDeliveryPhone: deliveryPhone,
           );
@@ -5778,7 +5895,9 @@ class AdminCustomerManagementScreen extends StatelessWidget {
                 child: LoadingView(),
               );
             }
-            final users = snapshot.data ?? const <UserProfile>[];
+            final users = (snapshot.data ?? const <UserProfile>[])
+                .where((user) => !user.isDeliveryBoy)
+                .toList();
             if (users.isEmpty) {
               return const RefreshableCenteredContent(
                 child: EmptyState(
@@ -5813,6 +5932,299 @@ class AdminCustomerManagementScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class AdminDeliveryBoyManagementScreen extends StatelessWidget {
+  const AdminDeliveryBoyManagementScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.read<AppState>();
+    return _AdminScaffold(
+      title: 'Delivery boys',
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showDeliveryBoyDialog(context),
+        icon: const Icon(Icons.add),
+        label: const Text('Add delivery boy'),
+      ),
+      body: _AdminPage(
+        child: StreamBuilder<List<UserProfile>>(
+          stream: appState.firestoreService.watchDeliveryBoys(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const RefreshableCenteredContent(child: LoadingView());
+            }
+            final deliveryBoys = snapshot.data ?? const <UserProfile>[];
+            if (deliveryBoys.isEmpty) {
+              return const RefreshableCenteredContent(
+                child: EmptyState(
+                  icon: Icons.delivery_dining,
+                  title: 'No delivery boys',
+                  message: 'Create accounts for delivery staff here.',
+                ),
+              );
+            }
+            return ListView.separated(
+              physics: appRefreshScrollPhysics,
+              padding: const EdgeInsets.fromLTRB(0, 16, 0, 90),
+              itemCount: deliveryBoys.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final deliveryBoy = deliveryBoys[index];
+                return _AdminReveal(
+                  index: index,
+                  child: _DeliveryBoyTile(
+                    deliveryBoy: deliveryBoy,
+                    onEdit: () => _showDeliveryBoyDialog(
+                      context,
+                      deliveryBoy: deliveryBoy,
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showDeliveryBoyDialog(
+    BuildContext context, {
+    UserProfile? deliveryBoy,
+  }) async {
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (_) => _DeliveryBoyEditorDialog(deliveryBoy: deliveryBoy),
+    );
+    if (context.mounted && saved == true) {
+      showSnack(
+        context,
+        deliveryBoy == null
+            ? 'Delivery boy account created.'
+            : 'Delivery boy account updated.',
+      );
+    }
+  }
+}
+
+class _DeliveryBoyTile extends StatelessWidget {
+  const _DeliveryBoyTile({
+    required this.deliveryBoy,
+    required this.onEdit,
+  });
+
+  final UserProfile deliveryBoy;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor =
+        deliveryBoy.isBlocked ? const Color(0xFFC83A2B) : _adminPrimary;
+    return _AdminCard(
+      onTap: onEdit,
+      child: Row(
+        children: [
+          _AdminIconBadge(
+            icon: Icons.delivery_dining,
+            color: statusColor,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  deliveryBoy.fullName,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _adminInk,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  deliveryBoy.phone,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _adminMuted,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          _AdminPill(
+            label: deliveryBoy.isBlocked ? 'Inactive' : 'Active',
+            color: statusColor,
+            icon: deliveryBoy.isBlocked ? Icons.block : Icons.check_circle,
+          ),
+          const SizedBox(width: 4),
+          const Icon(Icons.edit_outlined, color: _adminMuted),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveryBoyEditorDialog extends StatefulWidget {
+  const _DeliveryBoyEditorDialog({this.deliveryBoy});
+
+  final UserProfile? deliveryBoy;
+
+  @override
+  State<_DeliveryBoyEditorDialog> createState() =>
+      _DeliveryBoyEditorDialogState();
+}
+
+class _DeliveryBoyEditorDialogState extends State<_DeliveryBoyEditorDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _name;
+  late final TextEditingController _phone;
+  late final TextEditingController _password;
+  var _isActive = true;
+  var _isSaving = false;
+
+  bool get _isEditing => widget.deliveryBoy != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final deliveryBoy = widget.deliveryBoy;
+    _name = TextEditingController(text: deliveryBoy?.fullName ?? '');
+    _phone = TextEditingController(text: deliveryBoy?.phone ?? '');
+    _password = TextEditingController();
+    _isActive = !(deliveryBoy?.isBlocked ?? false);
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(_isEditing ? 'Edit delivery boy' : 'Add delivery boy'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _name,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Full name',
+                    prefixIcon: Icon(Icons.person_outline),
+                  ),
+                  validator: (value) =>
+                      Validators.requiredText(value, 'Full name'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _phone,
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Phone number',
+                    prefixIcon: Icon(Icons.phone_outlined),
+                  ),
+                  validator: Validators.phone,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _password,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText:
+                        _isEditing ? 'New password (optional)' : 'Password',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                  ),
+                  validator: (value) {
+                    if (_isEditing && (value == null || value.isEmpty)) {
+                      return null;
+                    }
+                    return Validators.password(value);
+                  },
+                ),
+                if (_isEditing) ...[
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Active account'),
+                    value: _isActive,
+                    onChanged: (value) => setState(() => _isActive = value),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: _isSaving ? null : _save,
+          icon: _isSaving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.save),
+          label: const Text('Save'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      final appState = context.read<AppState>();
+      if (_isEditing) {
+        await appState.authService.updateDeliveryBoy(
+          uid: widget.deliveryBoy!.uid,
+          fullName: _name.text,
+          phone: _phone.text,
+          password: _password.text.trim().isEmpty ? null : _password.text,
+          isBlocked: !_isActive,
+        );
+      } else {
+        await appState.authService.createDeliveryBoy(
+          fullName: _name.text,
+          phone: _phone.text,
+          password: _password.text,
+        );
+      }
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 }
 
