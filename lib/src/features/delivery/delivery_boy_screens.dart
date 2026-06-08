@@ -17,8 +17,19 @@ const _deliveryPrimary = Color(0xFF176B45);
 const _deliveryBlue = Color(0xFF356DAA);
 const _deliveryWarning = Color(0xFFD88413);
 
-class DeliveryBoyDashboardScreen extends StatelessWidget {
+enum _DeliveryOrderBucket { active, history, all }
+
+class DeliveryBoyDashboardScreen extends StatefulWidget {
   const DeliveryBoyDashboardScreen({super.key});
+
+  @override
+  State<DeliveryBoyDashboardScreen> createState() =>
+      _DeliveryBoyDashboardScreenState();
+}
+
+class _DeliveryBoyDashboardScreenState
+    extends State<DeliveryBoyDashboardScreen> {
+  var _selectedBucket = _DeliveryOrderBucket.active;
 
   @override
   Widget build(BuildContext context) {
@@ -65,36 +76,63 @@ class DeliveryBoyDashboardScreen extends StatelessWidget {
                       child: LoadingView(),
                     );
                   }
-                  if (orders.isEmpty) {
-                    return const RefreshableCenteredContent(
-                      child: EmptyState(
-                        icon: Icons.local_shipping_outlined,
-                        title: 'No assigned orders',
-                        message: 'Assigned deliveries will appear here.',
-                      ),
-                    );
-                  }
-                  return ListView.separated(
-                    physics: appRefreshScrollPhysics,
-                    padding: EdgeInsets.fromLTRB(
-                      horizontal,
-                      16,
-                      horizontal,
-                      28,
-                    ),
-                    itemCount: orders.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      return Align(
-                        alignment: Alignment.topCenter,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 820),
-                          child: _DeliveryOrderCard(
-                            order: orders[index],
+                  final visibleOrders = _ordersForBucket(orders);
+                  return Padding(
+                    padding: EdgeInsets.symmetric(horizontal: horizontal),
+                    child: CustomScrollView(
+                      physics: appRefreshScrollPhysics,
+                      slivers: [
+                      const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                      SliverToBoxAdapter(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 820),
+                            child: _DeliveryHistoryFilterBar(
+                              selected: _selectedBucket,
+                              activeCount: _activeOrders(orders).length,
+                              historyCount: _historyOrders(orders).length,
+                              allCount: orders.length,
+                              onSelected: (bucket) {
+                                setState(() => _selectedBucket = bucket);
+                              },
+                            ),
                           ),
                         ),
-                      );
-                    },
+                      ),
+                      const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                      if (visibleOrders.isEmpty)
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: _DeliveryEmptyOrders(
+                            bucket: _selectedBucket,
+                            hasAnyOrders: orders.isNotEmpty,
+                          ),
+                        )
+                      else
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              if (index.isOdd) {
+                                return const SizedBox(height: 12);
+                              }
+                              final order = visibleOrders[index ~/ 2];
+                              return Align(
+                                alignment: Alignment.topCenter,
+                                child: ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 820),
+                                  child: _DeliveryOrderCard(order: order),
+                                ),
+                              );
+                            },
+                            childCount: visibleOrders.length * 2 - 1,
+                          ),
+                        ),
+                      if (visibleOrders.isNotEmpty)
+                        const SliverToBoxAdapter(child: SizedBox(height: 28)),
+                      ],
+                    ),
                   );
                 },
               );
@@ -102,6 +140,155 @@ class DeliveryBoyDashboardScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  List<OrderModel> _ordersForBucket(List<OrderModel> orders) {
+    switch (_selectedBucket) {
+      case _DeliveryOrderBucket.active:
+        return _activeOrders(orders);
+      case _DeliveryOrderBucket.history:
+        return _historyOrders(orders);
+      case _DeliveryOrderBucket.all:
+        return orders;
+    }
+  }
+
+  List<OrderModel> _activeOrders(List<OrderModel> orders) {
+    return orders.where((order) => !_isHistoryOrder(order)).toList();
+  }
+
+  List<OrderModel> _historyOrders(List<OrderModel> orders) {
+    return orders.where(_isHistoryOrder).toList();
+  }
+
+  bool _isHistoryOrder(OrderModel order) {
+    return order.orderStatus == 'Delivered' ||
+        order.orderStatus == 'Cancelled' ||
+        order.orderStatus == 'Rejected';
+  }
+}
+
+class _DeliveryHistoryFilterBar extends StatelessWidget {
+  const _DeliveryHistoryFilterBar({
+    required this.selected,
+    required this.activeCount,
+    required this.historyCount,
+    required this.allCount,
+    required this.onSelected,
+  });
+
+  final _DeliveryOrderBucket selected;
+  final int activeCount;
+  final int historyCount;
+  final int allCount;
+  final ValueChanged<_DeliveryOrderBucket> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final options = [
+      _DeliveryOrderFilterOption(
+        bucket: _DeliveryOrderBucket.active,
+        label: 'Active',
+        count: activeCount,
+        icon: Icons.local_shipping_outlined,
+      ),
+      _DeliveryOrderFilterOption(
+        bucket: _DeliveryOrderBucket.history,
+        label: 'History',
+        count: historyCount,
+        icon: Icons.history,
+      ),
+      _DeliveryOrderFilterOption(
+        bucket: _DeliveryOrderBucket.all,
+        label: 'All',
+        count: allCount,
+        icon: Icons.list_alt_outlined,
+      ),
+    ];
+
+    return SizedBox(
+      height: 48,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: options.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final option = options[index];
+          final isSelected = selected == option.bucket;
+          return ChoiceChip(
+            selected: isSelected,
+            onSelected: (_) => onSelected(option.bucket),
+            avatar: Icon(
+              option.icon,
+              size: 16,
+              color: isSelected ? Colors.white : _deliveryPrimary,
+            ),
+            label: Text('${option.label} (${option.count})'),
+            labelStyle: TextStyle(
+              color: isSelected ? Colors.white : _deliveryInk,
+              fontWeight: FontWeight.w900,
+            ),
+            selectedColor: _deliveryPrimary,
+            backgroundColor: Colors.white,
+            side: BorderSide(
+              color: isSelected ? _deliveryPrimary : _deliveryLine,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DeliveryOrderFilterOption {
+  const _DeliveryOrderFilterOption({
+    required this.bucket,
+    required this.label,
+    required this.count,
+    required this.icon,
+  });
+
+  final _DeliveryOrderBucket bucket;
+  final String label;
+  final int count;
+  final IconData icon;
+}
+
+class _DeliveryEmptyOrders extends StatelessWidget {
+  const _DeliveryEmptyOrders({
+    required this.bucket,
+    required this.hasAnyOrders,
+  });
+
+  final _DeliveryOrderBucket bucket;
+  final bool hasAnyOrders;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = switch (bucket) {
+      _DeliveryOrderBucket.active => 'No active deliveries',
+      _DeliveryOrderBucket.history => 'No delivery history',
+      _DeliveryOrderBucket.all => 'No assigned orders',
+    };
+    final message = switch (bucket) {
+      _DeliveryOrderBucket.active => hasAnyOrders
+          ? 'Completed deliveries are saved in History.'
+          : 'Assigned deliveries will appear here.',
+      _DeliveryOrderBucket.history =>
+        'Delivered and closed assigned orders will appear here.',
+      _DeliveryOrderBucket.all => 'Assigned deliveries will appear here.',
+    };
+
+    return EmptyState(
+      icon: bucket == _DeliveryOrderBucket.history
+          ? Icons.history
+          : Icons.local_shipping_outlined,
+      title: title,
+      message: message,
     );
   }
 }
@@ -167,40 +354,14 @@ class _DeliveryOrderCardState extends State<_DeliveryOrderCard> {
           const Divider(height: 24, color: _deliveryLine),
           _DeliveryInfoRow('Customer phone', order.customerPhone),
           _DeliveryInfoRow('Address', order.customerAddress),
-          _DeliveryInfoRow('Amount', order.totalAmount.money),
+          _DeliveryInfoRow('Payment method', order.paymentMethod),
           _DeliveryInfoRow('Payment', order.paymentStatus),
           if (order.adminNotes.trim().isNotEmpty)
             _DeliveryInfoRow('Admin notes', order.adminNotes.trim()),
-          if (order.items.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            const Text(
-              'Order items',
-              style: TextStyle(
-                color: _deliveryInk,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 8),
-            for (final item in order.items.take(4))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 5),
-                child: Text(
-                  '${item.quantity} x ${item.name} - ${item.lineTotal.money}',
-                  style: const TextStyle(
-                    color: _deliveryMuted,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            if (order.items.length > 4)
-              Text(
-                '+${order.items.length - 4} more items',
-                style: const TextStyle(
-                  color: _deliveryMuted,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-          ],
+          const SizedBox(height: 12),
+          _DeliveryAmountBreakdown(order: order),
+          const SizedBox(height: 14),
+          _DeliveryOrderItems(order: order),
           if (order.effectiveManualListText.trim().isNotEmpty) ...[
             const SizedBox(height: 10),
             _DeliveryNotice(
@@ -309,6 +470,248 @@ class _DeliveryIconBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(icon, color: color),
+    );
+  }
+}
+
+class _DeliveryAmountBreakdown extends StatelessWidget {
+  const _DeliveryAmountBreakdown({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DeliveryPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _DeliverySectionTitle(
+            icon: Icons.payments_outlined,
+            title: 'Amount details',
+          ),
+          const SizedBox(height: 8),
+          _DeliveryAmountRow('Cart items', order.cartItemsAmount.money),
+          if (order.hasUpload)
+            _DeliveryAmountRow('Photo list items', order.photoListAmount.money),
+          if (order.hasManualList)
+            _DeliveryAmountRow(
+              'Manual list items',
+              order.manualListAmount.money,
+            ),
+          _DeliveryAmountRow('Subtotal', order.subtotal.money),
+          _DeliveryAmountRow('Delivery charge', order.deliveryCharge.money),
+          _DeliveryAmountRow('Service charge', order.serviceCharge.money),
+          const Divider(height: 18, color: _deliveryLine),
+          _DeliveryAmountRow(
+            'Total amount',
+            order.totalAmount.money,
+            isStrong: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveryOrderItems extends StatelessWidget {
+  const _DeliveryOrderItems({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    if (order.items.isEmpty) {
+      return const _DeliveryPanel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _DeliverySectionTitle(
+              icon: Icons.shopping_basket_outlined,
+              title: 'Order items',
+            ),
+            SizedBox(height: 8),
+            Text(
+              'No cart items. Check the attached list details below.',
+              style: TextStyle(
+                color: _deliveryMuted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _DeliveryPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _DeliverySectionTitle(
+            icon: Icons.shopping_basket_outlined,
+            title: 'Order items',
+          ),
+          const SizedBox(height: 8),
+          for (var index = 0; index < order.items.length; index++) ...[
+            _DeliveryItemRow(item: order.items[index], index: index),
+            if (index != order.items.length - 1)
+              const Divider(height: 16, color: _deliveryLine),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveryPanel extends StatelessWidget {
+  const _DeliveryPanel({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBF8),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _deliveryLine),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _DeliverySectionTitle extends StatelessWidget {
+  const _DeliverySectionTitle({
+    required this.icon,
+    required this.title,
+  });
+
+  final IconData icon;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: _deliveryPrimary, size: 19),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              color: _deliveryInk,
+              fontWeight: FontWeight.w900,
+              fontSize: 15,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DeliveryAmountRow extends StatelessWidget {
+  const _DeliveryAmountRow(
+    this.label,
+    this.value, {
+    this.isStrong = false,
+  });
+
+  final String label;
+  final String value;
+  final bool isStrong;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isStrong ? _deliveryInk : _deliveryMuted,
+                fontWeight: isStrong ? FontWeight.w900 : FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            value,
+            textAlign: TextAlign.end,
+            style: TextStyle(
+              color: isStrong ? _deliveryPrimary : _deliveryInk,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveryItemRow extends StatelessWidget {
+  const _DeliveryItemRow({
+    required this.item,
+    required this.index,
+  });
+
+  final OrderItem item;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 28,
+          child: Text(
+            '#${index + 1}',
+            style: const TextStyle(
+              color: _deliveryMuted,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.name,
+                style: const TextStyle(
+                  color: _deliveryInk,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                '${item.quantity} x ${item.price.money} / ${item.unit}',
+                style: const TextStyle(
+                  color: _deliveryMuted,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          item.lineTotal.money,
+          textAlign: TextAlign.end,
+          style: const TextStyle(
+            color: _deliveryInk,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
     );
   }
 }
