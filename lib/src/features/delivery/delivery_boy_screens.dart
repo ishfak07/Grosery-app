@@ -77,6 +77,8 @@ class _DeliveryBoyDashboardScreenState
                     );
                   }
                   final visibleOrders = _ordersForBucket(orders);
+                  final activeOrders = _activeOrders(orders);
+                  final historyOrders = _historyOrders(orders);
                   return Padding(
                     padding: EdgeInsets.symmetric(horizontal: horizontal),
                     child: CustomScrollView(
@@ -88,10 +90,46 @@ class _DeliveryBoyDashboardScreenState
                           alignment: Alignment.topCenter,
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 820),
+                            child: _DeliveryDashboardHero(
+                              deliveryBoyName: profile.fullName,
+                              activeCount: activeOrders.length,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SliverToBoxAdapter(child: SizedBox(height: 14)),
+                      SliverToBoxAdapter(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 820),
+                            child: _DeliveryPerformanceGrid(orders: orders),
+                          ),
+                        ),
+                      ),
+                      const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                      SliverToBoxAdapter(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 820),
+                            child: _DeliverySectionHeading(
+                              bucket: _selectedBucket,
+                              count: visibleOrders.length,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SliverToBoxAdapter(child: SizedBox(height: 10)),
+                      SliverToBoxAdapter(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 820),
                             child: _DeliveryHistoryFilterBar(
                               selected: _selectedBucket,
-                              activeCount: _activeOrders(orders).length,
-                              historyCount: _historyOrders(orders).length,
+                              activeCount: activeOrders.length,
+                              historyCount: historyOrders.length,
                               allCount: orders.length,
                               onSelected: (bucket) {
                                 setState(() => _selectedBucket = bucket);
@@ -166,6 +204,317 @@ class _DeliveryBoyDashboardScreenState
     return order.orderStatus == 'Delivered' ||
         order.orderStatus == 'Cancelled' ||
         order.orderStatus == 'Rejected';
+  }
+}
+
+class _DeliveryDashboardHero extends StatelessWidget {
+  const _DeliveryDashboardHero({
+    required this.deliveryBoyName,
+    required this.activeCount,
+  });
+
+  final String deliveryBoyName;
+  final int activeCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final hour = DateTime.now().hour;
+    final greeting = hour < 12
+        ? 'Good morning'
+        : hour < 17
+            ? 'Good afternoon'
+            : 'Good evening';
+    final cleanedName = deliveryBoyName.trim();
+    final firstName =
+        cleanedName.isEmpty ? 'there' : cleanedName.split(RegExp(r'\s+')).first;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF176B45), Color(0xFF0F4D33)],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: _deliveryPrimary.withOpacity(0.18),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -18,
+            bottom: -30,
+            child: Icon(
+              Icons.local_shipping_outlined,
+              size: 126,
+              color: Colors.white.withOpacity(0.08),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.14),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.circle,
+                          size: 8,
+                          color: Color(0xFF8CE3B7),
+                        ),
+                        SizedBox(width: 7),
+                        Text(
+                          'Ready for delivery',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                '$greeting, $firstName',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.4,
+                    ),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                activeCount == 0
+                    ? 'You are all caught up. New assignments will appear here.'
+                    : activeCount == 1
+                        ? 'You have 1 delivery waiting for you.'
+                        : 'You have $activeCount deliveries waiting for you.',
+                style: const TextStyle(
+                  color: Color(0xFFD9F0E4),
+                  fontWeight: FontWeight.w600,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveryPerformanceGrid extends StatelessWidget {
+  const _DeliveryPerformanceGrid({required this.orders});
+
+  final List<OrderModel> orders;
+
+  @override
+  Widget build(BuildContext context) {
+    final delivered =
+        orders.where((order) => order.orderStatus == 'Delivered').toList();
+    final reviewed = delivered.where((order) => order.hasDeliveryReview).toList();
+    final averageRating = reviewed.isEmpty
+        ? 0.0
+        : reviewed.fold<int>(
+              0,
+              (total, order) => total + order.deliveryRating,
+            ) /
+            reviewed.length;
+    final now = DateTime.now();
+    final deliveredToday = delivered.where((order) {
+      final date = order.updatedAt;
+      return date.year == now.year &&
+          date.month == now.month &&
+          date.day == now.day;
+    }).length;
+    final active = orders.where((order) {
+      return order.orderStatus != 'Delivered' &&
+          order.orderStatus != 'Cancelled' &&
+          order.orderStatus != 'Rejected';
+    }).length;
+
+    final metrics = [
+      _DeliveryMetric(
+        label: 'Active now',
+        value: '$active',
+        icon: Icons.route_outlined,
+        color: _deliveryBlue,
+      ),
+      _DeliveryMetric(
+        label: 'Delivered today',
+        value: '$deliveredToday',
+        icon: Icons.today_outlined,
+        color: _deliveryPrimary,
+      ),
+      _DeliveryMetric(
+        label: 'All delivered',
+        value: '${delivered.length}',
+        icon: Icons.task_alt,
+        color: const Color(0xFF6A55A5),
+      ),
+      _DeliveryMetric(
+        label: 'Customer rating',
+        value: reviewed.isEmpty ? 'New' : averageRating.toStringAsFixed(1),
+        detail: reviewed.isEmpty
+            ? 'No reviews yet'
+            : '${reviewed.length} ${reviewed.length == 1 ? 'review' : 'reviews'}',
+        icon: Icons.star_rounded,
+        color: _deliveryWarning,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const gap = 10.0;
+        final columns = constraints.maxWidth >= 700 ? 4 : 2;
+        final width =
+            (constraints.maxWidth - (gap * (columns - 1))) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final metric in metrics)
+              SizedBox(
+                width: width,
+                child: _DeliveryMetricCard(metric: metric),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DeliveryMetric {
+  const _DeliveryMetric({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    this.detail,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final String? detail;
+}
+
+class _DeliveryMetricCard extends StatelessWidget {
+  const _DeliveryMetricCard({required this.metric});
+
+  final _DeliveryMetric metric;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DeliveryCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DeliveryIconBadge(icon: metric.icon, color: metric.color),
+          const SizedBox(height: 12),
+          Text(
+            metric.value,
+            style: const TextStyle(
+              color: _deliveryInk,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            metric.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: _deliveryMuted,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (metric.detail != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              metric.detail!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: metric.color,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliverySectionHeading extends StatelessWidget {
+  const _DeliverySectionHeading({
+    required this.bucket,
+    required this.count,
+  });
+
+  final _DeliveryOrderBucket bucket;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = switch (bucket) {
+      _DeliveryOrderBucket.active => 'Current deliveries',
+      _DeliveryOrderBucket.history => 'Delivery history',
+      _DeliveryOrderBucket.all => 'All assigned orders',
+    };
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: _deliveryInk,
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: _deliveryPrimary.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            '$count',
+            style: const TextStyle(
+              color: _deliveryPrimary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -369,6 +718,10 @@ class _DeliveryOrderCardState extends State<_DeliveryOrderCard> {
               message: order.effectiveManualListText.trim(),
             ),
           ],
+          if (order.hasDeliveryReview) ...[
+            const SizedBox(height: 12),
+            _DeliveryCustomerReview(order: order),
+          ],
           const SizedBox(height: 14),
           Row(
             children: [
@@ -423,6 +776,61 @@ class _DeliveryOrderCardState extends State<_DeliveryOrderCard> {
 
   Future<void> _launchPhone(String phone) async {
     await launchUrl(Uri(scheme: 'tel', path: phone));
+  }
+}
+
+class _DeliveryCustomerReview extends StatelessWidget {
+  const _DeliveryCustomerReview({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DeliveryPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _DeliverySectionTitle(
+            icon: Icons.reviews_outlined,
+            title: 'Customer review',
+          ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              for (var value = 1; value <= 5; value++)
+                Icon(
+                  value <= order.deliveryRating
+                      ? Icons.star_rounded
+                      : Icons.star_border_rounded,
+                  color: value <= order.deliveryRating
+                      ? _deliveryWarning
+                      : _deliveryLine,
+                  size: 22,
+                ),
+              const SizedBox(width: 8),
+              Text(
+                '${order.deliveryRating}/5',
+                style: const TextStyle(
+                  color: _deliveryInk,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          if (order.deliveryReview.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              order.deliveryReview.trim(),
+              style: const TextStyle(
+                color: _deliveryMuted,
+                fontWeight: FontWeight.w700,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 

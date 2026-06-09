@@ -4965,6 +4965,23 @@ class OrderTile extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                   ),
                 ),
+                if (order.hasDeliveryReview) ...[
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      const Icon(Icons.star, color: _customerGold, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${order.deliveryRating}/5 delivery rating',
+                        style: const TextStyle(
+                          color: _customerMuted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -5124,6 +5141,10 @@ class _DeliveredOrderCompletionView extends StatelessWidget {
           const SizedBox(height: 12),
           _CustomerCard(child: _DeliveryContactSummary(order: order)),
         ],
+        if (order.assignedDeliveryBoyId.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _DeliveryReviewCard(order: order),
+        ],
         if (order.adminNotes.isNotEmpty) ...[
           const SizedBox(height: 12),
           _CustomerCard(child: _AdminNoteSummary(order: order)),
@@ -5141,6 +5162,278 @@ class _DeliveredOrderCompletionView extends StatelessWidget {
         _OrderSupportButton(order: order),
       ],
     );
+  }
+}
+
+class _DeliveryReviewCard extends StatelessWidget {
+  const _DeliveryReviewCard({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasReview = order.hasDeliveryReview;
+    final deliveryName = order.assignedDeliveryPerson.trim().isEmpty
+        ? context.t('your delivery person')
+        : order.assignedDeliveryPerson.trim();
+    return _CustomerCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: _customerGold.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.workspace_premium_outlined,
+                  color: _customerWarning,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.t(
+                        hasReview
+                            ? 'Your delivery review'
+                            : 'Rate your delivery',
+                      ),
+                      style: const TextStyle(
+                        color: _customerInk,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      hasReview
+                          ? context.t('Thank you for sharing your experience.')
+                          : context.t(
+                              'How was your delivery with {name}?',
+                              values: {'name': deliveryName},
+                            ),
+                      style: const TextStyle(
+                        color: _customerMuted,
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (hasReview) ...[
+            const SizedBox(height: 14),
+            _DeliveryRatingStars(
+              rating: order.deliveryRating,
+              iconSize: 26,
+            ),
+            if (order.deliveryReview.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _customerBackground,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: _customerLine),
+                ),
+                child: Text(
+                  order.deliveryReview.trim(),
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w700,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ],
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _showDeliveryReviewDialog(context, order),
+              icon: Icon(hasReview ? Icons.edit_outlined : Icons.star_outline),
+              label: Text(
+                context.t(hasReview ? 'Edit review' : 'Rate delivery'),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveryRatingStars extends StatelessWidget {
+  const _DeliveryRatingStars({
+    required this.rating,
+    this.iconSize = 32,
+    this.onSelected,
+  });
+
+  final int rating;
+  final double iconSize;
+  final ValueChanged<int>? onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var value = 1; value <= 5; value++)
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            constraints: const BoxConstraints(),
+            tooltip: context.t('{rating} stars', values: {'rating': value}),
+            onPressed: onSelected == null ? null : () => onSelected!(value),
+            icon: Icon(
+              value <= rating ? Icons.star_rounded : Icons.star_border_rounded,
+              color: value <= rating ? _customerGold : _customerLine,
+              size: iconSize,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+Future<void> _showDeliveryReviewDialog(
+  BuildContext context,
+  OrderModel order,
+) async {
+  final pageContext = context;
+  var selectedRating = order.deliveryRating;
+  var isSaving = false;
+  final reviewController = TextEditingController(text: order.deliveryReview);
+
+  try {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> submit() async {
+              if (selectedRating == 0) {
+                showSnack(context, 'Choose a star rating before submitting.');
+                return;
+              }
+              setDialogState(() => isSaving = true);
+              try {
+                await pageContext
+                    .read<AppState>()
+                    .authService
+                    .submitDeliveryReview(
+                      orderId: order.orderId,
+                      rating: selectedRating,
+                      review: reviewController.text,
+                    );
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
+                if (pageContext.mounted) {
+                  showSnack(
+                    pageContext,
+                    'Delivery review saved. Thank you!',
+                  );
+                }
+              } catch (error) {
+                if (pageContext.mounted) {
+                  showSnack(pageContext, error.toString());
+                  setDialogState(() => isSaving = false);
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: Text(
+                context.t(
+                  order.hasDeliveryReview
+                      ? 'Edit delivery review'
+                      : 'Rate your delivery',
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      context.t(
+                        'Your feedback helps us improve every delivery.',
+                      ),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: _customerMuted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _DeliveryRatingStars(
+                      rating: selectedRating,
+                      iconSize: 36,
+                      onSelected: isSaving
+                          ? null
+                          : (rating) {
+                              setDialogState(() => selectedRating = rating);
+                            },
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: reviewController,
+                      enabled: !isSaving,
+                      maxLength: 500,
+                      minLines: 3,
+                      maxLines: 5,
+                      decoration: InputDecoration(
+                        labelText: context.t('Review (optional)'),
+                        hintText: context.t(
+                          'Tell us what went well or what can improve.',
+                        ),
+                        alignLabelWithHint: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: Text(context.t('Cancel')),
+                ),
+                FilledButton.icon(
+                  onPressed: isSaving ? null : submit,
+                  icon: isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send_outlined),
+                  label: Text(
+                    context.t(isSaving ? 'Saving' : 'Submit review'),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  } finally {
+    reviewController.dispose();
   }
 }
 

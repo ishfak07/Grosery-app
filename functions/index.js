@@ -441,6 +441,77 @@ exports.markAssignedOrderDelivered = onCall(async (request) => {
   return {ok: true};
 });
 
+exports.submitDeliveryReview = onCall(async (request) => {
+  const customer = await requireCustomer(request);
+
+  const orderId = assertRequiredText(request.data?.orderId, "Order");
+  const rating = Number(request.data?.rating);
+  const review = `${request.data?.review || ""}`.trim();
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Choose a delivery rating from 1 to 5.",
+    );
+  }
+  if (review.length > 500) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Delivery review must be 500 characters or less.",
+    );
+  }
+
+  const db = admin.firestore();
+  const orderRef = db.collection("orders").doc(orderId);
+  await db.runTransaction(async (transaction) => {
+    const orderDoc = await transaction.get(orderRef);
+    if (!orderDoc.exists) {
+      throw new HttpsError("not-found", "Order not found.");
+    }
+
+    const order = orderDoc.data();
+    if (order.userId !== customer.uid) {
+      throw new HttpsError(
+        "permission-denied",
+        "You can only review your own delivered order.",
+      );
+    }
+    if (order.orderStatus !== "Delivered") {
+      throw new HttpsError(
+        "failed-precondition",
+        "The order must be delivered before you can review it.",
+      );
+    }
+    if (!order.assignedDeliveryBoyId) {
+      throw new HttpsError(
+        "failed-precondition",
+        "No delivery boy is assigned to this order.",
+      );
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    transaction.update(orderRef, {
+      deliveryRating: rating,
+      deliveryReview: review,
+      deliveryReviewedAt: now,
+    });
+
+    const notificationRef = db.collection("notifications").doc();
+    transaction.set(notificationRef, {
+      notificationId: notificationRef.id,
+      userId: order.assignedDeliveryBoyId,
+      recipientRole: "delivery_boy",
+      title: "New delivery rating",
+      body: `${order.customerName || "Customer"} rated your delivery ${rating}/5`,
+      type: "delivery_review",
+      relatedId: orderDoc.id,
+      isRead: false,
+      createdAt: now,
+    });
+  });
+
+  return {ok: true};
+});
+
 async function resolveTokens(notification) {
   if (notification.recipientRole === "admin") {
     const admins = await admin
@@ -723,6 +794,29 @@ async function requireDeliveryBoy(request) {
     throw new HttpsError(
       "permission-denied",
       "Only assigned delivery boys can update delivery orders.",
+    );
+  }
+  return {uid: request.auth.uid, profile: userDoc.data()};
+}
+
+async function requireCustomer(request) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Customer login is required.");
+  }
+
+  const userDoc = await admin
+    .firestore()
+    .collection("users")
+    .doc(request.auth.uid)
+    .get();
+  if (
+    !userDoc.exists ||
+    userDoc.get("role") !== "user" ||
+    userDoc.get("isBlocked") === true
+  ) {
+    throw new HttpsError(
+      "permission-denied",
+      "Only active customers can review deliveries.",
     );
   }
   return {uid: request.auth.uid, profile: userDoc.data()};

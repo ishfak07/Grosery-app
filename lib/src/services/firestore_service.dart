@@ -385,7 +385,10 @@ class FirestoreService {
   }
 
   Future<void> createOrder(OrderModel order) async {
-    final orderMap = order.toMap();
+    final orderMap = order.toMap()
+      ..remove('deliveryRating')
+      ..remove('deliveryReview')
+      ..remove('deliveryReviewedAt');
     try {
       await _commitOrderCreate(order, orderMap);
     } on FirebaseException catch (error) {
@@ -430,7 +433,10 @@ class FirestoreService {
       ..remove('listAmountsReviewed')
       ..remove('rejectionReason')
       ..remove('assignedDeliveryBoyId')
-      ..remove('assignedDeliveryPhone');
+      ..remove('assignedDeliveryPhone')
+      ..remove('deliveryRating')
+      ..remove('deliveryReview')
+      ..remove('deliveryReviewedAt');
   }
 
   Stream<List<OrderModel>> watchOrdersForUser(String userId) {

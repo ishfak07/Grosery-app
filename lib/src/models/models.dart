@@ -804,6 +804,9 @@ class OrderModel {
     required this.assignedDeliveryBoyId,
     required this.assignedDeliveryPerson,
     required this.assignedDeliveryPhone,
+    required this.deliveryRating,
+    required this.deliveryReview,
+    required this.deliveryReviewedAt,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -834,6 +837,9 @@ class OrderModel {
   final String assignedDeliveryBoyId;
   final String assignedDeliveryPerson;
   final String assignedDeliveryPhone;
+  final int deliveryRating;
+  final String deliveryReview;
+  final DateTime? deliveryReviewedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -861,6 +867,7 @@ class OrderModel {
       (orderStatus == 'Out for Delivery' || orderStatus == 'Delivered') &&
       (assignedDeliveryPerson.trim().isNotEmpty ||
           assignedDeliveryPhone.trim().isNotEmpty);
+  bool get hasDeliveryReview => deliveryRating >= 1 && deliveryRating <= 5;
 
   OrderModel copyWith({
     List<OrderItem>? items,
@@ -871,6 +878,9 @@ class OrderModel {
     String? assignedDeliveryBoyId,
     String? assignedDeliveryPerson,
     String? assignedDeliveryPhone,
+    int? deliveryRating,
+    String? deliveryReview,
+    DateTime? deliveryReviewedAt,
     double? cartItemsAmount,
     double? photoListAmount,
     double? manualListAmount,
@@ -912,6 +922,9 @@ class OrderModel {
           assignedDeliveryPerson ?? this.assignedDeliveryPerson,
       assignedDeliveryPhone:
           assignedDeliveryPhone ?? this.assignedDeliveryPhone,
+      deliveryRating: deliveryRating ?? this.deliveryRating,
+      deliveryReview: deliveryReview ?? this.deliveryReview,
+      deliveryReviewedAt: deliveryReviewedAt ?? this.deliveryReviewedAt,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
     );
@@ -947,6 +960,10 @@ class OrderModel {
       'assignedDeliveryBoyId': assignedDeliveryBoyId,
       'assignedDeliveryPerson': assignedDeliveryPerson,
       'assignedDeliveryPhone': assignedDeliveryPhone,
+      'deliveryRating': deliveryRating,
+      'deliveryReview': deliveryReview,
+      'deliveryReviewedAt':
+          deliveryReviewedAt == null ? null : _writeDate(deliveryReviewedAt!),
       'createdAt': _writeDate(createdAt),
       'updatedAt': _writeDate(updatedAt),
     };
@@ -1022,6 +1039,9 @@ class OrderModel {
       assignedDeliveryBoyId: map['assignedDeliveryBoyId'] as String? ?? '',
       assignedDeliveryPerson: map['assignedDeliveryPerson'] as String? ?? '',
       assignedDeliveryPhone: map['assignedDeliveryPhone'] as String? ?? '',
+      deliveryRating: (map['deliveryRating'] as num?)?.toInt() ?? 0,
+      deliveryReview: map['deliveryReview'] as String? ?? '',
+      deliveryReviewedAt: _readOptionalDate(map['deliveryReviewedAt']),
       createdAt: _readDate(map['createdAt']),
       updatedAt: _readDate(map['updatedAt']),
     );

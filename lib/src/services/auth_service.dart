@@ -381,6 +381,22 @@ class AuthService {
     }
   }
 
+  Future<void> submitDeliveryReview({
+    required String orderId,
+    required int rating,
+    required String review,
+  }) async {
+    try {
+      await _functions.httpsCallable('submitDeliveryReview').call({
+        'orderId': orderId,
+        'rating': rating,
+        'review': review.trim(),
+      });
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
   Future<void> _callFirstAvailableDeliveryFunction({
     required String primaryName,
     required String fallbackName,

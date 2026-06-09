@@ -629,6 +629,9 @@ class AppState extends ChangeNotifier {
       assignedDeliveryBoyId: '',
       assignedDeliveryPerson: '',
       assignedDeliveryPhone: '',
+      deliveryRating: 0,
+      deliveryReview: '',
+      deliveryReviewedAt: null,
       createdAt: now,
       updatedAt: now,
     );

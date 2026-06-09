@@ -156,6 +156,24 @@ void main() {
     expect(restored.rejectionReason, 'Outside delivery area today.');
     expect(legacyRestored.rejectionReason, '');
   });
+
+  test('order stores and restores delivery rating and review', () {
+    final reviewedAt = DateTime(2026, 6, 9, 12, 30);
+    final order = _order(
+      orderStatus: 'Delivered',
+      assignedDeliveryBoyId: 'driver-1',
+      deliveryRating: 5,
+      deliveryReview: 'Friendly and careful delivery.',
+      deliveryReviewedAt: reviewedAt,
+    );
+
+    final restored = OrderModel.fromMap(order.toMap(), order.orderId);
+
+    expect(restored.hasDeliveryReview, isTrue);
+    expect(restored.deliveryRating, 5);
+    expect(restored.deliveryReview, 'Friendly and careful delivery.');
+    expect(restored.deliveryReviewedAt, reviewedAt);
+  });
 }
 
 OrderModel _order({
@@ -165,6 +183,9 @@ OrderModel _order({
   String assignedDeliveryBoyId = '',
   String assignedDeliveryPerson = '',
   String assignedDeliveryPhone = '',
+  int deliveryRating = 0,
+  String deliveryReview = '',
+  DateTime? deliveryReviewedAt,
   String orderStatus = 'Pending',
   String rejectionReason = '',
   double cartItemsAmount = 0,
@@ -202,6 +223,9 @@ OrderModel _order({
     assignedDeliveryBoyId: assignedDeliveryBoyId,
     assignedDeliveryPerson: assignedDeliveryPerson,
     assignedDeliveryPhone: assignedDeliveryPhone,
+    deliveryRating: deliveryRating,
+    deliveryReview: deliveryReview,
+    deliveryReviewedAt: deliveryReviewedAt,
     createdAt: now,
     updatedAt: now,
   );
