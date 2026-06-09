@@ -16,6 +16,7 @@ import '../../core/widgets/common_widgets.dart';
 import '../../models/models.dart';
 import '../../state/app_state.dart';
 import '../customer/customer_screens.dart';
+import 'admin_order_sheet_screen.dart';
 
 const _adminBackground = Color(0xFFF4F7F4);
 const _adminSurface = Color(0xFFFFFFFF);
@@ -2260,6 +2261,22 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      AdminOrderSheetScreen(order: order),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.storefront_outlined),
+                            label: const Text('View shop order sheet'),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -2603,8 +2620,7 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                                   ? null
                                   : (value) {
                                       UserProfile? selected;
-                                      for (final deliveryBoy
-                                          in deliveryBoys) {
+                                      for (final deliveryBoy in deliveryBoys) {
                                         if (deliveryBoy.uid == value) {
                                           selected = deliveryBoy;
                                           break;
@@ -2655,22 +2671,22 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                           child: Padding(
                             padding: const EdgeInsets.all(12),
                             child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const _AdminSectionHeader(
-                                title: 'Assigned delivery boy',
-                                icon: Icons.delivery_dining,
-                              ),
-                              _OrderInfoRow(
-                                'Name',
-                                order.assignedDeliveryPerson,
-                              ),
-                              _OrderInfoRow(
-                                'Phone',
-                                order.assignedDeliveryPhone,
-                              ),
-                            ],
-                          ),
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const _AdminSectionHeader(
+                                  title: 'Assigned delivery boy',
+                                  icon: Icons.delivery_dining,
+                                ),
+                                _OrderInfoRow(
+                                  'Name',
+                                  order.assignedDeliveryPerson,
+                                ),
+                                _OrderInfoRow(
+                                  'Phone',
+                                  order.assignedDeliveryPhone,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],

@@ -921,7 +921,7 @@ class _HomeSearchCallout extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      context.t('Search groceries and shops'),
+                      context.t('Search groceries '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -5408,9 +5408,8 @@ Future<void> _showDeliveryReviewDialog(
               ),
               actions: [
                 TextButton(
-                  onPressed: isSaving
-                      ? null
-                      : () => Navigator.of(dialogContext).pop(),
+                  onPressed:
+                      isSaving ? null : () => Navigator.of(dialogContext).pop(),
                   child: Text(context.t('Cancel')),
                 ),
                 FilledButton.icon(

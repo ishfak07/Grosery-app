@@ -189,7 +189,7 @@ const _tamil = <String, String>{
   'View all': 'அனைத்தையும் பார்க்க',
   'Hi {name}': 'வணக்கம் {name}',
   'there': 'நண்பரே',
-  'Search groceries and shops': 'மளிகை மற்றும் கடைகளை தேடுங்கள்',
+  'Search groceries ': 'மளிகைகளை தேடுங்கள்',
   'Fast local delivery': 'வேகமான உள்ளூர் விநியோகம்',
   'Fresh groceries, photo lists, and COD in one smooth order.':
       'புதிய மளிகை, புகைப்பட பட்டியல்கள், COD அனைத்தும் ஒரே எளிய ஆர்டரில்.',

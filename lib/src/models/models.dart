@@ -705,6 +705,7 @@ class OrderItem {
     required this.unit,
     required this.price,
     required this.quantity,
+    this.imageUrl = '',
     this.isAvailable = true,
   });
 
@@ -716,6 +717,7 @@ class OrderItem {
   final String unit;
   final double price;
   final int quantity;
+  final String imageUrl;
   final bool isAvailable;
 
   double get lineTotal => price * quantity;
@@ -738,6 +740,7 @@ class OrderItem {
       'unit': unit,
       'price': price,
       'quantity': quantity,
+      'imageUrl': imageUrl,
       'isAvailable': isAvailable,
     };
   }
@@ -752,6 +755,7 @@ class OrderItem {
       unit: item.unit,
       price: item.price,
       quantity: item.quantity,
+      imageUrl: item.imageUrl,
     );
   }
 
@@ -765,6 +769,7 @@ class OrderItem {
       unit: map['unit'] as String? ?? 'piece',
       price: (map['price'] as num?)?.toDouble() ?? 0,
       quantity: (map['quantity'] as num?)?.toInt() ?? 1,
+      imageUrl: map['imageUrl'] as String? ?? '',
       isAvailable: map['isAvailable'] as bool? ?? true,
     );
   }
