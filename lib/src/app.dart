@@ -40,6 +40,11 @@ class HomeGate extends StatelessWidget {
     if (!appState.hasSeenOnboarding) {
       return const OnboardingScreen();
     }
+    if (appState.isLoggingOut) {
+      return const Scaffold(
+        body: LoadingView(message: 'Logging out...'),
+      );
+    }
     if (!appState.isLoggedIn) {
       return const LoginScreen();
     }

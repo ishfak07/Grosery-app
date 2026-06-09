@@ -6653,6 +6653,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late final TextEditingController _address;
   var _isSaving = false;
   var _isChangingLanguage = false;
+  var _isLoggingOut = false;
 
   @override
   void initState() {
@@ -6673,7 +6674,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final profile = appState.profile;
-    if (profile == null) {
+    if (_isLoggingOut || profile == null) {
       return const _CustomerLogoutTransition();
     }
     return _CustomerScaffold(
@@ -6721,11 +6722,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
-              onPressed: () async {
-                final navigator = Navigator.of(context);
-                navigator.popUntil((route) => route.isFirst);
-                await appState.logout();
-              },
+              onPressed: _logout,
               icon: const Icon(Icons.logout),
               label: Text(context.t('Logout')),
             ),
@@ -6733,6 +6730,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _logout() async {
+    if (_isLoggingOut) {
+      return;
+    }
+    final navigator = Navigator.of(context);
+    setState(() => _isLoggingOut = true);
+    try {
+      await context.read<AppState>().logout();
+    } finally {
+      if (mounted) {
+        navigator.popUntil((route) => route.isFirst);
+      }
+    }
   }
 
   Future<void> _save() async {

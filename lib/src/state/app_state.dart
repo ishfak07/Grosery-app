@@ -47,6 +47,7 @@ class AppState extends ChangeNotifier {
   StreamSubscription<PaymentSettings>? _paymentSettingsSubscription;
 
   bool _isInitializing = true;
+  bool _isLoggingOut = false;
   bool _hasSeenOnboarding = false;
   bool _hasInternetConnection = true;
   UserProfile? _profile;
@@ -62,6 +63,7 @@ class AppState extends ChangeNotifier {
   String _preferredLanguageCode = AppLanguageCodes.english;
 
   bool get isInitializing => _isInitializing;
+  bool get isLoggingOut => _isLoggingOut;
   bool get hasSeenOnboarding => _hasSeenOnboarding;
   bool get hasInternetConnection => _hasInternetConnection;
   UserProfile? get profile => _profile;
@@ -114,6 +116,9 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _handleAuthUser(User? user) async {
+    if (_isLoggingOut && user != null) {
+      return;
+    }
     if (!_isCurrentAuthUser(user)) {
       return;
     }
@@ -152,7 +157,7 @@ class AppState extends ChangeNotifier {
 
     _profileSubscription = firestoreService.watchUserProfile(user.uid).listen(
       (profile) async {
-        if (!_isCurrentAuthUser(user)) {
+        if (_isLoggingOut || !_isCurrentAuthUser(user)) {
           return;
         }
         _profile = profile;
@@ -335,24 +340,37 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    final current = _profile;
-    if (current != null) {
-      try {
-        await notificationService.clearTokenForUser(current.uid);
-      } catch (_) {
-        // Push-token cleanup should not block logout.
-      }
+    if (_isLoggingOut) {
+      return;
     }
+    _isLoggingOut = true;
+    final current = _profile;
+    final profileSubscription = _profileSubscription;
+    _profileSubscription = null;
     _profile = null;
     _notificationsConfiguredForProfileKey = null;
     _checkoutChargeSettings = CheckoutChargeSettings.defaults;
     _hasLoadedCheckoutChargeSettings = false;
     _paymentSettings = PaymentSettings.defaults;
     _hasLoadedPaymentSettings = false;
-    await _checkoutChargeSettingsSubscription?.cancel();
-    await _paymentSettingsSubscription?.cancel();
-    await authService.logout();
     notifyListeners();
+
+    try {
+      await profileSubscription?.cancel();
+      if (current != null) {
+        try {
+          await notificationService.clearTokenForUser(current.uid);
+        } catch (_) {
+          // Push-token cleanup should not block logout.
+        }
+      }
+      await _checkoutChargeSettingsSubscription?.cancel();
+      await _paymentSettingsSubscription?.cancel();
+      await authService.logout();
+    } finally {
+      _isLoggingOut = false;
+      notifyListeners();
+    }
   }
 
   Future<void> completeRegistration({
