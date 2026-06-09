@@ -29,6 +29,9 @@ const _adminBlue = Color(0xFF356DAA);
 const _adminViolet = Color(0xFF7656A6);
 const _adminWarning = Color(0xFFD88413);
 const _minimumOrderSearchLength = 4;
+const _defaultAdminNote =
+    'Kindly be patient \u{1F60A} Your order will be delivered soon by our '
+    'delivery person. Thank you!';
 
 Color _adminStatusColor(String status) {
   switch (status) {
@@ -2083,7 +2086,7 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
   final _subtotal = TextEditingController();
   final _delivery = TextEditingController();
   final _service = TextEditingController();
-  final _adminNotes = TextEditingController();
+  final _adminNotes = TextEditingController(text: _defaultAdminNote);
   final _rejectionReason = TextEditingController();
   final _deliveryPerson = TextEditingController();
   final _deliveryPhone = TextEditingController();
@@ -2131,7 +2134,8 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
     _subtotal.text = order.subtotal.toStringAsFixed(2);
     _delivery.text = order.deliveryCharge.toStringAsFixed(2);
     _service.text = order.serviceCharge.toStringAsFixed(2);
-    _adminNotes.text = order.adminNotes;
+    _adminNotes.text =
+        order.adminNotes.trim().isEmpty ? _defaultAdminNote : order.adminNotes;
     _rejectionReason.text = order.rejectionReason;
     _deliveryPerson.text = order.assignedDeliveryPerson;
     _deliveryPhone.text = order.assignedDeliveryPhone;
