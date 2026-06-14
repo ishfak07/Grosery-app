@@ -655,7 +655,7 @@ class AdminDashboardScreen extends StatelessWidget {
                 _AdminTile(
                   icon: Icons.receipt_long,
                   title: 'Orders',
-                  subtitle: 'Review and update',
+                  subtitle: 'Current work, latest first',
                   accent: _adminPrimary,
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
@@ -670,8 +670,7 @@ class AdminDashboardScreen extends StatelessWidget {
                   accent: _adminBlue,
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) =>
-                          const AdminOrdersScreen(autofocusSearch: true),
+                      builder: (_) => const AdminOrdersScreen.find(),
                     ),
                   ),
                 ),
@@ -800,11 +799,7 @@ class AdminDashboardScreen extends StatelessWidget {
                     .where((order) => order.orderStatus == 'Pending')
                     .length;
                 final activeOrders = allOrders
-                    .where(
-                      (order) =>
-                          order.orderStatus != 'Delivered' &&
-                          order.orderStatus != 'Cancelled',
-                    )
+                    .where(_isCurrentAdminOrder)
                     .length;
                 final deliveredOrders = allOrders
                     .where((order) => order.orderStatus == 'Delivered')
@@ -1470,8 +1465,16 @@ class _AdminTileState extends State<_AdminTile> {
 }
 
 class AdminOrdersScreen extends StatefulWidget {
-  const AdminOrdersScreen({super.key, this.autofocusSearch = false});
+  const AdminOrdersScreen({super.key})
+      : _isFindMode = false,
+        autofocusSearch = false;
 
+  const AdminOrdersScreen.find({
+    super.key,
+    this.autofocusSearch = true,
+  }) : _isFindMode = true;
+
+  final bool _isFindMode;
   final bool autofocusSearch;
 
   @override
@@ -1493,6 +1496,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.read<AppState>();
+    final isFindMode = widget._isFindMode;
     final filters = [
       'All',
       'Pending',
@@ -1502,7 +1506,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
       'Rejected',
     ];
     return _AdminScaffold(
-      title: 'Orders',
+      title: isFindMode ? 'Find order' : 'Current orders',
       body: _AdminPage(
         child: StreamBuilder<List<OrderModel>>(
           stream: appState.firestoreService.watchAllOrders(),
@@ -1511,6 +1515,17 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
             final isLoading =
                 snapshot.connectionState == ConnectionState.waiting &&
                     allOrders.isEmpty;
+            if (!isFindMode) {
+              final currentOrders = allOrders
+                  .where(_isCurrentAdminOrder)
+                  .toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+              return _AdminCurrentOrdersContent(
+                isLoading: isLoading,
+                orders: currentOrders,
+              );
+            }
+
             final orders = _filteredOrders(allOrders);
             final searchQuery =
                 _normalizeOrderSearchInput(_submittedOrderSearch);
@@ -1622,6 +1637,133 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
 
   bool _isSameDate(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+}
+
+bool _isCurrentAdminOrder(OrderModel order) {
+  return order.orderStatus != 'Delivered' &&
+      order.orderStatus != 'Cancelled' &&
+      order.orderStatus != 'Rejected';
+}
+
+class _AdminCurrentOrdersContent extends StatelessWidget {
+  const _AdminCurrentOrdersContent({
+    required this.isLoading,
+    required this.orders,
+  });
+
+  final bool isLoading;
+  final List<OrderModel> orders;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomScrollView(
+      physics: appRefreshScrollPhysics,
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(0, 16, 0, 2),
+            child: _AdminCard(
+              child: Row(
+                children: [
+                  const _AdminIconBadge(
+                    icon: Icons.dynamic_feed_outlined,
+                    color: _adminPrimary,
+                    size: 42,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Current orders',
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: _adminInk,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isLoading
+                              ? 'Loading current orders...'
+                              : '${orders.length} active ${orders.length == 1 ? 'order' : 'orders'} - latest first',
+                          style: const TextStyle(
+                            color: _adminMuted,
+                            fontWeight: FontWeight.w700,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const _AdminPill(
+                    label: 'Latest first',
+                    color: _adminBlue,
+                    icon: Icons.south,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (isLoading)
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: LoadingView(),
+          )
+        else if (orders.isEmpty)
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: EmptyState(
+              icon: Icons.task_alt,
+              title: 'No current orders',
+              message: 'New and active customer orders will appear here.',
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final order = orders[index];
+                  final isLatest = index == 0;
+                  final isOldest = index == orders.length - 1;
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      bottom: isOldest ? 0 : 10,
+                    ),
+                    child: _AdminReveal(
+                      index: index,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (isLatest || (isOldest && orders.length > 1)) ...[
+                            _AdminPill(
+                              label: isLatest
+                                  ? 'Latest order'
+                                  : 'Oldest current order',
+                              color: isLatest ? _adminPrimary : _adminWarning,
+                              icon: isLatest
+                                  ? Icons.fiber_new_outlined
+                                  : Icons.history,
+                            ),
+                            const SizedBox(height: 7),
+                          ],
+                          AdminOrderTile(order: order),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                childCount: orders.length,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }
 
@@ -5785,7 +5927,7 @@ class AdminSupportScreen extends StatelessWidget {
           tooltip: 'Find order',
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => const AdminOrdersScreen(autofocusSearch: true),
+              builder: (_) => const AdminOrdersScreen.find(),
             ),
           ),
           icon: Icons.manage_search,
