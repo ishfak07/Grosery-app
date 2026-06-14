@@ -574,6 +574,74 @@ exports.initializeDeliveryRewardStars = onCall(async (request) => {
   return {ok: true, stars};
 });
 
+exports.addDeliveryRewardStars = onCall(async (request) => {
+  const adminUid = await requireAdmin(request);
+  const deliveryBoyId = assertUid(request.data?.uid);
+  const starsToAdd = Number(request.data?.stars);
+  if (!Number.isInteger(starsToAdd) || starsToAdd < 1 || starsToAdd > 100000) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Enter a whole-number star amount from 1 to 100,000.",
+    );
+  }
+
+  const db = admin.firestore();
+  const deliveryBoyRef = db.collection("users").doc(deliveryBoyId);
+  const adjustmentRef = db.collection("delivery_reward_adjustments").doc();
+
+  const result = await db.runTransaction(async (transaction) => {
+    const deliveryBoyDoc = await transaction.get(deliveryBoyRef);
+    const currentStars = await initializeDeliveryRewardStarsInTransaction({
+      transaction,
+      db,
+      deliveryBoyRef,
+      deliveryBoyDoc,
+    });
+    const deliveryBoy = deliveryBoyDoc.data();
+    const now = admin.firestore.Timestamp.now();
+    const updatedStars = currentStars + starsToAdd;
+
+    transaction.update(deliveryBoyRef, {
+      deliveryRewardStars: updatedStars,
+      updatedAt: now,
+    });
+    transaction.set(adjustmentRef, {
+      adjustmentId: adjustmentRef.id,
+      deliveryBoyId,
+      deliveryBoyName: deliveryBoy.fullName || "",
+      deliveryBoyPhone: deliveryBoy.phone || "",
+      adjustmentType: "manual_add",
+      starsBefore: currentStars,
+      starsAdded: starsToAdd,
+      starsAfter: updatedStars,
+      addedBy: adminUid,
+      addedAt: now,
+    });
+
+    const notificationRef = db.collection("notifications").doc();
+    transaction.set(notificationRef, {
+      notificationId: notificationRef.id,
+      userId: deliveryBoyId,
+      recipientRole: "delivery_boy",
+      title: `${starsToAdd} reward stars added`,
+      body: `Admin added ${starsToAdd} stars. Your balance is now ${updatedStars}.`,
+      type: "delivery_reward",
+      relatedId: adjustmentRef.id,
+      isRead: false,
+      createdAt: now,
+    });
+
+    return {starsBefore: currentStars, starsAfter: updatedStars};
+  });
+
+  return {
+    ok: true,
+    starsAdded: starsToAdd,
+    starsBefore: result.starsBefore,
+    starsAfter: result.starsAfter,
+  };
+});
+
 exports.payDeliveryStarReward = onCall(async (request) => {
   const adminUid = await requireAdmin(request);
   const deliveryBoyId = assertUid(request.data?.uid);

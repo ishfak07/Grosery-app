@@ -6111,6 +6111,7 @@ class _AdminDeliveryBoyManagementScreenState
     extends State<AdminDeliveryBoyManagementScreen> {
   final Set<String> _initializedRewardProfiles = <String>{};
   String? _payingDeliveryBoyId;
+  String? _addingStarsDeliveryBoyId;
 
   @override
   Widget build(BuildContext context) {
@@ -6172,7 +6173,10 @@ class _AdminDeliveryBoyManagementScreenState
                       deliveryBoy: deliveryBoy,
                     ),
                     isPaying: _payingDeliveryBoyId == deliveryBoy.uid,
+                    isAddingStars:
+                        _addingStarsDeliveryBoyId == deliveryBoy.uid,
                     onPayReward: () => _payReward(deliveryBoy),
+                    onAddStars: () => _addRewardStars(deliveryBoy),
                   ),
                 );
               },
@@ -6234,6 +6238,42 @@ class _AdminDeliveryBoyManagementScreenState
     } finally {
       if (mounted) {
         setState(() => _payingDeliveryBoyId = null);
+      }
+    }
+  }
+
+  Future<void> _addRewardStars(UserProfile deliveryBoy) async {
+    final starsToAdd = await showDialog<int>(
+      context: context,
+      builder: (_) => _DeliveryRewardAddStarsDialog(
+        deliveryBoy: deliveryBoy,
+      ),
+    );
+    if (starsToAdd == null || !mounted) {
+      return;
+    }
+
+    setState(() => _addingStarsDeliveryBoyId = deliveryBoy.uid);
+    try {
+      await context.read<AppState>().authService.addDeliveryRewardStars(
+            uid: deliveryBoy.uid,
+            stars: starsToAdd,
+          );
+      if (mounted) {
+        showSnack(
+          context,
+          'Successfully added $starsToAdd stars to '
+          '${deliveryBoy.fullName}. '
+          '${deliveryBoy.deliveryRewardStars + starsToAdd} stars total.',
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _addingStarsDeliveryBoyId = null);
       }
     }
   }
@@ -6353,19 +6393,110 @@ class _DeliveryRewardPaymentDialogState
   }
 }
 
+class _DeliveryRewardAddStarsDialog extends StatefulWidget {
+  const _DeliveryRewardAddStarsDialog({required this.deliveryBoy});
+
+  final UserProfile deliveryBoy;
+
+  @override
+  State<_DeliveryRewardAddStarsDialog> createState() =>
+      _DeliveryRewardAddStarsDialogState();
+}
+
+class _DeliveryRewardAddStarsDialogState
+    extends State<_DeliveryRewardAddStarsDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _starsController = TextEditingController();
+
+  @override
+  void dispose() {
+    _starsController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final deliveryBoy = widget.deliveryBoy;
+    return AlertDialog(
+      title: const Text('Add reward stars'),
+      content: SizedBox(
+        width: 420,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${deliveryBoy.fullName} currently has '
+                '${deliveryBoy.deliveryRewardStars} stars.',
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _starsController,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  labelText: 'Stars to add',
+                  prefixIcon: Icon(Icons.add_circle_outline),
+                  helperText: 'These stars will be added to the current balance.',
+                ),
+                validator: (value) {
+                  final stars = int.tryParse(value?.trim() ?? '');
+                  if (stars == null || stars < 1) {
+                    return 'Enter at least 1 star.';
+                  }
+                  if (stars > 100000) {
+                    return 'You can add up to 100,000 stars at once.';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: _submit,
+          icon: const Icon(Icons.add_circle_outline),
+          label: const Text('Add stars'),
+        ),
+      ],
+    );
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    Navigator.of(context).pop(int.parse(_starsController.text.trim()));
+  }
+}
+
 class _DeliveryBoyTile extends StatelessWidget {
   const _DeliveryBoyTile({
     required this.deliveryBoy,
     required this.onEdit,
     required this.onPayReward,
+    required this.onAddStars,
     required this.isPaying,
+    required this.isAddingStars,
   });
 
   static const _rewardTarget = 1000;
   final UserProfile deliveryBoy;
   final VoidCallback onEdit;
   final VoidCallback onPayReward;
+  final VoidCallback onAddStars;
   final bool isPaying;
+  final bool isAddingStars;
 
   @override
   Widget build(BuildContext context) {
@@ -6478,8 +6609,10 @@ class _DeliveryBoyTile extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               );
-              final button = FilledButton.icon(
-                onPressed: canPayReward && !isPaying ? onPayReward : null,
+              final payButton = FilledButton.icon(
+                onPressed: canPayReward && !isPaying && !isAddingStars
+                    ? onPayReward
+                    : null,
                 style: FilledButton.styleFrom(
                   backgroundColor: _adminWarning,
                   foregroundColor: Colors.white,
@@ -6496,13 +6629,26 @@ class _DeliveryBoyTile extends StatelessWidget {
                     : const Icon(Icons.payments_outlined),
                 label: Text(isPaying ? 'Recording...' : 'Pay from stars'),
               );
+              final addButton = OutlinedButton.icon(
+                onPressed: isAddingStars || isPaying ? null : onAddStars,
+                icon: isAddingStars
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add_circle_outline),
+                label: Text(isAddingStars ? 'Adding...' : 'Add stars'),
+              );
               if (constraints.maxWidth < 430) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     message,
                     const SizedBox(height: 10),
-                    button,
+                    addButton,
+                    const SizedBox(height: 8),
+                    payButton,
                   ],
                 );
               }
@@ -6510,7 +6656,9 @@ class _DeliveryBoyTile extends StatelessWidget {
                 children: [
                   Expanded(child: message),
                   const SizedBox(width: 12),
-                  button,
+                  addButton,
+                  const SizedBox(width: 8),
+                  payButton,
                 ],
               );
             },

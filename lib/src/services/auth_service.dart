@@ -421,6 +421,20 @@ class AuthService {
     }
   }
 
+  Future<void> addDeliveryRewardStars({
+    required String uid,
+    required int stars,
+  }) async {
+    try {
+      await _functions.httpsCallable('addDeliveryRewardStars').call({
+        'uid': uid,
+        'stars': stars,
+      });
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
   Future<void> _callFirstAvailableDeliveryFunction({
     required String primaryName,
     required String fallbackName,
