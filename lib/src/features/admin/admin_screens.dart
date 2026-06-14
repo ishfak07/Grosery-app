@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -6097,8 +6099,18 @@ class AdminCustomerManagementScreen extends StatelessWidget {
   }
 }
 
-class AdminDeliveryBoyManagementScreen extends StatelessWidget {
+class AdminDeliveryBoyManagementScreen extends StatefulWidget {
   const AdminDeliveryBoyManagementScreen({super.key});
+
+  @override
+  State<AdminDeliveryBoyManagementScreen> createState() =>
+      _AdminDeliveryBoyManagementScreenState();
+}
+
+class _AdminDeliveryBoyManagementScreenState
+    extends State<AdminDeliveryBoyManagementScreen> {
+  final Set<String> _initializedRewardProfiles = <String>{};
+  String? _payingDeliveryBoyId;
 
   @override
   Widget build(BuildContext context) {
@@ -6114,10 +6126,27 @@ class AdminDeliveryBoyManagementScreen extends StatelessWidget {
         child: StreamBuilder<List<UserProfile>>(
           stream: appState.firestoreService.watchDeliveryBoys(),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+            if (snapshot.hasError) {
+              return RefreshableCenteredContent(
+                child: EmptyState(
+                  icon: Icons.cloud_off_outlined,
+                  title: 'Could not load delivery boys',
+                  message:
+                      'The delivery staff list could not be loaded. Please try again.',
+                  action: FilledButton.icon(
+                    onPressed: () => setState(() {}),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ),
+              );
+            }
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
               return const RefreshableCenteredContent(child: LoadingView());
             }
             final deliveryBoys = snapshot.data ?? const <UserProfile>[];
+            _initializeRewardProfiles(deliveryBoys, appState);
             if (deliveryBoys.isEmpty) {
               return const RefreshableCenteredContent(
                 child: EmptyState(
@@ -6142,6 +6171,8 @@ class AdminDeliveryBoyManagementScreen extends StatelessWidget {
                       context,
                       deliveryBoy: deliveryBoy,
                     ),
+                    isPaying: _payingDeliveryBoyId == deliveryBoy.uid,
+                    onPayReward: () => _payReward(deliveryBoy),
                   ),
                 );
               },
@@ -6150,6 +6181,61 @@ class AdminDeliveryBoyManagementScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _initializeRewardProfiles(
+    List<UserProfile> deliveryBoys,
+    AppState appState,
+  ) {
+    for (final deliveryBoy in deliveryBoys) {
+      if (deliveryBoy.deliveryRewardStarsInitialized ||
+          !_initializedRewardProfiles.add(deliveryBoy.uid)) {
+        continue;
+      }
+      unawaited(
+        appState.authService
+            .initializeDeliveryRewardStars(uid: deliveryBoy.uid)
+            .catchError((_) {}),
+      );
+    }
+  }
+
+  Future<void> _payReward(UserProfile deliveryBoy) async {
+    final amountLkr = await showDialog<int>(
+      context: context,
+      builder: (_) => _DeliveryRewardPaymentDialog(
+        deliveryBoy: deliveryBoy,
+      ),
+    );
+    if (amountLkr == null || !mounted) {
+      return;
+    }
+
+    setState(() => _payingDeliveryBoyId = deliveryBoy.uid);
+    try {
+      await context
+          .read<AppState>()
+          .authService
+          .payDeliveryStarReward(
+            uid: deliveryBoy.uid,
+            amountLkr: amountLkr,
+          );
+      if (mounted) {
+        showSnack(
+          context,
+          'Successfully paid LKR $amountLkr from stars. '
+          '${deliveryBoy.deliveryRewardStars - amountLkr} stars remain.',
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _payingDeliveryBoyId = null);
+      }
+    }
   }
 
   Future<void> _showDeliveryBoyDialog(
@@ -6171,61 +6257,264 @@ class AdminDeliveryBoyManagementScreen extends StatelessWidget {
   }
 }
 
+class _DeliveryRewardPaymentDialog extends StatefulWidget {
+  const _DeliveryRewardPaymentDialog({required this.deliveryBoy});
+
+  final UserProfile deliveryBoy;
+
+  @override
+  State<_DeliveryRewardPaymentDialog> createState() =>
+      _DeliveryRewardPaymentDialogState();
+}
+
+class _DeliveryRewardPaymentDialogState
+    extends State<_DeliveryRewardPaymentDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _amountController;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController = TextEditingController(
+      text: widget.deliveryBoy.deliveryRewardStars.toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final deliveryBoy = widget.deliveryBoy;
+    return AlertDialog(
+      title: const Text('Pay from reward stars'),
+      content: SizedBox(
+        width: 420,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${deliveryBoy.fullName} has '
+                '${deliveryBoy.deliveryRewardStars} stars. '
+                'One star equals LKR 1.',
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _amountController,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  labelText: 'Payment amount (LKR)',
+                  prefixIcon: Icon(Icons.payments_outlined),
+                  helperText: 'The same number of stars will be deducted.',
+                ),
+                validator: (value) {
+                  final amount = int.tryParse(value?.trim() ?? '');
+                  if (amount == null || amount < 1) {
+                    return 'Enter an amount of at least LKR 1.';
+                  }
+                  if (amount > deliveryBoy.deliveryRewardStars) {
+                    return 'Only ${deliveryBoy.deliveryRewardStars} stars are available.';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: _submit,
+          icon: const Icon(Icons.payments_outlined),
+          label: const Text('Confirm payment'),
+        ),
+      ],
+    );
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    Navigator.of(context).pop(int.parse(_amountController.text.trim()));
+  }
+}
+
 class _DeliveryBoyTile extends StatelessWidget {
   const _DeliveryBoyTile({
     required this.deliveryBoy,
     required this.onEdit,
+    required this.onPayReward,
+    required this.isPaying,
   });
 
+  static const _rewardTarget = 1000;
   final UserProfile deliveryBoy;
   final VoidCallback onEdit;
+  final VoidCallback onPayReward;
+  final bool isPaying;
 
   @override
   Widget build(BuildContext context) {
     final statusColor =
         deliveryBoy.isBlocked ? const Color(0xFFC83A2B) : _adminPrimary;
+    final rewardStars = deliveryBoy.deliveryRewardStars;
+    final canPayReward = rewardStars > 0;
+    final rewardProgress =
+        (rewardStars / _rewardTarget).clamp(0.0, 1.0).toDouble();
     return _AdminCard(
       onTap: onEdit,
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _AdminIconBadge(
-            icon: Icons.delivery_dining,
-            color: statusColor,
+          Row(
+            children: [
+              _AdminIconBadge(
+                icon: Icons.delivery_dining,
+                color: statusColor,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      deliveryBoy.fullName,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _adminInk,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      deliveryBoy.phone,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _adminMuted,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              _AdminPill(
+                label: deliveryBoy.isBlocked ? 'Inactive' : 'Active',
+                color: statusColor,
+                icon:
+                    deliveryBoy.isBlocked ? Icons.block : Icons.check_circle,
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.edit_outlined, color: _adminMuted),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  deliveryBoy.fullName,
-                  overflow: TextOverflow.ellipsis,
+          const SizedBox(height: 14),
+          const Divider(height: 1, color: _adminLine),
+          const SizedBox(height: 13),
+          Row(
+            children: [
+              const Icon(
+                Icons.star_rounded,
+                size: 21,
+                color: _adminWarning,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'Reward stars: $rewardStars / $_rewardTarget',
                   style: const TextStyle(
                     color: _adminInk,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(height: 5),
+              ),
+              if (deliveryBoy.deliveryRewardCount > 0)
                 Text(
-                  deliveryBoy.phone,
-                  overflow: TextOverflow.ellipsis,
+                  '${deliveryBoy.deliveryRewardCount} paid',
                   style: const TextStyle(
                     color: _adminMuted,
                     fontWeight: FontWeight.w700,
                     fontSize: 12,
                   ),
                 ),
-              ],
+            ],
+          ),
+          const SizedBox(height: 9),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: rewardProgress,
+              minHeight: 8,
+              backgroundColor: const Color(0xFFF2E8D9),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(_adminWarning),
             ),
           ),
-          const SizedBox(width: 10),
-          _AdminPill(
-            label: deliveryBoy.isBlocked ? 'Inactive' : 'Active',
-            color: statusColor,
-            icon: deliveryBoy.isBlocked ? Icons.block : Icons.check_circle,
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final message = Text(
+                canPayReward
+                    ? 'Available to pay: LKR $rewardStars'
+                    : 'No reward stars available yet.',
+                style: const TextStyle(
+                  color: _adminMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              );
+              final button = FilledButton.icon(
+                onPressed: canPayReward && !isPaying ? onPayReward : null,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _adminWarning,
+                  foregroundColor: Colors.white,
+                ),
+                icon: isPaying
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.payments_outlined),
+                label: Text(isPaying ? 'Recording...' : 'Pay from stars'),
+              );
+              if (constraints.maxWidth < 430) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    message,
+                    const SizedBox(height: 10),
+                    button,
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: message),
+                  const SizedBox(width: 12),
+                  button,
+                ],
+              );
+            },
           ),
-          const SizedBox(width: 4),
-          const Icon(Icons.edit_outlined, color: _adminMuted),
         ],
       ),
     );

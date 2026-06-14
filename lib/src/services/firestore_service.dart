@@ -154,8 +154,12 @@ class FirestoreService {
     return _users.snapshots().map(
       (snapshot) {
         final users = snapshot.docs
+            .where(
+              (doc) => _isDeliveryBoyRole(
+                doc.data()['role']?.toString() ?? '',
+              ),
+            )
             .map((doc) => UserProfile.fromMap(doc.data(), doc.id))
-            .where((user) => _isDeliveryBoyRole(user.role))
             .where((user) => !activeOnly || !user.isBlocked)
             .toList()
           ..sort((a, b) => a.fullName.compareTo(b.fullName));

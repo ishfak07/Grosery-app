@@ -252,6 +252,11 @@ class UserProfile {
     this.preferredLanguageCode = AppLanguageCodes.english,
     this.fcmToken = '',
     this.fcmTokens = const <String>[],
+    this.deliveryRewardStars = 0,
+    this.deliveryRewardStarsInitialized = false,
+    this.deliveryRewardCount = 0,
+    this.deliveryRewardsPaidLkr = 0,
+    this.deliveryRewardLastPaidAt,
   });
 
   final String uid;
@@ -267,6 +272,11 @@ class UserProfile {
   final String preferredLanguageCode;
   final String fcmToken;
   final List<String> fcmTokens;
+  final int deliveryRewardStars;
+  final bool deliveryRewardStarsInitialized;
+  final int deliveryRewardCount;
+  final int deliveryRewardsPaidLkr;
+  final DateTime? deliveryRewardLastPaidAt;
 
   bool get isAdmin => role == 'admin';
   bool get isDeliveryBoy =>
@@ -282,6 +292,11 @@ class UserProfile {
     String? preferredLanguageCode,
     String? fcmToken,
     List<String>? fcmTokens,
+    int? deliveryRewardStars,
+    bool? deliveryRewardStarsInitialized,
+    int? deliveryRewardCount,
+    int? deliveryRewardsPaidLkr,
+    DateTime? deliveryRewardLastPaidAt,
   }) {
     return UserProfile(
       uid: uid,
@@ -299,6 +314,15 @@ class UserProfile {
       ),
       fcmToken: fcmToken ?? this.fcmToken,
       fcmTokens: fcmTokens ?? this.fcmTokens,
+      deliveryRewardStars:
+          deliveryRewardStars ?? this.deliveryRewardStars,
+      deliveryRewardStarsInitialized: deliveryRewardStarsInitialized ??
+          this.deliveryRewardStarsInitialized,
+      deliveryRewardCount: deliveryRewardCount ?? this.deliveryRewardCount,
+      deliveryRewardsPaidLkr:
+          deliveryRewardsPaidLkr ?? this.deliveryRewardsPaidLkr,
+      deliveryRewardLastPaidAt:
+          deliveryRewardLastPaidAt ?? this.deliveryRewardLastPaidAt,
     );
   }
 
@@ -318,6 +342,13 @@ class UserProfile {
           AppLanguageCodes.normalize(preferredLanguageCode),
       'fcmToken': fcmToken,
       'fcmTokens': fcmTokens,
+      'deliveryRewardStars': deliveryRewardStars,
+      'deliveryRewardStarsInitialized': deliveryRewardStarsInitialized,
+      'deliveryRewardCount': deliveryRewardCount,
+      'deliveryRewardsPaidLkr': deliveryRewardsPaidLkr,
+      'deliveryRewardLastPaidAt': deliveryRewardLastPaidAt == null
+          ? null
+          : _writeDate(deliveryRewardLastPaidAt!),
     };
   }
 
@@ -343,6 +374,16 @@ class UserProfile {
       fcmToken: map['fcmToken'] as String? ??
           (fcmTokens.isEmpty ? '' : fcmTokens.first),
       fcmTokens: fcmTokens,
+      deliveryRewardStars:
+          (map['deliveryRewardStars'] as num?)?.toInt() ?? 0,
+      deliveryRewardStarsInitialized:
+          map['deliveryRewardStarsInitialized'] == true,
+      deliveryRewardCount:
+          (map['deliveryRewardCount'] as num?)?.toInt() ?? 0,
+      deliveryRewardsPaidLkr:
+          (map['deliveryRewardsPaidLkr'] as num?)?.toInt() ?? 0,
+      deliveryRewardLastPaidAt:
+          _readOptionalDate(map['deliveryRewardLastPaidAt']),
     );
   }
 }

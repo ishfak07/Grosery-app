@@ -293,6 +293,10 @@ exports.createDeliveryBoyAccount = onCall(async (request) => {
     isBlocked: false,
     preferredLanguageCode: "en",
     createdBy: adminUid,
+    deliveryRewardStars: 0,
+    deliveryRewardStarsInitialized: true,
+    deliveryRewardCount: 0,
+    deliveryRewardsPaidLkr: 0,
   }, {merge: true});
 
   return {uid: userRecord.uid};
@@ -488,12 +492,34 @@ exports.submitDeliveryReview = onCall(async (request) => {
       );
     }
 
+    const deliveryBoyRef = db
+      .collection("users")
+      .doc(order.assignedDeliveryBoyId);
+    const deliveryBoyDoc = await transaction.get(deliveryBoyRef);
+    const rewardStars = await initializeDeliveryRewardStarsInTransaction({
+      transaction,
+      db,
+      deliveryBoyRef,
+      deliveryBoyDoc,
+    });
+    const hadDeliveryReview =
+      Number.isInteger(order.deliveryRating) &&
+      order.deliveryRating >= 1 &&
+      order.deliveryRating <= 5;
     const now = admin.firestore.Timestamp.now();
-    transaction.update(orderRef, {
+    const orderUpdate = {
       deliveryRating: rating,
       deliveryReview: review,
       deliveryReviewedAt: now,
-    });
+    };
+    if (!hadDeliveryReview) {
+      orderUpdate.deliveryRewardStarsCredited = rating;
+      transaction.update(deliveryBoyRef, {
+        deliveryRewardStars: rewardStars + rating,
+        updatedAt: now,
+      });
+    }
+    transaction.update(orderRef, orderUpdate);
 
     const notificationRef = db.collection("notifications").doc();
     transaction.set(notificationRef, {
@@ -510,6 +536,125 @@ exports.submitDeliveryReview = onCall(async (request) => {
   });
 
   return {ok: true};
+});
+
+exports.initializeDeliveryRewardStars = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Login is required.");
+  }
+
+  const db = admin.firestore();
+  const callerDoc = await db.collection("users").doc(request.auth.uid).get();
+  if (!callerDoc.exists || callerDoc.get("isBlocked") === true) {
+    throw new HttpsError("permission-denied", "Active account required.");
+  }
+
+  const callerRole = callerDoc.get("role");
+  let deliveryBoyId = request.auth.uid;
+  if (callerRole === "admin") {
+    deliveryBoyId = assertUid(request.data?.uid);
+  } else if (callerRole !== "delivery_boy") {
+    throw new HttpsError(
+      "permission-denied",
+      "Only admins and delivery boys can initialize reward stars.",
+    );
+  }
+
+  const deliveryBoyRef = db.collection("users").doc(deliveryBoyId);
+  const stars = await db.runTransaction(async (transaction) => {
+    const deliveryBoyDoc = await transaction.get(deliveryBoyRef);
+    return initializeDeliveryRewardStarsInTransaction({
+      transaction,
+      db,
+      deliveryBoyRef,
+      deliveryBoyDoc,
+    });
+  });
+
+  return {ok: true, stars};
+});
+
+exports.payDeliveryStarReward = onCall(async (request) => {
+  const adminUid = await requireAdmin(request);
+  const deliveryBoyId = assertUid(request.data?.uid);
+  const amountLkr = Number(request.data?.amountLkr);
+  if (!Number.isInteger(amountLkr) || amountLkr < 1) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Enter a whole-number payment amount of at least LKR 1.",
+    );
+  }
+  const db = admin.firestore();
+  const deliveryBoyRef = db.collection("users").doc(deliveryBoyId);
+  const paymentRef = db.collection("delivery_reward_payments").doc();
+
+  const result = await db.runTransaction(async (transaction) => {
+    const deliveryBoyDoc = await transaction.get(deliveryBoyRef);
+    const stars = await initializeDeliveryRewardStarsInTransaction({
+      transaction,
+      db,
+      deliveryBoyRef,
+      deliveryBoyDoc,
+    });
+    if (amountLkr > stars) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Only ${stars} reward stars are available.`,
+      );
+    }
+
+    const deliveryBoy = deliveryBoyDoc.data();
+    const now = admin.firestore.Timestamp.now();
+    const remainingStars = stars - amountLkr;
+    const previousRewardCount = Number.isInteger(
+      deliveryBoy.deliveryRewardCount,
+    ) ? deliveryBoy.deliveryRewardCount : 0;
+    const previousPaidLkr = Number.isInteger(
+      deliveryBoy.deliveryRewardsPaidLkr,
+    ) ? deliveryBoy.deliveryRewardsPaidLkr : 0;
+
+    transaction.update(deliveryBoyRef, {
+      deliveryRewardStars: remainingStars,
+      deliveryRewardCount: previousRewardCount + 1,
+      deliveryRewardsPaidLkr: previousPaidLkr + amountLkr,
+      deliveryRewardLastPaidAt: now,
+      updatedAt: now,
+    });
+    transaction.set(paymentRef, {
+      paymentId: paymentRef.id,
+      deliveryBoyId,
+      deliveryBoyName: deliveryBoy.fullName || "",
+      deliveryBoyPhone: deliveryBoy.phone || "",
+      starsBefore: stars,
+      starsDeducted: amountLkr,
+      starsAfter: remainingStars,
+      amountLkr,
+      paidBy: adminUid,
+      paidAt: now,
+    });
+
+    const notificationRef = db.collection("notifications").doc();
+    transaction.set(notificationRef, {
+      notificationId: notificationRef.id,
+      userId: deliveryBoyId,
+      recipientRole: "delivery_boy",
+      title: `LKR ${amountLkr} star reward paid`,
+      body: `${amountLkr} stars were used. ${remainingStars} stars remain.`,
+      type: "delivery_reward",
+      relatedId: paymentRef.id,
+      isRead: false,
+      createdAt: now,
+    });
+
+    return {starsBefore: stars, starsAfter: remainingStars};
+  });
+
+  return {
+    ok: true,
+    amountLkr,
+    starsBefore: result.starsBefore,
+    starsAfter: result.starsAfter,
+  };
 });
 
 async function resolveTokens(notification) {
@@ -751,6 +896,53 @@ function assertPassword(value) {
     );
   }
   return password;
+}
+
+async function initializeDeliveryRewardStarsInTransaction({
+  transaction,
+  db,
+  deliveryBoyRef,
+  deliveryBoyDoc,
+}) {
+  if (
+    !deliveryBoyDoc.exists ||
+    deliveryBoyDoc.get("role") !== "delivery_boy"
+  ) {
+    throw new HttpsError("not-found", "Delivery boy account not found.");
+  }
+
+  const profile = deliveryBoyDoc.data();
+  if (profile.deliveryRewardStarsInitialized === true) {
+    const storedStars = Number(profile.deliveryRewardStars);
+    return Number.isInteger(storedStars) && storedStars >= 0 ? storedStars : 0;
+  }
+
+  const reviewedOrders = await transaction.get(
+    db
+      .collection("orders")
+      .where("assignedDeliveryBoyId", "==", deliveryBoyRef.id),
+  );
+  const stars = reviewedOrders.docs.reduce((total, orderDoc) => {
+    const rating = Number(orderDoc.data().deliveryRating);
+    return Number.isInteger(rating) && rating >= 1 && rating <= 5 ?
+      total + rating :
+      total;
+  }, 0);
+
+  transaction.update(deliveryBoyRef, {
+    deliveryRewardStars: stars,
+    deliveryRewardStarsInitialized: true,
+    deliveryRewardCount:
+      Number.isInteger(profile.deliveryRewardCount) ?
+        profile.deliveryRewardCount :
+        0,
+    deliveryRewardsPaidLkr:
+      Number.isInteger(profile.deliveryRewardsPaidLkr) ?
+        profile.deliveryRewardsPaidLkr :
+        0,
+    updatedAt: admin.firestore.Timestamp.now(),
+  });
+  return stars;
 }
 
 async function requireAdmin(request) {

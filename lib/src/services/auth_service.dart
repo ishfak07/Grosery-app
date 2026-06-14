@@ -397,6 +397,30 @@ class AuthService {
     }
   }
 
+  Future<void> initializeDeliveryRewardStars({String? uid}) async {
+    try {
+      await _functions.httpsCallable('initializeDeliveryRewardStars').call({
+        if (uid != null) 'uid': uid,
+      });
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
+  Future<void> payDeliveryStarReward({
+    required String uid,
+    required int amountLkr,
+  }) async {
+    try {
+      await _functions.httpsCallable('payDeliveryStarReward').call({
+        'uid': uid,
+        'amountLkr': amountLkr,
+      });
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
   Future<void> _callFirstAvailableDeliveryFunction({
     required String primaryName,
     required String fallbackName,

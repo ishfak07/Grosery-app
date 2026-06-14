@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -30,6 +32,22 @@ class DeliveryBoyDashboardScreen extends StatefulWidget {
 class _DeliveryBoyDashboardScreenState
     extends State<DeliveryBoyDashboardScreen> {
   var _selectedBucket = _DeliveryOrderBucket.active;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_initializeRewardStars());
+    });
+  }
+
+  Future<void> _initializeRewardStars() async {
+    try {
+      await context.read<AppState>().authService.initializeDeliveryRewardStars();
+    } catch (_) {
+      // The profile stream will retry naturally after the backend is available.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -94,6 +112,16 @@ class _DeliveryBoyDashboardScreenState
                               deliveryBoyName: profile.fullName,
                               activeCount: activeOrders.length,
                             ),
+                          ),
+                        ),
+                      ),
+                      const SliverToBoxAdapter(child: SizedBox(height: 14)),
+                      SliverToBoxAdapter(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 820),
+                            child: _DeliveryRewardCard(profile: profile),
                           ),
                         ),
                       ),
@@ -204,6 +232,121 @@ class _DeliveryBoyDashboardScreenState
     return order.orderStatus == 'Delivered' ||
         order.orderStatus == 'Cancelled' ||
         order.orderStatus == 'Rejected';
+  }
+}
+
+class _DeliveryRewardCard extends StatelessWidget {
+  const _DeliveryRewardCard({required this.profile});
+
+  static const _targetStars = 1000;
+  final UserProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final stars = profile.deliveryRewardStars;
+    final progress = (stars / _targetStars).clamp(0.0, 1.0).toDouble();
+    final remaining = (_targetStars - stars).clamp(0, _targetStars);
+    final rewardReady = stars >= _targetStars;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _deliverySurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: rewardReady
+              ? _deliveryWarning.withOpacity(0.55)
+              : _deliveryLine,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: _deliveryWarning.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.workspace_premium_rounded,
+                  color: _deliveryWarning,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'LKR 1,000 star reward',
+                      style: TextStyle(
+                        color: _deliveryInk,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      rewardReady
+                          ? 'LKR $stars is available from your stars'
+                          : '$remaining stars until 1,000 stars',
+                      style: const TextStyle(
+                        color: _deliveryMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '$stars / $_targetStars',
+                style: const TextStyle(
+                  color: _deliveryWarning,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 13),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 9,
+              backgroundColor: const Color(0xFFF1E6D6),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(_deliveryWarning),
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            '1 star = LKR 1. You can ask the admin for a partial or full payment.',
+            style: TextStyle(
+              color: _deliveryMuted,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (profile.deliveryRewardCount > 0) ...[
+            const SizedBox(height: 10),
+            Text(
+              '${profile.deliveryRewardCount} rewards paid | '
+              'LKR ${profile.deliveryRewardsPaidLkr}',
+              style: const TextStyle(
+                color: _deliveryMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 
