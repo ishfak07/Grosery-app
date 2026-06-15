@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Delete Account - Puttalam Drop</title>
+    <meta
+      name="description"
+      content="Request deletion of a Puttalam Drop customer account."
+    >
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/delete-account.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <div class="header-inner">
+        <p class="brand">Puttalam Drop</p>
+        <h1>Delete your account</h1>
+      </div>
+    </header>
+    <main>
+      <section class="card">
+        <h2>Delete inside the app</h2>
+        <p>
+          The quickest method is Profile &gt; Delete account. Confirm your
+          password and the app will remove the account if it has no active order.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Request deletion from the web</h2>
+        <p>
+          Use this form if you cannot sign in. We will verify that you control
+          the account before processing the request. Submitting the form does
+          not immediately delete an active order.
+        </p>
+        <form id="deletion-form">
+          <label for="customer-name">Name (optional)</label>
+          <input
+            id="customer-name"
+            name="customerName"
+            maxlength="120"
+            autocomplete="name"
+          >
+
+          <label for="phone">Account mobile number</label>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            required
+            maxlength="20"
+            autocomplete="tel"
+            placeholder="+94 7X XXX XXXX"
+          >
+
+          <label for="details">Additional details (optional)</label>
+          <textarea
+            id="details"
+            name="details"
+            maxlength="1000"
+            placeholder="Tell us why you cannot use in-app deletion."
+          ></textarea>
+
+          <button id="submit-button" type="submit">Submit deletion request</button>
+          <p id="form-status" class="status" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>What is deleted</h2>
+        <p>
+          Authentication, profile information, support conversations,
+          notifications, reset requests, and personal Firebase Storage images
+          are deleted. Closed order and accounting records may be retained in
+          anonymized form for legal and business-record purposes. See the
+          <a href="/privacy">privacy policy</a> for full details.
+        </p>
+      </section>
+    </main>
+    <footer><a href="/">Puttalam Drop support</a></footer>
+  </body>
+</html>

@@ -40,6 +40,8 @@ class FirestoreService {
       _db.collection('notifications');
   CollectionReference<Map<String, dynamic>> get _passwordResetRequests =>
       _db.collection('password_reset_requests');
+  CollectionReference<Map<String, dynamic>> get _accountDeletionRequests =>
+      _db.collection('account_deletion_requests');
   CollectionReference<Map<String, dynamic>> get _appSettings =>
       _db.collection('app_settings');
 
@@ -990,6 +992,21 @@ class FirestoreService {
     return _notificationsFromSnapshot(snapshot)
         .where((notification) => notification.recipientRole == role)
         .toList();
+  }
+
+  Stream<List<AccountDeletionRequest>> watchAccountDeletionRequests() {
+    if (!_firebaseAvailable) {
+      return Stream<List<AccountDeletionRequest>>.value(
+        const <AccountDeletionRequest>[],
+      );
+    }
+    return _accountDeletionRequests.snapshots().map((snapshot) {
+      final requests = snapshot.docs
+          .map((doc) => AccountDeletionRequest.fromMap(doc.data(), doc.id))
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return requests;
+    });
   }
 
   static List<AppNotification> notificationsCreatedOnOrAfter(

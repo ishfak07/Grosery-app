@@ -1583,6 +1583,43 @@ class PasswordResetRequest {
   }
 }
 
+class AccountDeletionRequest {
+  const AccountDeletionRequest({
+    required this.requestId,
+    required this.customerName,
+    required this.phone,
+    required this.details,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String requestId;
+  final String customerName;
+  final String phone;
+  final String details;
+  final String status;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  bool get isPending => status == 'pending';
+
+  factory AccountDeletionRequest.fromMap(
+    Map<String, dynamic> map,
+    String id,
+  ) {
+    return AccountDeletionRequest(
+      requestId: id,
+      customerName: map['customerName'] as String? ?? '',
+      phone: map['phone'] as String? ?? '',
+      details: map['details'] as String? ?? '',
+      status: map['status'] as String? ?? 'pending',
+      createdAt: _readDate(map['createdAt']),
+      updatedAt: _readDate(map['updatedAt']),
+    );
+  }
+}
+
 class AppNotification {
   const AppNotification({
     required this.notificationId,

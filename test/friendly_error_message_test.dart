@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:grocerydelivery/services/cloudinary_service.dart';
+import 'package:grocerydelivery/services/image_upload_service.dart';
 import 'package:grocerydelivery/src/core/widgets/common_widgets.dart';
 
 void main() {
@@ -20,11 +20,11 @@ void main() {
     );
   });
 
-  test('turns Cloudinary upload failures into an image upload message', () {
+  test('turns storage upload failures into an image upload message', () {
     expect(
       appFriendlyErrorMessage(
-        const CloudinaryUploadException(
-          'Cloudinary upload failed with status 413.',
+        const ImageUploadException(
+          'Image upload failed (unauthorized). Please try again.',
         ),
       ),
       'Image upload failed. Please check your connection and try again.',

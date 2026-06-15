@@ -4,9 +4,6 @@ class AppConstants {
   static const appName = 'Puttalam Drop';
   static const appLogoAsset = 'assets/images/puttalam_drop_logo.png';
   static const packageName = 'com.ishi.grocerydelivery';
-  static const bootstrapAdminPhone = '+94768976111';
-  static const bootstrapAdminPassword = 'admin123';
-  static const bootstrapAdminName = 'Admin';
   static const currency = 'LKR';
   static const defaultDeliveryCharge = 250.0;
   static const defaultServiceCharge = 0.0;
@@ -16,6 +13,10 @@ class AppConstants {
   static const bankName = 'Bank Of Cylon (BOC)';
   static const bankBranch = 'Puttalam';
   static const bankAccountNumber = '89001476';
+  static const privacyPolicyUrl =
+      'https://grocery-delivery-app-388bc.web.app/privacy';
+  static const accountDeletionUrl =
+      'https://grocery-delivery-app-388bc.web.app/delete-account';
 
   static const orderStatuses = <String>[
     'Pending',

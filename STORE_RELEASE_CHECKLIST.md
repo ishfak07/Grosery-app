@@ -28,13 +28,14 @@
 
 Notes:
 
-- The Android release build targets API 35, which is required for new Google Play submissions from August 31, 2025.
+- The Android release build targets API 35, which satisfies the current Google Play requirement for new mobile apps and updates.
+- Do not add `READ_MEDIA_IMAGES` or `READ_EXTERNAL_STORAGE` for one-off uploads. The app uses the system picker through `image_picker`.
 - The release build no longer uses the debug signing key. It requires `android/key.properties`.
 - If Firebase Android auth/API integrations depend on SHA certificates, add the upload/app signing SHA-1 and SHA-256 values in Firebase Console.
 
 ## iOS / App Store
 
-1. Use a Mac with Xcode 16 or later.
+1. Use a Mac with Xcode 26 or later and a current Flutter stable SDK that supports Xcode 26 and iOS 26.
 2. Open `ios/Runner.xcworkspace` in Xcode.
 3. Select the Runner target, set your Apple Developer Team, and confirm the bundle ID is `com.ishi.grocerydelivery`.
 4. Confirm signing and capabilities, including push notifications if you use Firebase Cloud Messaging.
@@ -49,15 +50,43 @@ Notes:
 
 Notes:
 
+- The deployment target is iOS 13, matching the Firebase Apple SDK generation used by the current FlutterFire dependencies.
 - `ios/Runner/PrivacyInfo.xcprivacy` is included in the Runner resources for UserDefaults access used by local storage.
-- App Store Connect privacy answers must include the app and third-party services. This app uses Firebase, Cloudinary image upload, account/order data, phone numbers, addresses, uploaded images/receipts, support messages, and push notification tokens.
+- App Store Connect privacy answers must include the app and Firebase services.
+  Use `STORE_DATA_DISCLOSURES.md` for the exact selections.
+
+## Mandatory Privacy And Account Deletion
+
+Implemented in the repository:
+
+1. Public privacy policy at
+   `https://grocery-delivery-app-388bc.web.app/privacy`.
+2. Privacy Policy link in the customer Profile screen.
+3. Password-confirmed in-app customer account deletion.
+4. Public deletion request page at
+   `https://grocery-delivery-app-388bc.web.app/delete-account`.
+5. Admin review and verified deletion flow for public requests.
+6. Firebase Auth/profile/support/notification/reset deletion, Firebase Storage
+   cleanup, and closed-order/accounting anonymization.
+7. Retention/deletion disclosure and scheduled cleanup: anonymized financial
+   records expire after seven years and processed web requests after 90 days.
+8. Store answer matrix in `STORE_DATA_DISCLOSURES.md`.
+
+The Hosting site, Functions, Firestore rules, and Storage rules must be deployed
+before these URLs and workflows are considered live.
 
 ## Production Security
 
-- Do not publish with the debug bootstrap admin as your only admin path. Release builds disable it, so create the real Firebase admin user before launch.
-- Change any Firebase admin account that was created with the old debug password.
-- Review the Cloudinary unsigned upload preset and restrict it as much as possible, or move uploads behind a signed backend endpoint.
-- Deploy Firestore rules and Cloud Functions before store review.
+- The source and Firestore rules no longer contain a bootstrap administrator backdoor.
+- Delete any old Firebase Authentication account created with the former fixed debug administrator password, or reset it to a strong unique credential.
+- Create the real Firebase administrator account and set only its Firestore profile to `role: "admin"`.
+- New uploads use authenticated Firebase Storage rules. The old unsigned
+  Cloudinary preset is no longer referenced by the app and should be disabled
+  in Cloudinary after any legacy build is retired.
+- Legacy Cloudinary URLs discovered during deletion are removed from customer
+  records and placed in the admin-only `legacy_media_cleanup` queue.
+- Deploy Firestore rules, Storage rules, Cloud Functions, and Hosting before
+  store review.
 
 ## Firebase API Key Troubleshooting
 

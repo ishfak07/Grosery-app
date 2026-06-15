@@ -1,10 +1,208 @@
 const admin = require("firebase-admin");
+const crypto = require("crypto");
 const {onDocumentCreated} = require("firebase-functions/v2/firestore");
-const {HttpsError, onCall} = require("firebase-functions/v2/https");
+const {HttpsError, onCall, onRequest} = require("firebase-functions/v2/https");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 
 admin.initializeApp();
 
 const notificationChannelId = "puttalam_drop_alerts";
+const terminalOrderStatuses = new Set([
+  "Delivered",
+  "Cancelled",
+  "Rejected",
+]);
+
+exports.deleteCustomerAccount = onCall(async (request) => {
+  const customer = await requireCustomer(request);
+  requireRecentAuthentication(request);
+  return deleteCustomerData(customer);
+});
+
+exports.processAccountDeletionRequest = onCall(async (request) => {
+  const adminUid = await requireAdmin(request);
+  const requestId = assertRequestId(request.data?.requestId);
+  const action = `${request.data?.action || ""}`.trim();
+  if (!["delete", "reject"].includes(action)) {
+    throw new HttpsError("invalid-argument", "Choose delete or reject.");
+  }
+
+  const db = admin.firestore();
+  const deletionRequestRef = db
+    .collection("account_deletion_requests")
+    .doc(requestId);
+  const deletionRequest = await deletionRequestRef.get();
+  if (!deletionRequest.exists || deletionRequest.get("status") !== "pending") {
+    throw new HttpsError(
+      "failed-precondition",
+      "This deletion request is no longer pending.",
+    );
+  }
+
+  const now = admin.firestore.Timestamp.now();
+  if (action === "reject") {
+    await deletionRequestRef.update({
+      status: "rejected",
+      rejectedBy: adminUid,
+      rejectedAt: now,
+      updatedAt: now,
+    });
+    return {rejected: true};
+  }
+
+  const phone = normalizeSriLankanPhone(deletionRequest.get("phone") || "");
+  assertSriLankanMobile(phone);
+  let authUser;
+  try {
+    authUser = await admin.auth().getUserByEmail(hiddenEmailForPhone(phone));
+  } catch (error) {
+    if (error.code !== "auth/user-not-found") {
+      throw error;
+    }
+    await deletionRequestRef.update({
+      phone: "",
+      customerName: "",
+      details: "",
+      status: "completed",
+      completedBy: adminUid,
+      completedAt: now,
+      accountNotFound: true,
+      updatedAt: now,
+    });
+    return {deleted: true, accountNotFound: true};
+  }
+
+  const profileDoc = await db.collection("users").doc(authUser.uid).get();
+  if (!profileDoc.exists || profileDoc.get("role") !== "user") {
+    throw new HttpsError(
+      "failed-precondition",
+      "The linked account is not a customer account.",
+    );
+  }
+  return deleteCustomerData({
+    uid: authUser.uid,
+    profile: profileDoc.data(),
+    completedBy: adminUid,
+  });
+});
+
+exports.purgeExpiredPrivacyRecords = onSchedule(
+  {schedule: "every day 03:00", timeZone: "Asia/Colombo"},
+  async () => {
+    const now = new Date();
+    const sevenYearsAgo = new Date(now);
+    sevenYearsAgo.setUTCFullYear(sevenYearsAgo.getUTCFullYear() - 7);
+    const ninetyDaysAgo = new Date(
+      now.getTime() - 90 * 24 * 60 * 60 * 1000,
+    );
+    const db = admin.firestore();
+    const queries = [
+      db
+        .collection("orders")
+        .where(
+          "customerDeletedAt",
+          "<=",
+          admin.firestore.Timestamp.fromDate(sevenYearsAgo),
+        )
+        .limit(400)
+        .get(),
+      db
+        .collection("account_sales")
+        .where(
+          "customerDeletedAt",
+          "<=",
+          admin.firestore.Timestamp.fromDate(sevenYearsAgo),
+        )
+        .limit(400)
+        .get(),
+      db
+        .collection("account_deletion_requests")
+        .where(
+          "completedAt",
+          "<=",
+          admin.firestore.Timestamp.fromDate(ninetyDaysAgo),
+        )
+        .limit(400)
+        .get(),
+      db
+        .collection("account_deletion_requests")
+        .where(
+          "rejectedAt",
+          "<=",
+          admin.firestore.Timestamp.fromDate(ninetyDaysAgo),
+        )
+        .limit(400)
+        .get(),
+    ];
+    const snapshots = await Promise.all(queries);
+    const writer = db.bulkWriter();
+    const seenPaths = new Set();
+    for (const snapshot of snapshots) {
+      for (const doc of snapshot.docs) {
+        if (!seenPaths.has(doc.ref.path)) {
+          seenPaths.add(doc.ref.path);
+          writer.delete(doc.ref);
+        }
+      }
+    }
+    await writer.close();
+  },
+);
+
+exports.submitAccountDeletionRequest = onRequest(
+  {cors: true, maxInstances: 10},
+  async (request, response) => {
+    if (request.method !== "POST") {
+      response.set("Allow", "POST");
+      response.status(405).json({error: "Method not allowed."});
+      return;
+    }
+
+    const phone = normalizeSriLankanPhone(request.body?.phone || "");
+    if (!/^7[0-9]{8}$/.test(localSriLankanDigits(phone))) {
+      response.status(400).json({
+        error: "Enter a valid Sri Lankan mobile number starting with 7.",
+      });
+      return;
+    }
+
+    const customerName = `${request.body?.customerName || ""}`
+      .trim()
+      .substring(0, 120);
+    const details = `${request.body?.details || ""}`
+      .trim()
+      .substring(0, 1000);
+    const db = admin.firestore();
+    const existing = await db
+      .collection("account_deletion_requests")
+      .where("phone", "==", phone)
+      .get();
+    const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const hasRecentPendingRequest = existing.docs.some((doc) => {
+      const createdAt = doc.get("createdAt");
+      return doc.get("status") === "pending" &&
+        createdAt?.toMillis?.() >= dayAgo;
+    });
+
+    if (!hasRecentPendingRequest) {
+      const now = admin.firestore.Timestamp.now();
+      await db.collection("account_deletion_requests").add({
+        phone,
+        customerName,
+        details,
+        status: "pending",
+        source: "public-web-form",
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    response.status(202).json({
+      accepted: true,
+      message: "Your deletion request has been received.",
+    });
+  },
+);
 
 exports.sendPushForNotification = onDocumentCreated(
   "notifications/{notificationId}",
@@ -964,6 +1162,173 @@ function assertPassword(value) {
     );
   }
   return password;
+}
+
+function requireRecentAuthentication(request) {
+  const authenticationTime = Number(request.auth?.token?.auth_time || 0);
+  const ageInSeconds = Math.floor(Date.now() / 1000) - authenticationTime;
+  if (!authenticationTime || ageInSeconds > 10 * 60) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Confirm your password again before deleting your account.",
+    );
+  }
+}
+
+async function deleteCustomerData(customer) {
+  const db = admin.firestore();
+  const now = admin.firestore.Timestamp.now();
+  const uidHash = crypto
+    .createHash("sha256")
+    .update(customer.uid)
+    .digest("hex");
+  const orders = await db
+    .collection("orders")
+    .where("userId", "==", customer.uid)
+    .get();
+  const activeOrder = orders.docs.find(
+    (doc) => !terminalOrderStatuses.has(`${doc.get("orderStatus") || ""}`),
+  );
+  if (activeOrder) {
+    throw new HttpsError(
+      "failed-precondition",
+      "This account has an active order. Complete or cancel it before " +
+        "deleting the account.",
+    );
+  }
+
+  const tickets = await db
+    .collection("support_tickets")
+    .where("userId", "==", customer.uid)
+    .get();
+  const ticketMessages = [];
+  for (const ticketDoc of tickets.docs) {
+    const messages = await db
+      .collection("support_messages")
+      .where("ticketId", "==", ticketDoc.id)
+      .get();
+    ticketMessages.push(...messages.docs);
+  }
+
+  const [
+    notifications,
+    accountSales,
+    passwordResetRequests,
+    deletionRequests,
+  ] = await Promise.all([
+    db.collection("notifications").where("userId", "==", customer.uid).get(),
+    db.collection("account_sales").where("userId", "==", customer.uid).get(),
+    customer.profile.hiddenEmail ?
+      db
+        .collection("password_reset_requests")
+        .where("hiddenEmail", "==", customer.profile.hiddenEmail)
+        .get() :
+      Promise.resolve({docs: []}),
+    customer.profile.phone ?
+      db
+        .collection("account_deletion_requests")
+        .where("phone", "==", customer.profile.phone)
+        .get() :
+      Promise.resolve({docs: []}),
+  ]);
+  const legacyImageUrls = collectLegacyImageUrls(
+    orders.docs,
+    ticketMessages,
+  );
+
+  await deleteUserStorage(customer.uid);
+
+  const writer = db.bulkWriter();
+  writer.onWriteError((error) => error.failedAttempts < 3);
+  for (const orderDoc of orders.docs) {
+    writer.update(orderDoc.ref, {
+      userId: "",
+      customerName: "Deleted customer",
+      customerPhone: "",
+      customerAddress: "",
+      uploadedImageUrl: "",
+      paymentReceiptImageUrl: "",
+      orderNotes: "",
+      manualListText: "",
+      deliveryRating: 0,
+      deliveryReview: "",
+      deliveryReviewedAt: null,
+      customerDeletedAt: now,
+      deletedCustomerHash: uidHash,
+      updatedAt: now,
+    });
+  }
+  for (const saleDoc of accountSales.docs) {
+    writer.update(saleDoc.ref, {
+      userId: "",
+      customerName: "Deleted customer",
+      customerPhone: "",
+      customerAddress: "",
+      customerDeletedAt: now,
+      deletedCustomerHash: uidHash,
+      updatedAt: now,
+    });
+  }
+  for (const doc of [
+    ...ticketMessages,
+    ...tickets.docs,
+    ...notifications.docs,
+    ...passwordResetRequests.docs,
+  ]) {
+    writer.delete(doc.ref);
+  }
+  for (const requestDoc of deletionRequests.docs) {
+    writer.update(requestDoc.ref, {
+      phone: "",
+      customerName: "",
+      details: "",
+      status: "completed",
+      completedBy: customer.completedBy || "",
+      completedAt: now,
+      updatedAt: now,
+    });
+  }
+  writer.delete(db.collection("users").doc(customer.uid));
+  if (legacyImageUrls.length > 0) {
+    writer.set(db.collection("legacy_media_cleanup").doc(), {
+      deletedCustomerHash: uidHash,
+      imageUrls: legacyImageUrls,
+      status: "pending",
+      reason: "customer-account-deletion",
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  await writer.close();
+  await admin.auth().deleteUser(customer.uid);
+  return {
+    deleted: true,
+    anonymizedOrderCount: orders.size,
+    legacyImageCleanupQueued: legacyImageUrls.length,
+  };
+}
+
+function collectLegacyImageUrls(orderDocs, messageDocs) {
+  const urls = [];
+  for (const orderDoc of orderDocs) {
+    const order = orderDoc.data();
+    urls.push(order.uploadedImageUrl, order.paymentReceiptImageUrl);
+  }
+  for (const messageDoc of messageDocs) {
+    urls.push(messageDoc.get("imageUrl"));
+  }
+  return [...new Set(urls.filter((url) =>
+    typeof url === "string" &&
+    url.includes("res.cloudinary.com/"),
+  ))];
+}
+
+async function deleteUserStorage(uid) {
+  await admin.storage().bucket().deleteFiles({
+    prefix: `user_uploads/${uid}/`,
+    force: true,
+  });
 }
 
 async function initializeDeliveryRewardStarsInTransaction({

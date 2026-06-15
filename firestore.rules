@@ -10,14 +10,10 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(uid));
     }
 
-    function isBootstrapAdmin() {
-      return signedIn() &&
-        request.auth.token.email == '94768976111@app.local';
-    }
-
     function isAdmin() {
       return signedIn() &&
-        (isBootstrapAdmin() || profile(request.auth.uid).data.role == 'admin');
+        profile(request.auth.uid).data.role == 'admin' &&
+        profile(request.auth.uid).data.isBlocked != true;
     }
 
     function isDeliveryBoy() {
@@ -189,7 +185,7 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow create: if signedIn() && request.auth.uid == uid &&
-        (isBootstrapAdmin() || request.resource.data.role == 'user');
+        request.resource.data.role == 'user';
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow update: if signedIn() && (
         isAdmin() ||
@@ -315,6 +311,16 @@ service cloud.firestore {
     match /password_reset_requests/{requestId} {
       allow read: if isAdmin();
       allow create, update, delete: if false;
+    }
+
+    match /account_deletion_requests/{requestId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if false;
+    }
+
+    match /legacy_media_cleanup/{cleanupId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if false;
     }
 
     match /app_settings/{settingId} {

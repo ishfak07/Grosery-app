@@ -4,8 +4,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import '../../../services/cloudinary_service.dart';
+import '../../../services/image_upload_service.dart';
 import '../../../services/image_picker_helper.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/i18n/app_localizations.dart';
@@ -6580,7 +6581,12 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
       final appState = context.read<AppState>();
       var imageUrl = '';
       if (_imagePath != null) {
-        imageUrl = await CloudinaryService.uploadImage(File(_imagePath!));
+        imageUrl = await ImageUploadService.uploadUserImage(
+          imageFile: File(_imagePath!),
+          ownerUid: appState.profile!.uid,
+          folder: 'support/${widget.ticket.ticketId}',
+          fileName: 'message-${DateTime.now().millisecondsSinceEpoch}',
+        );
       }
       await appState.firestoreService.sendSupportMessage(
         ticket: widget.ticket,
@@ -6654,6 +6660,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   var _isSaving = false;
   var _isChangingLanguage = false;
   var _isLoggingOut = false;
+  var _isDeletingAccount = false;
 
   @override
   void initState() {
@@ -6674,7 +6681,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final profile = appState.profile;
-    if (_isLoggingOut || profile == null) {
+    if (_isLoggingOut || _isDeletingAccount || profile == null) {
       return const _CustomerLogoutTransition();
     }
     return _CustomerScaffold(
@@ -6720,6 +6727,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
               isLoading: _isSaving,
               onPressed: _save,
             ),
+            const SizedBox(height: 16),
+            _CustomerCard(
+              child: Column(
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(
+                      Icons.privacy_tip_outlined,
+                      color: _customerPrimary,
+                    ),
+                    title: const Text('Privacy policy'),
+                    subtitle: const Text(
+                      'See how account, order, and image data is handled.',
+                    ),
+                    trailing: const Icon(Icons.open_in_new),
+                    onTap: () => _openUrl(AppConstants.privacyPolicyUrl),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(
+                      Icons.delete_forever_outlined,
+                      color: _customerDanger,
+                    ),
+                    title: const Text(
+                      'Delete account',
+                      style: TextStyle(color: _customerDanger),
+                    ),
+                    subtitle: const Text(
+                      'Permanently remove your account and personal data.',
+                    ),
+                    onTap: _deleteAccount,
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: _logout,
@@ -6743,6 +6786,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } finally {
       if (mounted) {
         navigator.popUntil((route) => route.isFirst);
+      }
+    }
+  }
+
+  Future<void> _openUrl(String value) async {
+    final launched = await launchUrl(
+      Uri.parse(value),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!launched && mounted) {
+      showSnack(context, 'Unable to open this page.');
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    final password = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const _DeleteAccountDialog(),
+    );
+    if (password == null || !mounted) {
+      return;
+    }
+
+    final navigator = Navigator.of(context);
+    setState(() => _isDeletingAccount = true);
+    try {
+      await context.read<AppState>().deleteCustomerAccount(
+            password: password,
+          );
+      if (mounted) {
+        navigator.popUntil((route) => route.isFirst);
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _isDeletingAccount = false);
+        showSnack(context, error);
       }
     }
   }
@@ -6795,6 +6875,86 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() => _isChangingLanguage = false);
       }
     }
+  }
+}
+
+class _DeleteAccountDialog extends StatefulWidget {
+  const _DeleteAccountDialog();
+
+  @override
+  State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
+  final _password = TextEditingController();
+  var _confirmed = false;
+  var _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Permanently delete account?'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Your profile, support messages, notifications, and uploaded '
+              'personal images will be removed. Closed order records are '
+              'anonymized for accounting. Active orders must be completed or '
+              'cancelled first.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _password,
+              obscureText: _obscurePassword,
+              autofocus: true,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: 'Password',
+                suffixIcon: IconButton(
+                  onPressed: () {
+                    setState(() => _obscurePassword = !_obscurePassword);
+                  },
+                  icon: Icon(
+                    _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                  ),
+                ),
+              ),
+            ),
+            CheckboxListTile(
+              value: _confirmed,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('I understand this cannot be undone.'),
+              onChanged: (value) {
+                setState(() => _confirmed = value ?? false);
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Keep account'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: _customerDanger),
+          onPressed: !_confirmed || _password.text.isEmpty
+              ? null
+              : () => Navigator.of(context).pop(_password.text),
+          child: const Text('Delete permanently'),
+        ),
+      ],
+    );
   }
 }
 

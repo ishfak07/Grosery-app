@@ -23,6 +23,8 @@ void main() {
       of: find.text('Logout'),
       matching: find.byWidgetPredicate((widget) => widget is OutlinedButton),
     );
+    await tester.ensureVisible(logoutButton);
+    await tester.pumpAndSettle();
     await tester.tap(logoutButton);
     await tester.pump();
 
@@ -90,8 +92,8 @@ UserProfile _customerProfile() {
   return UserProfile(
     uid: 'customer-1',
     fullName: 'Test Customer',
-    phone: '+94768976111',
-    hiddenEmail: '94768976111@app.local',
+    phone: '+94770000000',
+    hiddenEmail: '94770000000@app.local',
     role: 'user',
     address: 'Puttalam',
     createdAt: now,

@@ -8,7 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../services/cloudinary_service.dart';
+import '../../../services/image_upload_service.dart';
 import '../../../services/image_picker_helper.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
@@ -761,6 +761,17 @@ class AdminDashboardScreen extends StatelessWidget {
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => const AdminPasswordResetScreen(),
+                    ),
+                  ),
+                ),
+                _AdminTile(
+                  icon: Icons.person_remove_outlined,
+                  title: 'Account deletion',
+                  subtitle: 'Review web requests',
+                  accent: _adminAccent,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AdminAccountDeletionScreen(),
                     ),
                   ),
                 ),
@@ -4814,7 +4825,11 @@ class _AdminOfferFormScreenState extends State<AdminOfferFormScreen> {
       final offerId = widget.offer?.offerId ?? const Uuid().v4();
       var imageUrl = widget.offer?.imageUrl ?? '';
       if (_imagePath != null) {
-        imageUrl = await CloudinaryService.uploadImage(File(_imagePath!));
+        imageUrl = await ImageUploadService.uploadCatalogImage(
+          imageFile: File(_imagePath!),
+          collection: 'offers',
+          entityId: offerId,
+        );
       }
       final offer = Offer(
         offerId: offerId,
@@ -5559,7 +5574,11 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       final productId = widget.product?.productId ?? const Uuid().v4();
       var imageUrl = widget.product?.imageUrl ?? '';
       if (_imagePath != null) {
-        imageUrl = await CloudinaryService.uploadImage(File(_imagePath!));
+        imageUrl = await ImageUploadService.uploadCatalogImage(
+          imageFile: File(_imagePath!),
+          collection: 'products',
+          entityId: productId,
+        );
       }
       final now = DateTime.now();
       final productUnit = _isCustomUnit ? _customUnit.text.trim() : _unit;
@@ -6824,6 +6843,219 @@ class _DeliveryBoyEditorDialogState extends State<_DeliveryBoyEditorDialog> {
         setState(() => _isSaving = false);
       }
     }
+  }
+}
+
+class AdminAccountDeletionScreen extends StatefulWidget {
+  const AdminAccountDeletionScreen({super.key});
+
+  @override
+  State<AdminAccountDeletionScreen> createState() =>
+      _AdminAccountDeletionScreenState();
+}
+
+class _AdminAccountDeletionScreenState
+    extends State<AdminAccountDeletionScreen> {
+  String? _busyRequestId;
+
+  @override
+  Widget build(BuildContext context) {
+    final service = context.read<AppState>().firestoreService;
+    return _AdminScaffold(
+      title: 'Account deletion',
+      body: _AdminPage(
+        child: StreamBuilder<List<AccountDeletionRequest>>(
+          stream: service.watchAccountDeletionRequests(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const RefreshableCenteredContent(child: LoadingView());
+            }
+            final requests =
+                snapshot.data ?? const <AccountDeletionRequest>[];
+            if (requests.isEmpty) {
+              return const RefreshableCenteredContent(
+                child: EmptyState(
+                  icon: Icons.person_remove_outlined,
+                  title: 'No deletion requests',
+                  message: 'Requests from the public web form appear here.',
+                ),
+              );
+            }
+            return ListView.separated(
+              physics: appRefreshScrollPhysics,
+              padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
+              itemCount: requests.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final request = requests[index];
+                return _AdminReveal(
+                  index: index,
+                  child: _AdminAccountDeletionTile(
+                    request: request,
+                    isBusy: _busyRequestId == request.requestId,
+                    onDelete: request.isPending
+                        ? () => _process(request, deleteAccount: true)
+                        : null,
+                    onReject: request.isPending
+                        ? () => _process(request, deleteAccount: false)
+                        : null,
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _process(
+    AccountDeletionRequest request, {
+    required bool deleteAccount,
+  }) async {
+    if (deleteAccount) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Identity verified?'),
+          content: Text(
+            'Only continue after confirming that ${request.phone} controls '
+            'this customer account. This permanently deletes the account.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: _adminAccent),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Verified - delete'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) {
+        return;
+      }
+    }
+
+    setState(() => _busyRequestId = request.requestId);
+    try {
+      await context.read<AppState>().authService.processAccountDeletionRequest(
+            requestId: request.requestId,
+            deleteAccount: deleteAccount,
+          );
+      if (mounted) {
+        showSnack(
+          context,
+          deleteAccount ? 'Account deleted.' : 'Request rejected.',
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busyRequestId = null);
+      }
+    }
+  }
+}
+
+class _AdminAccountDeletionTile extends StatelessWidget {
+  const _AdminAccountDeletionTile({
+    required this.request,
+    required this.isBusy,
+    required this.onDelete,
+    required this.onReject,
+  });
+
+  final AccountDeletionRequest request;
+  final bool isBusy;
+  final VoidCallback? onDelete;
+  final VoidCallback? onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = _adminStatusColor(request.status);
+    final requestedAt = DateFormat.yMMMd().add_jm().format(request.createdAt);
+    return _AdminCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _AdminIconBadge(
+                icon: Icons.person_remove_outlined,
+                color: statusColor,
+                size: 48,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      request.customerName.isEmpty
+                          ? request.phone
+                          : request.customerName,
+                      style: const TextStyle(
+                        color: _adminInk,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '${request.phone} - $requestedAt',
+                      style: const TextStyle(
+                        color: _adminMuted,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _AdminPill(
+                label: request.status,
+                color: statusColor,
+                icon: Icons.circle,
+              ),
+            ],
+          ),
+          if (request.details.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              request.details,
+              style: const TextStyle(color: _adminMuted),
+            ),
+          ],
+          if (request.isPending) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: isBusy ? null : onReject,
+                    icon: const Icon(Icons.close),
+                    label: const Text('Reject'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: isBusy ? null : onDelete,
+                    icon: const Icon(Icons.delete_forever),
+                    label: Text(isBusy ? 'Working' : 'Verify & delete'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 

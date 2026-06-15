@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../services/cloudinary_service.dart';
+import '../../services/image_upload_service.dart';
 import '../core/constants/app_constants.dart';
 import '../core/i18n/language_codes.dart';
 import '../core/utils/phone_utils.dart';
@@ -147,14 +147,6 @@ class AppState extends ChangeNotifier {
     _watchCheckoutChargeSettings();
     _watchPaymentSettings();
 
-    if (authService.isBootstrapAdminUser(user)) {
-      _profile = authService.bootstrapAdminProfile(user.uid);
-      _isInitializing = false;
-      notifyListeners();
-      await _configureNotificationsForProfile(_profile);
-      return;
-    }
-
     _profileSubscription = firestoreService.watchUserProfile(user.uid).listen(
       (profile) async {
         if (_isLoggingOut || !_isCurrentAuthUser(user)) {
@@ -267,11 +259,6 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    if (authService.isBootstrapAdminUser(user)) {
-      _profile = authService.bootstrapAdminProfile(user.uid);
-      notifyListeners();
-      return;
-    }
     _profile = await firestoreService.fetchUserProfile(user.uid);
     await _applyProfileLanguage(_profile);
     notifyListeners();
@@ -367,6 +354,34 @@ class AppState extends ChangeNotifier {
       await _checkoutChargeSettingsSubscription?.cancel();
       await _paymentSettingsSubscription?.cancel();
       await authService.logout();
+    } finally {
+      _isLoggingOut = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteCustomerAccount({required String password}) async {
+    if (_isLoggingOut) {
+      return;
+    }
+    _isLoggingOut = true;
+    try {
+      await authService.deleteCustomerAccount(password: password);
+      await _profileSubscription?.cancel();
+      _profileSubscription = null;
+      await _checkoutChargeSettingsSubscription?.cancel();
+      await _paymentSettingsSubscription?.cancel();
+      await notificationService.detachUser();
+      await localStorageService.clearPrivateAccountData();
+      _profile = null;
+      _cartItems = const <CartItem>[];
+      _billImagePath = null;
+      _manualListText = '';
+      _notificationsConfiguredForProfileKey = null;
+      _checkoutChargeSettings = CheckoutChargeSettings.defaults;
+      _hasLoadedCheckoutChargeSettings = false;
+      _paymentSettings = PaymentSettings.defaults;
+      _hasLoadedPaymentSettings = false;
     } finally {
       _isLoggingOut = false;
       notifyListeners();
@@ -603,15 +618,23 @@ class AppState extends ChangeNotifier {
     final orderId = _uuid.v4();
     String uploadedImageUrl = '';
     if (hasBillImage) {
-      uploadedImageUrl =
-          await CloudinaryService.uploadImage(File(_billImagePath!));
+      uploadedImageUrl = await ImageUploadService.uploadUserImage(
+        imageFile: File(_billImagePath!),
+        ownerUid: current.uid,
+        folder: 'orders/$orderId',
+        fileName: 'shopping-list',
+      );
     }
     String paymentReceiptImageUrl = '';
     if (paymentMethod == AppConstants.paymentMethodBankTransfer &&
         paymentReceiptImagePath != null &&
         paymentReceiptImagePath.trim().isNotEmpty) {
-      paymentReceiptImageUrl =
-          await CloudinaryService.uploadImage(File(paymentReceiptImagePath));
+      paymentReceiptImageUrl = await ImageUploadService.uploadUserImage(
+        imageFile: File(paymentReceiptImagePath),
+        ownerUid: current.uid,
+        folder: 'orders/$orderId',
+        fileName: 'payment-receipt',
+      );
     }
 
     final charges = _checkoutChargeSettings;

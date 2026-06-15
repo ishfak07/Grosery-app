@@ -847,7 +847,8 @@ String appFriendlyErrorMessage(Object? error, {String? fallback}) {
       lower.contains('firebaseunavailableexception')) {
     return 'Service setup is not complete. Please contact support.';
   }
-  if (lower.contains('cloudinary upload')) {
+  if (lower.contains('image upload failed') ||
+      lower.contains('cloudinary upload')) {
     return 'Image upload failed. Please check your connection and try again.';
   }
   if (_looksLikeTechnicalFirebaseError(lower)) {

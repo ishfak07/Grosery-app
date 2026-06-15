@@ -1,8 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 
-import '../core/constants/app_constants.dart';
 import '../core/i18n/language_codes.dart';
 import '../core/utils/phone_utils.dart';
 import '../models/models.dart';
@@ -84,39 +82,6 @@ class AuthService {
     return PhoneUtils.hiddenEmailForPhone(phone);
   }
 
-  bool isBootstrapAdminLogin(String phone, String password) {
-    if (kReleaseMode) {
-      return false;
-    }
-    return PhoneUtils.normalizeSriLankanPhone(phone) ==
-            AppConstants.bootstrapAdminPhone &&
-        password == AppConstants.bootstrapAdminPassword;
-  }
-
-  bool isBootstrapAdminUser(User user) {
-    return user.email?.toLowerCase() == _bootstrapAdminEmail;
-  }
-
-  UserProfile bootstrapAdminProfile(String uid) {
-    final now = DateTime.now();
-    return UserProfile(
-      uid: uid,
-      fullName: AppConstants.bootstrapAdminName,
-      phone: AppConstants.bootstrapAdminPhone,
-      hiddenEmail: _bootstrapAdminEmail,
-      role: 'admin',
-      address: '',
-      createdAt: now,
-      updatedAt: now,
-      isPhoneVerified: true,
-      isBlocked: false,
-    );
-  }
-
-  String get _bootstrapAdminEmail {
-    return hiddenEmailForPhone(AppConstants.bootstrapAdminPhone).toLowerCase();
-  }
-
   Future<UserProfile> completeRegistration({
     required String fullName,
     required String phone,
@@ -169,10 +134,6 @@ class AuthService {
     required String phone,
     required String password,
   }) async {
-    if (isBootstrapAdminLogin(phone, password)) {
-      return _loginBootstrapAdmin();
-    }
-
     final hiddenEmail = hiddenEmailForPhone(phone);
     late final UserCredential credential;
     try {
@@ -183,9 +144,6 @@ class AuthService {
     } on FirebaseAuthException catch (error) {
       throw AuthServiceException(_authErrorMessage(error));
     }
-    if (isBootstrapAdminUser(credential.user!)) {
-      return _saveBootstrapAdminProfile(credential.user!.uid);
-    }
     final profile = await _firestoreService.fetchUserProfile(
       credential.user!.uid,
     );
@@ -195,48 +153,6 @@ class AuthService {
     if (profile.isBlocked) {
       await _auth.signOut();
       throw StateError('This account is blocked. Contact admin support.');
-    }
-    return profile;
-  }
-
-  Future<UserProfile> _loginBootstrapAdmin() async {
-    if (kReleaseMode) {
-      throw const AuthServiceException(
-        'Bootstrap admin login is disabled in release builds.',
-      );
-    }
-
-    late final UserCredential credential;
-    try {
-      credential = await _auth.signInWithEmailAndPassword(
-        email: _bootstrapAdminEmail,
-        password: AppConstants.bootstrapAdminPassword,
-      );
-    } on FirebaseAuthException catch (error) {
-      if (error.code != 'user-not-found' &&
-          error.code != 'invalid-credential') {
-        throw AuthServiceException(_adminLoginErrorMessage(error));
-      }
-
-      try {
-        credential = await _auth.createUserWithEmailAndPassword(
-          email: _bootstrapAdminEmail,
-          password: AppConstants.bootstrapAdminPassword,
-        );
-      } on FirebaseAuthException catch (createError) {
-        throw AuthServiceException(_adminLoginErrorMessage(createError));
-      }
-    }
-
-    return _saveBootstrapAdminProfile(credential.user!.uid);
-  }
-
-  Future<UserProfile> _saveBootstrapAdminProfile(String uid) async {
-    final profile = bootstrapAdminProfile(uid);
-    try {
-      await _firestoreService.saveUserProfile(profile);
-    } catch (error) {
-      debugPrint('Unable to save bootstrap admin profile: $error');
     }
     return profile;
   }
@@ -480,6 +396,46 @@ class AuthService {
     await _auth.signOut();
   }
 
+  Future<void> deleteCustomerAccount({required String password}) async {
+    final user = _auth.currentUser;
+    final email = user?.email;
+    if (user == null || email == null || email.isEmpty) {
+      throw const AuthServiceException(
+        'Login again before deleting your account.',
+      );
+    }
+    if (password.isEmpty) {
+      throw const AuthServiceException('Enter your password to continue.');
+    }
+
+    try {
+      await user.reauthenticateWithCredential(
+        EmailAuthProvider.credential(email: email, password: password),
+      );
+      await user.getIdToken(true);
+      await _functions.httpsCallable('deleteCustomerAccount').call();
+      await _auth.signOut();
+    } on FirebaseAuthException catch (error) {
+      throw AuthServiceException(_authErrorMessage(error));
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
+  Future<void> processAccountDeletionRequest({
+    required String requestId,
+    required bool deleteAccount,
+  }) async {
+    try {
+      await _functions.httpsCallable('processAccountDeletionRequest').call({
+        'requestId': requestId,
+        'action': deleteAccount ? 'delete' : 'reject',
+      });
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
   String _registrationErrorMessage(FirebaseAuthException error) {
     switch (error.code) {
       case 'email-already-in-use':
@@ -528,21 +484,6 @@ class AuthService {
         return 'This account is deactivated. Contact admin support.';
       default:
         return error.message ?? 'Firebase authentication failed. Try again.';
-    }
-  }
-
-  String _adminLoginErrorMessage(FirebaseAuthException error) {
-    switch (error.code) {
-      case 'operation-not-allowed':
-        return 'Enable Email/Password in Firebase Authentication > Sign-in method to use the admin login without OTP.';
-      case 'email-already-in-use':
-      case 'invalid-credential':
-      case 'wrong-password':
-        return 'The admin auth account already exists with a different password. Reset it in Firebase Authentication or delete that user and try again.';
-      case 'network-request-failed':
-        return 'Network error. Check your connection and try admin login again.';
-      default:
-        return error.message ?? 'Admin login failed. Try again.';
     }
   }
 }

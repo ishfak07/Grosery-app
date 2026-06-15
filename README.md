@@ -4,19 +4,15 @@ This README is for administrators who manage Ishi Grocery Delivery operations fr
 
 ## Admin Login
 
-Production note: the built-in bootstrap admin login is disabled in release
-builds. Before publishing, create a real Firebase Authentication user for the
-admin phone number and make sure the matching Firestore `users/{uid}` document
-has `role: "admin"` and `isBlocked: false`.
-
-For local/debug builds:
+Before publishing, create a dedicated Firebase Authentication user for the
+administrator and make sure the matching Firestore `users/{uid}` document has
+`role: "admin"` and `isBlocked: false`. Do not reuse customer credentials or
+ship a fixed administrator password in the app.
 
 1. Open Ishi Grocery Delivery.
 2. Wait for the splash screen to finish.
-3. On the login screen, enter the admin phone number.
-   - If the phone field shows `+94` automatically, enter `768976111`.
-   - Full admin phone number: `+94768976111`.
-4. Enter the admin password: `admin123`.
+3. On the login screen, enter the provisioned administrator phone number.
+4. Enter the administrator password configured in Firebase Authentication.
 5. Tap `Login`.
 
 After successful login, the app opens the `Admin dashboard`. If the dashboard does not open, use an account that has admin access.
@@ -41,6 +37,7 @@ Quick access tiles:
 - `Shops`: add, edit, hide, or show partner shops.
 - `Customers`: block or unblock accounts.
 - `Password resets`: approve or reject reset requests.
+- `Account deletion`: verify and process public web deletion requests.
 - `Support`: reply to support tickets.
 
 Dashboard metrics:
@@ -323,6 +320,18 @@ Possible request statuses:
 
 Only pending requests show the `Approve` and `Reject` buttons. When you tap either action, the button may show `Saving` until the update finishes.
 
+## Account Deletion Requests
+
+1. From the dashboard, tap `Account deletion`.
+2. Contact the customer using the submitted phone number and verify that they
+   control the account.
+3. Tap `Verify & delete`, confirm verification, and wait for completion.
+4. Tap `Reject` when identity cannot be verified or the request is invalid.
+
+Deletion is blocked while the customer has an active order. Successful deletion
+removes authentication and private account data, deletes Firebase Storage
+uploads, and anonymizes closed order/accounting records.
+
 ## Support Tickets
 
 1. From the dashboard, tap `Support`.
@@ -389,9 +398,8 @@ Admin replies are saved in the ticket and record a support notification.
 
 ### Admin Dashboard Does Not Open
 
-Use an account with admin access. In local/debug builds, the bootstrap admin
-login uses phone `+94768976111` and password `admin123`. In release builds, use
-the production Firebase admin account instead.
+Use the dedicated Firebase Authentication account whose matching Firestore
+profile has `role: "admin"` and `isBlocked: false`.
 
 ### Firebase Setup Banner Appears
 

@@ -71,6 +71,16 @@ class LocalStorageService {
     await prefs.setString(_addressDraftKey, value);
   }
 
+  Future<void> clearPrivateAccountData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await Future.wait([
+      prefs.remove(_cartKey),
+      prefs.remove(_billImageKey),
+      prefs.remove(_manualListKey),
+      prefs.remove(_addressDraftKey),
+    ]);
+  }
+
   Future<String?> loadAddressDraft() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_addressDraftKey);
