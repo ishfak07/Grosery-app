@@ -23,6 +23,6 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Order from trusted local shops'), findsOneWidget);
+    expect(find.text('Everything you need in one place'), findsOneWidget);
   });
 }
