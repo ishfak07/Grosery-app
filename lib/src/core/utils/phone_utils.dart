@@ -1,6 +1,8 @@
 class PhoneUtils {
   const PhoneUtils._();
 
+  static final RegExp _sriLankanMobilePattern = RegExp(r'^7[0-9]{8}$');
+
   static String normalizeSriLankanPhone(String raw) {
     final compact = raw.trim().replaceAll(RegExp(r'[\s\-\(\)]'), '');
     if (compact.isEmpty) {
@@ -21,6 +23,10 @@ class PhoneUtils {
       return '+$digits';
     }
     return '+$digits';
+  }
+
+  static bool isSriLankanMobile(String raw) {
+    return _sriLankanMobilePattern.hasMatch(localSriLankanDigits(raw));
   }
 
   static String localSriLankanDigits(String raw) {

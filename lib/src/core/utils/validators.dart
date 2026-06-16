@@ -17,6 +17,9 @@ class Validators {
     if (PhoneUtils.localSriLankanDigits(value).length != 9) {
       return 'Enter the 9 digits after +94';
     }
+    if (!PhoneUtils.isSriLankanMobile(value)) {
+      return 'Enter a Sri Lankan mobile number starting with 7';
+    }
     return null;
   }
 

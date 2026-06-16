@@ -24,6 +24,28 @@ if (flutterVersionName == null) {
     flutterVersionName = "1.0"
 }
 
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withReader("UTF-8") { reader ->
+        keystoreProperties.load(reader)
+    }
+}
+
+def releaseStoreFile = keystoreProperties.getProperty("storeFile")
+def hasReleaseSigning = releaseStoreFile != null &&
+        keystoreProperties.getProperty("storePassword") != null &&
+        keystoreProperties.getProperty("keyAlias") != null &&
+        keystoreProperties.getProperty("keyPassword") != null
+def releaseSigningMessage = "Release signing is not configured. Copy android/key.properties.example " +
+        "to android/key.properties and create android/app/upload-keystore.jks before building a store release."
+def requestedReleaseBuild = gradle.startParameter.taskNames.any { taskName ->
+    taskName.toLowerCase().contains("release")
+}
+if (requestedReleaseBuild && !hasReleaseSigning) {
+    throw new GradleException(releaseSigningMessage)
+}
+
 android {
     namespace = "com.ishi.grocerydelivery"
     compileSdk = 35
@@ -44,17 +66,40 @@ android {
         applicationId = "com.ishi.grocerydelivery"
         // You can update the following values to match your application needs.
         // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
-        minSdk = 23
-        targetSdk = flutter.targetSdkVersion
+        minSdkVersion = flutter.minSdkVersion
+        targetSdk = 35
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName
     }
 
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                keyAlias = keystoreProperties["keyAlias"]
+                keyPassword = keystoreProperties["keyPassword"]
+                storeFile = file(releaseStoreFile)
+                storePassword = keystoreProperties["storePassword"]
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.debug
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.release
+            }
+        }
+    }
+}
+
+afterEvaluate {
+    tasks.matching { task ->
+        task.name in ["assembleRelease", "bundleRelease", "packageReleaseBundle"]
+    }.configureEach { task ->
+        task.doFirst {
+            if (!hasReleaseSigning) {
+                throw new GradleException(releaseSigningMessage)
+            }
         }
     }
 }

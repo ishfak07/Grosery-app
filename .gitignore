@@ -30,6 +30,12 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+/functions/node_modules/
+
+# Release signing secrets
+android/key.properties
+android/app/*.jks
+android/app/*.keystore
 
 # Symbolication related
 app.*.symbols

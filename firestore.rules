@@ -10,14 +10,16 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(uid));
     }
 
-    function isBootstrapAdmin() {
-      return signedIn() &&
-        request.auth.token.email == '94768976111@app.local';
-    }
-
     function isAdmin() {
       return signedIn() &&
-        (isBootstrapAdmin() || profile(request.auth.uid).data.role == 'admin');
+        profile(request.auth.uid).data.role == 'admin' &&
+        profile(request.auth.uid).data.isBlocked != true;
+    }
+
+    function isDeliveryBoy() {
+      return signedIn() &&
+        profile(request.auth.uid).data.role == 'delivery_boy' &&
+        profile(request.auth.uid).data.isBlocked != true;
     }
 
     function notBlocked() {
@@ -28,26 +30,180 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/support_tickets/$(ticketId));
     }
 
+    function ticketExists(ticketId) {
+      return exists(/databases/$(database)/documents/support_tickets/$(ticketId));
+    }
+
+    function orderAfter(orderId) {
+      return getAfter(/databases/$(database)/documents/orders/$(orderId));
+    }
+
+    function isAssignedDeliveryBoy(orderData) {
+      return isDeliveryBoy() &&
+        orderData.get('assignedDeliveryBoyId', '') == request.auth.uid;
+    }
+
+    function ticketAfter(ticketId) {
+      return getAfter(/databases/$(database)/documents/support_tickets/$(ticketId));
+    }
+
+    function hasPaymentSettings() {
+      return exists(/databases/$(database)/documents/app_settings/payment_methods);
+    }
+
+    function paymentSettings() {
+      return get(/databases/$(database)/documents/app_settings/payment_methods).data;
+    }
+
+    function isPaymentMethodEnabled(paymentMethod) {
+      return !hasPaymentSettings() ||
+        (
+          paymentMethod == 'COD' &&
+          paymentSettings().get('codEnabled', true) == true
+        ) ||
+        (
+          paymentMethod == 'Bank Transfer' &&
+          paymentSettings().get('bankTransferEnabled', true) == true
+        );
+    }
+
+    function userEditableProfileKeys() {
+      return [
+        'fullName',
+        'address',
+        'preferredLanguageCode',
+        'fcmToken',
+        'fcmTokens',
+        'fcmTokenPlatform',
+        'fcmTokenUpdatedAt',
+        'updatedAt'
+      ];
+    }
+
+    function legacyOrderCreateKeys() {
+      return [
+        'orderId',
+        'userId',
+        'customerName',
+        'customerPhone',
+        'customerAddress',
+        'items',
+        'uploadedImageUrl',
+        'paymentReceiptImageUrl',
+        'orderNotes',
+        'subtotal',
+        'deliveryCharge',
+        'serviceCharge',
+        'totalAmount',
+        'paymentMethod',
+        'paymentStatus',
+        'orderStatus',
+        'adminNotes',
+        'assignedDeliveryPerson',
+        'createdAt',
+        'updatedAt'
+      ];
+    }
+
+    function orderCreateKeys() {
+      return [
+        'orderId',
+        'userId',
+        'customerName',
+        'customerPhone',
+        'customerAddress',
+        'items',
+        'uploadedImageUrl',
+        'paymentReceiptImageUrl',
+        'orderNotes',
+        'cartItemsAmount',
+        'photoListAmount',
+        'manualListAmount',
+        'listAmountsReviewed',
+        'subtotal',
+        'deliveryCharge',
+        'serviceCharge',
+        'totalAmount',
+        'paymentMethod',
+        'paymentStatus',
+        'orderStatus',
+        'adminNotes',
+        'rejectionReason',
+        'assignedDeliveryBoyId',
+        'assignedDeliveryPerson',
+        'assignedDeliveryPhone',
+        'createdAt',
+        'updatedAt'
+      ];
+    }
+
+    function isValidOrderCreate() {
+      return request.resource.data.userId == request.auth.uid &&
+        request.resource.data.orderStatus == 'Pending' &&
+        request.resource.data.adminNotes == '' &&
+        request.resource.data.get('rejectionReason', '') == '' &&
+        request.resource.data.get('assignedDeliveryBoyId', '') == '' &&
+        request.resource.data.assignedDeliveryPerson == '' &&
+        request.resource.data.get('assignedDeliveryPhone', '') == '' &&
+        request.resource.data.paymentMethod in ['COD', 'Bank Transfer'] &&
+        isPaymentMethodEnabled(request.resource.data.paymentMethod) &&
+        request.resource.data.paymentStatus in ['pending', 'receipt uploaded'] &&
+        request.resource.data.subtotal >= 0 &&
+        request.resource.data.deliveryCharge >= 0 &&
+        request.resource.data.serviceCharge >= 0 &&
+        request.resource.data.totalAmount >= 0 &&
+        (
+          (
+            request.resource.data.keys().hasOnly(orderCreateKeys()) &&
+            request.resource.data.keys().hasAll(orderCreateKeys()) &&
+            request.resource.data.cartItemsAmount >= 0 &&
+            request.resource.data.photoListAmount >= 0 &&
+            request.resource.data.manualListAmount >= 0 &&
+            request.resource.data.listAmountsReviewed == false
+          ) ||
+          (
+            request.resource.data.keys().hasOnly(legacyOrderCreateKeys()) &&
+            request.resource.data.keys().hasAll(legacyOrderCreateKeys())
+          )
+        );
+    }
+
+    function validUserAdminNotification() {
+      return request.resource.data.recipientRole == 'admin' &&
+        request.resource.data.userId == '' &&
+        (
+          (
+            request.resource.data.type == 'order' &&
+            orderAfter(request.resource.data.relatedId).data.userId == request.auth.uid
+          ) ||
+          (
+            request.resource.data.type == 'support' &&
+            ticketAfter(request.resource.data.relatedId).data.userId == request.auth.uid
+          )
+        );
+    }
+
     match /users/{uid} {
       allow create: if signedIn() && request.auth.uid == uid &&
-        (isBootstrapAdmin() || request.resource.data.role == 'user');
+        request.resource.data.role == 'user';
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow update: if signedIn() && (
         isAdmin() ||
         (
           request.auth.uid == uid &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'role',
-            'isBlocked',
-            'hiddenEmail',
-            'isPhoneVerified'
-          ])
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(userEditableProfileKeys())
         )
       );
       allow delete: if false;
     }
 
     match /shops/{shopId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /offers/{offerId} {
       allow read: if signedIn();
       allow write: if isAdmin();
     }
@@ -59,10 +215,31 @@ service cloud.firestore {
 
     match /orders/{orderId} {
       allow create: if notBlocked() &&
-        request.resource.data.userId == request.auth.uid;
+        isValidOrderCreate();
       allow read: if signedIn() &&
-        (resource.data.userId == request.auth.uid || isAdmin());
-      allow update, delete: if isAdmin();
+        (
+          resource.data.userId == request.auth.uid ||
+          isAdmin() ||
+          isAssignedDeliveryBoy(resource.data)
+        );
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /account_sales/{recordId} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /delivery_reward_payments/{paymentId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /delivery_reward_adjustments/{adjustmentId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     match /support_tickets/{ticketId} {
@@ -71,15 +248,37 @@ service cloud.firestore {
       allow read: if signedIn() &&
         (resource.data.userId == request.auth.uid || isAdmin());
       allow update: if signedIn() &&
-        (resource.data.userId == request.auth.uid || isAdmin());
+        (
+          isAdmin() ||
+          (
+            resource.data.userId == request.auth.uid &&
+            resource.data.status != 'closed' &&
+            request.resource.data.status == 'open' &&
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'updatedAt'])
+          )
+        );
       allow delete: if isAdmin();
     }
 
     match /support_messages/{messageId} {
-      allow create: if notBlocked() && (
-        isAdmin() ||
-        ticket(request.resource.data.ticketId).data.userId == request.auth.uid
-      );
+      allow create: if notBlocked() &&
+        request.resource.data.senderId == request.auth.uid &&
+        (
+          !ticketExists(request.resource.data.ticketId) ||
+          ticket(request.resource.data.ticketId).data.status != 'closed'
+        ) &&
+        (
+          (
+            isAdmin() &&
+            request.resource.data.senderRole == 'admin'
+          ) ||
+          (
+            !isAdmin() &&
+            request.resource.data.senderRole == 'user' &&
+            ticketAfter(request.resource.data.ticketId).data.userId == request.auth.uid
+          )
+        );
       allow read: if signedIn() && (
         isAdmin() ||
         ticket(resource.data.ticketId).data.userId == request.auth.uid
@@ -88,16 +287,40 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow create: if signedIn();
+      allow create: if signedIn() && (
+        isAdmin() ||
+        validUserAdminNotification()
+      );
       allow read: if signedIn() && (
         isAdmin() ||
-        resource.data.userId == request.auth.uid
+        resource.data.userId == request.auth.uid ||
+        resource.data.recipientRole == 'broadcast'
       );
       allow update: if signedIn() && (
         isAdmin() ||
-        resource.data.userId == request.auth.uid
+        (
+          resource.data.recipientRole == 'user' &&
+          resource.data.userId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['isRead'])
+        )
       );
       allow delete: if isAdmin();
+    }
+
+    match /password_reset_requests/{requestId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /account_deletion_requests/{requestId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if false;
+    }
+
+    match /legacy_media_cleanup/{cleanupId} {
+      allow read, update, delete: if isAdmin();
+      allow create: if false;
     }
 
     match /app_settings/{settingId} {
