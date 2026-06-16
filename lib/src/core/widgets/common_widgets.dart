@@ -847,15 +847,74 @@ String appFriendlyErrorMessage(Object? error, {String? fallback}) {
       lower.contains('firebaseunavailableexception')) {
     return 'Service setup is not complete. Please contact support.';
   }
-  if (lower.contains('image upload failed') ||
-      lower.contains('cloudinary upload')) {
-    return 'Image upload failed. Please check your connection and try again.';
+  if (lower.contains('image upload failed')) {
+    return _imageUploadFriendlyMessage(message, lower);
+  }
+  if (lower.contains('cloudinary upload')) {
+    return _cloudinaryUploadFriendlyMessage(message, lower);
   }
   if (_looksLikeTechnicalFirebaseError(lower)) {
     return fallback ?? _appGenericErrorMessage;
   }
 
   return message;
+}
+
+String _cloudinaryUploadFriendlyMessage(String message, String lower) {
+  if (_looksLikeNetworkError(lower)) {
+    return appOfflineMessage;
+  }
+  if (lower.contains('not configured') ||
+      lower.contains('cloudinary_cloud_name') ||
+      lower.contains('cloudinary_upload_preset')) {
+    return 'Cloudinary image upload is not configured. Please contact support.';
+  }
+  if (lower.contains('upload preset')) {
+    return 'Cloudinary upload preset is not ready. Please contact support.';
+  }
+  if (lower.contains('invalid api key') || lower.contains('unknown api key')) {
+    return 'Cloudinary image upload setup is invalid. Please contact support.';
+  }
+  return message.contains(':')
+      ? message
+      : 'Image upload failed. Please try again.';
+}
+
+String _imageUploadFriendlyMessage(String message, String lower) {
+  if (_looksLikeNetworkError(lower)) {
+    return appOfflineMessage;
+  }
+  if (lower.contains('unauthenticated') ||
+      lower.contains('sign in again before checkout')) {
+    return 'Image upload failed. Please sign in again before checkout.';
+  }
+  if (lower.contains('unauthorized') ||
+      lower.contains('permission-denied') ||
+      lower.contains('permission denied') ||
+      lower.contains('not allowed to upload this image')) {
+    return 'Image upload failed. You are not allowed to upload this image. Please sign in again.';
+  }
+  if (lower.contains('bucket-not-found') ||
+      lower.contains('object-not-found') ||
+      lower.contains('project-not-found') ||
+      lower.contains('invalid-argument') ||
+      lower.contains('storage is not ready') ||
+      lower.contains('firebase storage is not set up')) {
+    return 'Image uploads are not enabled yet. Please contact support.';
+  }
+  if (lower.contains('quota-exceeded') ||
+      lower.contains('storage limit reached')) {
+    return 'Image upload storage limit reached. Please contact support.';
+  }
+  if (lower.contains('cancelled') || lower.contains('canceled')) {
+    return 'Image upload was cancelled. Please try again.';
+  }
+  if (lower.contains('not found') ||
+      lower.contains('empty') ||
+      lower.contains('smaller than 8 mb')) {
+    return message;
+  }
+  return 'Image upload failed. Please try again.';
 }
 
 String _firebaseFriendlyMessage(String code, {String? fallback}) {

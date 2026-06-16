@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:http/http.dart' as http;
+
 
 class ImageUploadException implements Exception {
   const ImageUploadException(this.message);
@@ -13,6 +15,15 @@ class ImageUploadException implements Exception {
 
 class ImageUploadService {
   static const int maxUploadBytes = 8 * 1024 * 1024;
+  static const String _cloudName = String.fromEnvironment(
+    'CLOUDINARY_CLOUD_NAME',
+    defaultValue: 'dbflkn1ig',
+  );
+  static const String _uploadPreset = String.fromEnvironment(
+    'CLOUDINARY_UPLOAD_PRESET',
+    defaultValue: 'grocery_unsigned',
+  );
+
 
   static Future<String> uploadUserImage({
     required File imageFile,
@@ -20,10 +31,7 @@ class ImageUploadService {
     required String folder,
     required String fileName,
   }) {
-    return _upload(
-      imageFile: imageFile,
-      storagePath: 'user_uploads/$ownerUid/$folder/$fileName',
-    );
+    return _upload(imageFile: imageFile);
   }
 
   static Future<String> uploadCatalogImage({
@@ -31,29 +39,20 @@ class ImageUploadService {
     required String collection,
     required String entityId,
   }) {
-    return _upload(
-      imageFile: imageFile,
-      storagePath: 'catalog/$collection/$entityId/image',
-    );
+    return _upload(imageFile: imageFile);
   }
 
   static Future<void> deleteFirebaseImage(String imageUrl) async {
-    if (!imageUrl.startsWith('https://firebasestorage.googleapis.com/') &&
-        !imageUrl.startsWith('gs://')) {
-      return;
-    }
-    try {
-      await FirebaseStorage.instance.refFromURL(imageUrl).delete();
-    } on FirebaseException catch (error) {
-      if (error.code != 'object-not-found') {
-        rethrow;
-      }
-    }
+    // Uploads now use Cloudinary. Keep this no-op for older call sites that
+    // only need to avoid deleting non-Firebase images.
+  }
+
+  static Uri cloudinaryUploadUriForDiagnostics() {
+    return Uri.https('api.cloudinary.com', '/v1_1/$_cloudName/image/upload');
   }
 
   static Future<String> _upload({
     required File imageFile,
-    required String storagePath,
   }) async {
     if (!await imageFile.exists()) {
       throw const ImageUploadException(
@@ -72,32 +71,66 @@ class ImageUploadService {
         'Image upload failed: select an image smaller than 8 MB.',
       );
     }
+    if (_cloudName.trim().isEmpty || _uploadPreset.trim().isEmpty) {
+      throw const ImageUploadException(
+        'Cloudinary upload is not configured. Add CLOUDINARY_CLOUD_NAME and CLOUDINARY_UPLOAD_PRESET.',
+      );
+    }
 
     try {
-      final reference = FirebaseStorage.instance.ref(storagePath);
-      await reference.putFile(
-        imageFile,
-        SettableMetadata(contentType: _contentType(imageFile.path)),
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.https('api.cloudinary.com', '/v1_1/$_cloudName/image/upload'),
+      )
+        ..fields['upload_preset'] = _uploadPreset
+        ..files.add(
+          await http.MultipartFile.fromPath(
+            'file',
+            imageFile.path,
+          ),
+        );
+      final response = await request.send();
+      final body = await response.stream.bytesToString();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ImageUploadException(_cloudinaryErrorMessage(body));
+      }
+      final payload = jsonDecode(body) as Map<String, dynamic>;
+      final secureUrl = payload['secure_url'] as String?;
+      if (secureUrl == null || secureUrl.trim().isEmpty) {
+        throw const ImageUploadException(
+          'Cloudinary upload failed. Please try again.',
+        );
+      }
+      return secureUrl;
+    } on SocketException {
+      throw const ImageUploadException(
+        'Cloudinary upload failed (network-request-failed). Please check your connection and try again.',
       );
-      return reference.getDownloadURL();
-    } on FirebaseException catch (error) {
-      throw ImageUploadException(
-        'Image upload failed (${error.code}). Please try again.',
+    } on HttpException {
+      throw const ImageUploadException(
+        'Cloudinary upload failed. Please try again.',
+      );
+    } on FormatException {
+      throw const ImageUploadException(
+        'Cloudinary upload failed. Please try again.',
       );
     }
   }
 
-  static String _contentType(String path) {
-    final lower = path.toLowerCase();
-    if (lower.endsWith('.png')) {
-      return 'image/png';
+
+  static String _cloudinaryErrorMessage(String responseBody) {
+    try {
+      final payload = jsonDecode(responseBody) as Map<String, dynamic>;
+      final error = payload['error'];
+      if (error is Map<String, dynamic>) {
+        final message = error['message'] as String?;
+        if (message != null && message.trim().isNotEmpty) {
+          return 'Cloudinary upload failed: ${message.trim()}';
+        }
+      }
+    } on FormatException {
+      // Fall through to the generic message below.
     }
-    if (lower.endsWith('.webp')) {
-      return 'image/webp';
-    }
-    if (lower.endsWith('.heic') || lower.endsWith('.heif')) {
-      return 'image/heic';
-    }
-    return 'image/jpeg';
+    return 'Cloudinary upload failed. Please try again.';
   }
 }
