@@ -30,6 +30,8 @@ const _adminAccent = Color(0xFFE86F4A);
 const _adminBlue = Color(0xFF356DAA);
 const _adminViolet = Color(0xFF7656A6);
 const _adminWarning = Color(0xFFD88413);
+const _adminDanger = Color(0xFFC83A2B);
+const _adminSuccess = _adminPrimary;
 const _minimumOrderSearchLength = 4;
 const _defaultAdminNote =
     'Kindly be patient \u{1F60A} Your order will be delivered soon by our '
@@ -811,9 +813,8 @@ class AdminDashboardScreen extends StatelessWidget {
                 final pendingCount = allOrders
                     .where((order) => order.orderStatus == 'Pending')
                     .length;
-                final activeOrders = allOrders
-                    .where(_isCurrentAdminOrder)
-                    .length;
+                final activeOrders =
+                    allOrders.where(_isCurrentAdminOrder).length;
                 final deliveredOrders = allOrders
                     .where((order) => order.orderStatus == 'Delivered')
                     .length;
@@ -6192,8 +6193,7 @@ class _AdminDeliveryBoyManagementScreenState
                       deliveryBoy: deliveryBoy,
                     ),
                     isPaying: _payingDeliveryBoyId == deliveryBoy.uid,
-                    isAddingStars:
-                        _addingStarsDeliveryBoyId == deliveryBoy.uid,
+                    isAddingStars: _addingStarsDeliveryBoyId == deliveryBoy.uid,
                     onPayReward: () => _payReward(deliveryBoy),
                     onAddStars: () => _addRewardStars(deliveryBoy),
                   ),
@@ -6236,10 +6236,7 @@ class _AdminDeliveryBoyManagementScreenState
 
     setState(() => _payingDeliveryBoyId = deliveryBoy.uid);
     try {
-      await context
-          .read<AppState>()
-          .authService
-          .payDeliveryStarReward(
+      await context.read<AppState>().authService.payDeliveryStarReward(
             uid: deliveryBoy.uid,
             amountLkr: amountLkr,
           );
@@ -6459,7 +6456,8 @@ class _DeliveryRewardAddStarsDialogState
                 decoration: const InputDecoration(
                   labelText: 'Stars to add',
                   prefixIcon: Icon(Icons.add_circle_outline),
-                  helperText: 'These stars will be added to the current balance.',
+                  helperText:
+                      'These stars will be added to the current balance.',
                 ),
                 validator: (value) {
                   final stars = int.tryParse(value?.trim() ?? '');
@@ -6566,8 +6564,7 @@ class _DeliveryBoyTile extends StatelessWidget {
               _AdminPill(
                 label: deliveryBoy.isBlocked ? 'Inactive' : 'Active',
                 color: statusColor,
-                icon:
-                    deliveryBoy.isBlocked ? Icons.block : Icons.check_circle,
+                icon: deliveryBoy.isBlocked ? Icons.block : Icons.check_circle,
               ),
               const SizedBox(width: 4),
               const Icon(Icons.edit_outlined, color: _adminMuted),
@@ -6611,8 +6608,7 @@ class _DeliveryBoyTile extends StatelessWidget {
               value: rewardProgress,
               minHeight: 8,
               backgroundColor: const Color(0xFFF2E8D9),
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(_adminWarning),
+              valueColor: const AlwaysStoppedAnimation<Color>(_adminWarning),
             ),
           ),
           const SizedBox(height: 12),
@@ -6857,49 +6853,200 @@ class AdminAccountDeletionScreen extends StatefulWidget {
 class _AdminAccountDeletionScreenState
     extends State<AdminAccountDeletionScreen> {
   String? _busyRequestId;
+  String? _busyCustomerId;
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  static const _terminalStatuses = <String>{
+    'Delivered',
+    'Cancelled',
+    'Rejected',
+  };
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final service = context.read<AppState>().firestoreService;
+    final appState = context.read<AppState>();
+    final service = appState.firestoreService;
     return _AdminScaffold(
       title: 'Account deletion',
       body: _AdminPage(
-        child: StreamBuilder<List<AccountDeletionRequest>>(
-          stream: service.watchAccountDeletionRequests(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const RefreshableCenteredContent(child: LoadingView());
-            }
-            final requests =
-                snapshot.data ?? const <AccountDeletionRequest>[];
-            if (requests.isEmpty) {
-              return const RefreshableCenteredContent(
-                child: EmptyState(
-                  icon: Icons.person_remove_outlined,
-                  title: 'No deletion requests',
-                  message: 'Requests from the public web form appear here.',
-                ),
-              );
-            }
-            return ListView.separated(
-              physics: appRefreshScrollPhysics,
-              padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
-              itemCount: requests.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final request = requests[index];
-                return _AdminReveal(
-                  index: index,
-                  child: _AdminAccountDeletionTile(
-                    request: request,
-                    isBusy: _busyRequestId == request.requestId,
-                    onDelete: request.isPending
-                        ? () => _process(request, deleteAccount: true)
-                        : null,
-                    onReject: request.isPending
-                        ? () => _process(request, deleteAccount: false)
-                        : null,
-                  ),
+        child: StreamBuilder<List<UserProfile>>(
+          stream: service.watchUsers(),
+          builder: (context, usersSnapshot) {
+            return StreamBuilder<List<OrderModel>>(
+              stream: service.watchAllOrders(),
+              builder: (context, ordersSnapshot) {
+                return StreamBuilder<List<AccountDeletionRequest>>(
+                  stream: service.watchAccountDeletionRequests(),
+                  builder: (context, requestsSnapshot) {
+                    if ((!usersSnapshot.hasData ||
+                            !ordersSnapshot.hasData ||
+                            !requestsSnapshot.hasData) &&
+                        (usersSnapshot.connectionState ==
+                                ConnectionState.waiting ||
+                            ordersSnapshot.connectionState ==
+                                ConnectionState.waiting ||
+                            requestsSnapshot.connectionState ==
+                                ConnectionState.waiting)) {
+                      return const RefreshableCenteredContent(
+                        child: LoadingView(),
+                      );
+                    }
+                    final error = usersSnapshot.error ??
+                        ordersSnapshot.error ??
+                        requestsSnapshot.error;
+                    if (error != null) {
+                      return RefreshableCenteredContent(
+                        child: EmptyState(
+                          icon: Icons.cloud_off_outlined,
+                          title: 'Could not load account deletion',
+                          message: 'Customer accounts could not be loaded.',
+                          action: FilledButton.icon(
+                            onPressed: () => setState(() {}),
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                          ),
+                        ),
+                      );
+                    }
+
+                    final orders = ordersSnapshot.data ?? const <OrderModel>[];
+                    final requests = requestsSnapshot.data ??
+                        const <AccountDeletionRequest>[];
+                    final pendingRequests =
+                        requests.where((request) => request.isPending).toList();
+                    final customers =
+                        (usersSnapshot.data ?? const <UserProfile>[])
+                            .where((user) => user.role == 'user')
+                            .where(_matchesSearch)
+                            .toList();
+
+                    return ListView(
+                      physics: appRefreshScrollPhysics,
+                      padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
+                      children: [
+                        const _AdminCard(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _AdminIconBadge(
+                                icon: Icons.admin_panel_settings_outlined,
+                                color: _adminAccent,
+                                size: 48,
+                              ),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Delete registered customer accounts here. '
+                                  'Accounts with active orders must be completed '
+                                  'or cancelled first.',
+                                  style: TextStyle(
+                                    color: _adminMuted,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.45,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (pendingRequests.isNotEmpty) ...[
+                          const SizedBox(height: 18),
+                          _AdminSectionHeader(
+                            title: 'Public deletion requests '
+                                '(${pendingRequests.length} waiting)',
+                          ),
+                          const SizedBox(height: 10),
+                          ...pendingRequests.asMap().entries.map((entry) {
+                            final request = entry.value;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _AdminReveal(
+                                index: entry.key,
+                                child: _AdminAccountDeletionTile(
+                                  request: request,
+                                  isBusy: _busyRequestId == request.requestId,
+                                  onDelete: () =>
+                                      _process(request, deleteAccount: true),
+                                  onReject: () =>
+                                      _process(request, deleteAccount: false),
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
+                        const SizedBox(height: 18),
+                        _AdminSectionHeader(
+                          title: 'Registered customers (${customers.length})',
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _searchController,
+                          onChanged: (value) {
+                            setState(() => _query = value.trim().toLowerCase());
+                          },
+                          decoration: InputDecoration(
+                            hintText: 'Search name, phone, or address',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: _query.isEmpty
+                                ? null
+                                : IconButton(
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _query = '');
+                                    },
+                                    icon: const Icon(Icons.close),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (customers.isEmpty)
+                          const _AdminCard(
+                            child: EmptyState(
+                              icon: Icons.person_search_outlined,
+                              title: 'No matching customers',
+                              message: 'Try a different search.',
+                            ),
+                          )
+                        else
+                          ...customers.asMap().entries.map((entry) {
+                            final customer = entry.value;
+                            final customerOrders = orders
+                                .where(
+                                  (order) => order.userId == customer.uid,
+                                )
+                                .toList();
+                            final activeOrders = customerOrders
+                                .where(
+                                  (order) => !_terminalStatuses
+                                      .contains(order.orderStatus),
+                                )
+                                .length;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _AdminReveal(
+                                index: entry.key,
+                                child: _AdminCustomerDeletionTile(
+                                  customer: customer,
+                                  totalOrders: customerOrders.length,
+                                  activeOrders: activeOrders,
+                                  isBusy: _busyCustomerId == customer.uid,
+                                  onDelete: activeOrders == 0
+                                      ? () => _deleteCustomer(customer)
+                                      : null,
+                                ),
+                              ),
+                            );
+                          }),
+                      ],
+                    );
+                  },
                 );
               },
             );
@@ -6907,6 +7054,63 @@ class _AdminAccountDeletionScreenState
         ),
       ),
     );
+  }
+
+  bool _matchesSearch(UserProfile customer) {
+    if (_query.isEmpty) {
+      return true;
+    }
+    return customer.fullName.toLowerCase().contains(_query) ||
+        customer.phone.toLowerCase().contains(_query) ||
+        customer.address.toLowerCase().contains(_query);
+  }
+
+  Future<void> _deleteCustomer(UserProfile customer) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Permanently delete customer?'),
+        content: Text(
+          '${customer.fullName} (${customer.phone}) will lose access '
+          'immediately. Personal data will be removed and completed order '
+          'records will be anonymized. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: _adminDanger),
+            onPressed: () => Navigator.of(context).pop(true),
+            icon: const Icon(Icons.delete_forever),
+            label: const Text('Delete permanently'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() => _busyCustomerId = customer.uid);
+    try {
+      await context
+          .read<AppState>()
+          .authService
+          .deleteCustomerAccountAsAdmin(customer.uid);
+      if (mounted) {
+        showSnack(context, 'Customer account deleted.');
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busyCustomerId = null);
+      }
+    }
   }
 
   Future<void> _process(
@@ -7053,6 +7257,125 @@ class _AdminAccountDeletionTile extends StatelessWidget {
               ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminCustomerDeletionTile extends StatelessWidget {
+  const _AdminCustomerDeletionTile({
+    required this.customer,
+    required this.totalOrders,
+    required this.activeOrders,
+    required this.isBusy,
+    required this.onDelete,
+  });
+
+  final UserProfile customer;
+  final int totalOrders;
+  final int activeOrders;
+  final bool isBusy;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final blocked = activeOrders > 0;
+    return _AdminCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _AdminIconBadge(
+                icon: Icons.person_outline,
+                color: blocked ? _adminWarning : _adminAccent,
+                size: 48,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      customer.fullName.isEmpty
+                          ? 'Unnamed customer'
+                          : customer.fullName,
+                      style: const TextStyle(
+                        color: _adminInk,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      customer.phone,
+                      style: const TextStyle(
+                        color: _adminMuted,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                    if (customer.address.trim().isNotEmpty)
+                      Text(
+                        customer.address,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _adminMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              _AdminPill(
+                label: customer.isBlocked ? 'Blocked' : 'Active',
+                color: customer.isBlocked ? _adminDanger : _adminSuccess,
+                icon: Icons.circle,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _AdminPill(
+                label: '$totalOrders total orders',
+                color: _adminMuted,
+                icon: Icons.receipt_long_outlined,
+              ),
+              _AdminPill(
+                label: '$activeOrders active',
+                color: blocked ? _adminWarning : _adminSuccess,
+                icon: blocked ? Icons.pending_actions : Icons.check_circle,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: _adminDanger,
+              ),
+              onPressed: isBusy ? null : onDelete,
+              icon: isBusy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.delete_forever),
+              label: Text(
+                isBusy
+                    ? 'Deleting account'
+                    : blocked
+                        ? 'Complete active orders first'
+                        : 'Delete customer account',
+              ),
+            ),
+          ),
         ],
       ),
     );

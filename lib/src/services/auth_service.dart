@@ -418,6 +418,14 @@ class AuthService {
     } on FirebaseAuthException catch (error) {
       throw AuthServiceException(_authErrorMessage(error));
     } on FirebaseFunctionsException catch (error) {
+      if (error.code == 'not-found' &&
+          (error.message == null ||
+              error.message!.trim().isEmpty ||
+              error.message!.trim().toUpperCase() == 'NOT_FOUND')) {
+        throw const AuthServiceException(
+          'Account deletion service is not available. Please try again shortly.',
+        );
+      }
       throw AuthServiceException(_functionsErrorMessage(error));
     }
   }
@@ -430,6 +438,16 @@ class AuthService {
       await _functions.httpsCallable('processAccountDeletionRequest').call({
         'requestId': requestId,
         'action': deleteAccount ? 'delete' : 'reject',
+      });
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
+  Future<void> deleteCustomerAccountAsAdmin(String uid) async {
+    try {
+      await _functions.httpsCallable('deleteCustomerAccountAsAdmin').call({
+        'uid': uid,
       });
     } on FirebaseFunctionsException catch (error) {
       throw AuthServiceException(_functionsErrorMessage(error));
@@ -459,6 +477,8 @@ class AuthService {
         return message ?? 'You are not allowed to perform this action.';
       case 'unavailable':
         return message ?? 'Service is unavailable. Try again shortly.';
+      case 'internal':
+        return 'Unable to complete account deletion. Please try again shortly.';
       default:
         return message ?? 'Request failed. Try again.';
     }

@@ -19,6 +19,24 @@ exports.deleteCustomerAccount = onCall(async (request) => {
   return deleteCustomerData(customer);
 });
 
+exports.deleteCustomerAccountAsAdmin = onCall(async (request) => {
+  const adminUid = await requireAdmin(request);
+  const customerUid = assertUid(request.data?.uid);
+  const profileDoc = await admin
+    .firestore()
+    .collection("users")
+    .doc(customerUid)
+    .get();
+  if (!profileDoc.exists || profileDoc.get("role") !== "user") {
+    throw new HttpsError("not-found", "Customer account not found.");
+  }
+  return deleteCustomerData({
+    uid: customerUid,
+    profile: profileDoc.data(),
+    completedBy: adminUid,
+  });
+});
+
 exports.processAccountDeletionRequest = onCall(async (request) => {
   const adminUid = await requireAdmin(request);
   const requestId = assertRequestId(request.data?.requestId);
@@ -1325,10 +1343,24 @@ function collectLegacyImageUrls(orderDocs, messageDocs) {
 }
 
 async function deleteUserStorage(uid) {
-  await admin.storage().bucket().deleteFiles({
-    prefix: `user_uploads/${uid}/`,
-    force: true,
-  });
+  try {
+    await admin.storage().bucket().deleteFiles({
+      prefix: `user_uploads/${uid}/`,
+      force: true,
+    });
+  } catch (error) {
+    const isMissingBucket =
+      Number(error?.code) === 404 ||
+      error?.errors?.some((item) => item?.reason === "notFound");
+    if (!isMissingBucket) {
+      throw error;
+    }
+    console.warn(
+      "Skipping user image cleanup because the configured Storage bucket " +
+        "does not exist.",
+      {uid},
+    );
+  }
 }
 
 async function initializeDeliveryRewardStarsInTransaction({
@@ -1441,7 +1473,7 @@ async function requireCustomer(request) {
   ) {
     throw new HttpsError(
       "permission-denied",
-      "Only active customers can review deliveries.",
+      "Only active customers can perform this action.",
     );
   }
   return {uid: request.auth.uid, profile: userDoc.data()};
