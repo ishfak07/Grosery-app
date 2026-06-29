@@ -22,9 +22,17 @@ class FirebaseBootstrap {
         );
       }
 
+      if (Firebase.apps.isNotEmpty) {
+        return const FirebaseBootstrap(isReady: true);
+      }
+
       await Firebase.initializeApp(options: options);
       return const FirebaseBootstrap(isReady: true);
     } catch (error) {
+      if (error is FirebaseException && error.code == 'duplicate-app') {
+        return const FirebaseBootstrap(isReady: true);
+      }
+
       return FirebaseBootstrap(
         isReady: false,
         errorMessage: error.toString(),
