@@ -63,7 +63,7 @@ class _DeliveryBoyDashboardScreenState
       backgroundColor: _deliveryBackground,
       appBar: AppBar(
         title: const Text('Delivery dashboard'),
-        backgroundColor: _deliveryBackground.withOpacity(0.96),
+        backgroundColor: _deliveryBackground.withValues(alpha: 0.96),
         foregroundColor: _deliveryInk,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -256,7 +256,7 @@ class _DeliveryRewardCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: rewardReady
-              ? _deliveryWarning.withOpacity(0.55)
+              ? _deliveryWarning.withValues(alpha: 0.55)
               : _deliveryLine,
         ),
       ),
@@ -269,7 +269,7 @@ class _DeliveryRewardCard extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: _deliveryWarning.withOpacity(0.12),
+                  color: _deliveryWarning.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
@@ -382,7 +382,7 @@ class _DeliveryDashboardHero extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: _deliveryPrimary.withOpacity(0.18),
+            color: _deliveryPrimary.withValues(alpha: 0.18),
             blurRadius: 24,
             offset: const Offset(0, 10),
           ),
@@ -396,7 +396,7 @@ class _DeliveryDashboardHero extends StatelessWidget {
             child: Icon(
               Icons.local_shipping_outlined,
               size: 126,
-              color: Colors.white.withOpacity(0.08),
+              color: Colors.white.withValues(alpha: 0.08),
             ),
           ),
           Column(
@@ -410,7 +410,7 @@ class _DeliveryDashboardHero extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.14),
+                      color: Colors.white.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.white24),
                     ),
@@ -645,7 +645,7 @@ class _DeliverySectionHeading extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: _deliveryPrimary.withOpacity(0.08),
+            color: _deliveryPrimary.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
@@ -1017,7 +1017,7 @@ class _DeliveryIconBadge extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(icon, color: color),
@@ -1320,9 +1320,9 @@ class _DeliveryNotice extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: _deliveryWarning.withOpacity(0.10),
+        color: _deliveryWarning.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _deliveryWarning.withOpacity(0.2)),
+        border: Border.all(color: _deliveryWarning.withValues(alpha: 0.2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

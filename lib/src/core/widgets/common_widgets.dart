@@ -41,7 +41,7 @@ class FirebaseSetupBanner extends StatelessWidget {
         border: Border.all(color: const Color(0xFFFFD89A)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4F3615).withOpacity(0.06),
+            color: const Color(0xFF4F3615).withValues(alpha: 0.06),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -86,7 +86,7 @@ class EmptyState extends StatelessWidget {
               border: Border.all(color: const Color(0xFFE1EAE3)),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF173C2A).withOpacity(0.07),
+                  color: const Color(0xFF173C2A).withValues(alpha: 0.07),
                   blurRadius: 24,
                   offset: const Offset(0, 12),
                 ),
@@ -104,7 +104,7 @@ class EmptyState extends StatelessWidget {
                       color: Theme.of(context)
                           .colorScheme
                           .primary
-                          .withOpacity(0.1),
+                          .withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -160,7 +160,7 @@ class LoadingView extends StatelessWidget {
           border: Border.all(color: const Color(0xFFE1EAE3)),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF173C2A).withOpacity(0.06),
+              color: const Color(0xFF173C2A).withValues(alpha: 0.06),
               blurRadius: 22,
               offset: const Offset(0, 10),
             ),
@@ -339,7 +339,7 @@ class _OfflineConnectionMessageState extends State<_OfflineConnectionMessage>
       maxScaleFactor: 1.18,
     );
     return Material(
-      color: const Color(0xFF10231A).withOpacity(0.22),
+      color: const Color(0xFF10231A).withValues(alpha: 0.22),
       child: SafeArea(
         child: Center(
           child: Padding(
@@ -352,14 +352,14 @@ class _OfflineConnectionMessageState extends State<_OfflineConnectionMessage>
                 data: media.copyWith(textScaler: textScaler),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10231A).withOpacity(0.98),
+                    color: const Color(0xFF10231A).withValues(alpha: 0.98),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.12),
+                      color: Colors.white.withValues(alpha: 0.12),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF10231A).withOpacity(0.28),
+                        color: const Color(0xFF10231A).withValues(alpha: 0.28),
                         blurRadius: 28,
                         offset: const Offset(0, 14),
                       ),
@@ -376,7 +376,7 @@ class _OfflineConnectionMessageState extends State<_OfflineConnectionMessage>
                             width: 58,
                             height: 58,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE86F4A).withOpacity(0.18),
+                              color: const Color(0xFFE86F4A).withValues(alpha: 0.18),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Icon(
@@ -407,7 +407,7 @@ class _OfflineConnectionMessageState extends State<_OfflineConnectionMessage>
                           style: (theme.textTheme.bodyMedium ??
                                   const TextStyle(fontSize: 14))
                               .copyWith(
-                            color: Colors.white.withOpacity(0.78),
+                            color: Colors.white.withValues(alpha: 0.78),
                             decoration: TextDecoration.none,
                             fontWeight: FontWeight.w700,
                             height: 1.32,
@@ -493,8 +493,8 @@ class StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        border: Border.all(color: color.withOpacity(0.2)),
+        color: color.withValues(alpha: 0.12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -743,7 +743,7 @@ class AppLogoMark extends StatelessWidget {
         boxShadow: showShadow
             ? [
                 BoxShadow(
-                  color: const Color(0xFF163526).withOpacity(0.14),
+                  color: const Color(0xFF163526).withValues(alpha: 0.14),
                   blurRadius: 20,
                   offset: const Offset(0, 10),
                 ),

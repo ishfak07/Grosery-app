@@ -62,7 +62,7 @@ class _AuthScaffold extends StatelessWidget {
           ? null
           : AppBar(
               title: Text(context.t(appBarTitle!)),
-              backgroundColor: _authBackground.withOpacity(0.96),
+              backgroundColor: _authBackground.withValues(alpha: 0.96),
               shape: const Border(bottom: BorderSide(color: _authLine)),
             ),
       body: _AuthBackdrop(
@@ -132,7 +132,7 @@ class _AuthCard extends StatelessWidget {
         border: Border.all(color: _authLine),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF163526).withOpacity(0.08),
+            color: const Color(0xFF163526).withValues(alpha: 0.08),
             blurRadius: 22,
             offset: const Offset(0, 10),
           ),
@@ -196,7 +196,7 @@ class _AuthHeroPanel extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: _authPrimary.withOpacity(0.2),
+            color: _authPrimary.withValues(alpha: 0.2),
             blurRadius: 28,
             offset: const Offset(0, 16),
           ),
@@ -222,7 +222,7 @@ class _AuthHeroPanel extends StatelessWidget {
                 Text(
                   context.t(message),
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.82),
+                    color: Colors.white.withValues(alpha: 0.82),
                     fontWeight: FontWeight.w600,
                     height: 1.35,
                   ),
@@ -235,9 +235,9 @@ class _AuthHeroPanel extends StatelessWidget {
             width: 76,
             height: 76,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.14),
+              color: Colors.white.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white.withOpacity(0.18)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
             ),
             child: Icon(icon, color: Colors.white, size: 40),
           ),
@@ -447,7 +447,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: _authPrimary.withOpacity(0.2),
+                                  color: _authPrimary.withValues(alpha: 0.2),
                                   blurRadius: 28,
                                   offset: const Offset(0, 16),
                                 ),
@@ -459,10 +459,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                   width: 94,
                                   height: 94,
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.15),
+                                    color: Colors.white.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(
-                                      color: Colors.white.withOpacity(0.18),
+                                      color: Colors.white.withValues(alpha: 0.18),
                                     ),
                                   ),
                                   child: Icon(
@@ -489,7 +489,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                   context.t(item.message),
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
-                                    color: Colors.white.withOpacity(0.82),
+                                    color: Colors.white.withValues(alpha: 0.82),
                                     fontWeight: FontWeight.w600,
                                     height: 1.4,
                                   ),
@@ -584,7 +584,7 @@ class _OnboardingChip extends StatelessWidget {
         border: Border.all(color: _authLine),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF163526).withOpacity(0.06),
+            color: const Color(0xFF163526).withValues(alpha: 0.06),
             blurRadius: 16,
             offset: const Offset(0, 8),
           ),

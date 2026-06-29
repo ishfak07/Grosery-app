@@ -95,7 +95,7 @@ class _AdminScaffold extends StatelessWidget {
           ),
         ),
         actions: actions,
-        backgroundColor: _adminBackground.withOpacity(0.96),
+        backgroundColor: _adminBackground.withValues(alpha: 0.96),
         foregroundColor: _adminInk,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -218,7 +218,7 @@ class _AdminCard extends StatelessWidget {
         border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF163526).withOpacity(0.07),
+            color: const Color(0xFF163526).withValues(alpha: 0.07),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -276,9 +276,9 @@ class _AdminIconBadge extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.18)),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
       child: Icon(icon, color: color, size: size * 0.48),
     );
@@ -302,9 +302,9 @@ class _AdminPill extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 300),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.11),
+        color: color.withValues(alpha: 0.11),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.18)),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -380,9 +380,9 @@ class _AdminNotice extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.22)),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -492,7 +492,7 @@ class _DashboardHero extends StatelessWidget {
                 Text(
                   'Manage orders, products, shops, customers, and support.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white.withOpacity(0.82),
+                        color: Colors.white.withValues(alpha: 0.82),
                         height: 1.45,
                       ),
                 ),
@@ -505,13 +505,13 @@ class _DashboardHero extends StatelessWidget {
               width: compact ? 82 : 108,
               height: compact ? 82 : 108,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.12),
+                color: Colors.white.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white.withOpacity(0.16)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
               ),
               child: Icon(
                 Icons.admin_panel_settings_outlined,
-                color: Colors.white.withOpacity(0.9),
+                color: Colors.white.withValues(alpha: 0.9),
                 size: compact ? 42 : 54,
               ),
             );
@@ -2094,10 +2094,10 @@ class _AdminOrderDateFilter extends StatelessWidget {
             icon: const Icon(Icons.close),
             style: IconButton.styleFrom(
               foregroundColor: _adminInk,
-              disabledForegroundColor: _adminMuted.withOpacity(0.45),
+              disabledForegroundColor: _adminMuted.withValues(alpha: 0.45),
               side: BorderSide(
                 color:
-                    onClear == null ? _adminLine.withOpacity(0.6) : _adminLine,
+                    onClear == null ? _adminLine.withValues(alpha: 0.6) : _adminLine,
               ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
@@ -2662,7 +2662,7 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
-                        value: [
+                        initialValue: [
                           'pending',
                           'receipt uploaded',
                           'collected',
@@ -2706,7 +2706,7 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                         icon: Icons.route_outlined,
                       ),
                       DropdownButtonFormField<String>(
-                        value: AppConstants.selectableOrderStatuses.contains(
+                        initialValue: AppConstants.selectableOrderStatuses.contains(
                           _status,
                         )
                             ? _status
@@ -2755,7 +2755,7 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                                 ? _selectedDeliveryBoyId
                                 : null;
                             return DropdownButtonFormField<String>(
-                              value: selectedId,
+                              initialValue: selectedId,
                               decoration: const InputDecoration(
                                 labelText: 'Assign delivery boy',
                                 prefixIcon: Icon(Icons.delivery_dining),
@@ -3573,7 +3573,7 @@ class _AccountMiniMetric extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.74),
+        color: Colors.white.withValues(alpha: 0.74),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: _adminLine),
       ),
@@ -3910,7 +3910,7 @@ class _AccountSaleTile extends StatelessWidget {
       onTap: onTap,
       padding: const EdgeInsets.all(12),
       borderColor: record.needsManualSalesAmount
-          ? _adminWarning.withOpacity(0.45)
+          ? _adminWarning.withValues(alpha: 0.45)
           : _adminLine,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -5367,7 +5367,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                           ),
                           const SizedBox(height: 10),
                           DropdownButtonFormField<String>(
-                            value: _selectedShopId,
+                            initialValue: _selectedShopId,
                             decoration: const InputDecoration(
                               labelText: 'Shop',
                               prefixIcon: Icon(Icons.storefront),
@@ -5432,7 +5432,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                           ),
                           const SizedBox(height: 10),
                           DropdownButtonFormField<String>(
-                            value: _unit,
+                            initialValue: _unit,
                             decoration: const InputDecoration(
                               labelText: 'Unit',
                               prefixIcon: Icon(Icons.scale_outlined),
@@ -5465,7 +5465,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                           ],
                           const SizedBox(height: 10),
                           DropdownButtonFormField<String>(
-                            value: _stockStatus,
+                            initialValue: _stockStatus,
                             decoration: const InputDecoration(
                               labelText: 'Stock status',
                               prefixIcon: Icon(Icons.fact_check_outlined),
@@ -7585,7 +7585,7 @@ class _AdminCustomerTile extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 24,
-            backgroundColor: statusColor.withOpacity(0.13),
+            backgroundColor: statusColor.withValues(alpha: 0.13),
             foregroundColor: statusColor,
             child: Text(
               initial,

@@ -75,7 +75,7 @@ class _CustomerScaffold extends StatelessWidget {
       appBar: AppBar(
         title: Text(context.t(title)),
         actions: actions,
-        backgroundColor: _customerBackground.withOpacity(0.96),
+        backgroundColor: _customerBackground.withValues(alpha: 0.96),
         foregroundColor: _customerInk,
         shape: const Border(bottom: BorderSide(color: _customerLine)),
       ),
@@ -185,7 +185,7 @@ class _CustomerCard extends StatelessWidget {
           border: Border.all(color: _customerLine),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF163526).withOpacity(0.08),
+              color: const Color(0xFF163526).withValues(alpha: 0.08),
               blurRadius: 22,
               offset: const Offset(0, 10),
             ),
@@ -618,7 +618,7 @@ class _HomeHeader extends StatelessWidget {
         borderRadius: radius,
         boxShadow: [
           BoxShadow(
-            color: _customerPrimary.withOpacity(0.22),
+            color: _customerPrimary.withValues(alpha: 0.22),
             blurRadius: 28,
             offset: const Offset(0, 16),
           ),
@@ -646,7 +646,7 @@ class _HomeHeader extends StatelessWidget {
                 child: Icon(
                   Icons.shopping_basket_outlined,
                   size: 168,
-                  color: Colors.white.withOpacity(0.07),
+                  color: Colors.white.withValues(alpha: 0.07),
                 ),
               ),
               Positioned(
@@ -657,7 +657,7 @@ class _HomeHeader extends StatelessWidget {
                   child: Container(
                     width: 210,
                     height: 42,
-                    color: Colors.white.withOpacity(0.055),
+                    color: Colors.white.withValues(alpha: 0.055),
                   ),
                 ),
               ),
@@ -688,7 +688,7 @@ class _HomeHeader extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.78),
+                                  color: Colors.white.withValues(alpha: 0.78),
                                   fontSize: 12,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 0,
@@ -719,7 +719,7 @@ class _HomeHeader extends StatelessWidget {
                                   Icon(
                                     Icons.location_on_outlined,
                                     size: 17,
-                                    color: Colors.white.withOpacity(0.86),
+                                    color: Colors.white.withValues(alpha: 0.86),
                                   ),
                                   const SizedBox(width: 5),
                                   Expanded(
@@ -728,7 +728,7 @@ class _HomeHeader extends StatelessWidget {
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
-                                        color: Colors.white.withOpacity(0.82),
+                                        color: Colors.white.withValues(alpha: 0.82),
                                         height: 1.24,
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,
@@ -818,7 +818,7 @@ class _HomeHeaderActionButton extends StatelessWidget {
         width: 40,
         height: 40,
         child: Material(
-          color: Colors.white.withOpacity(0.94),
+          color: Colors.white.withValues(alpha: 0.94),
           borderRadius: BorderRadius.circular(8),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -847,9 +847,9 @@ class _HomeHeaderPill extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 120),
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.14),
+        color: Colors.white.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withOpacity(0.16)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -889,7 +889,7 @@ class _HomeSearchCallout extends StatelessWidget {
           border: Border.all(color: Colors.white),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF10231A).withOpacity(0.09),
+              color: const Color(0xFF10231A).withValues(alpha: 0.09),
               blurRadius: 24,
               offset: const Offset(0, 12),
             ),
@@ -967,7 +967,7 @@ class _HomePromoBanner extends StatelessWidget {
         borderRadius: radius,
         boxShadow: [
           BoxShadow(
-            color: _customerPrimary.withOpacity(0.22),
+            color: _customerPrimary.withValues(alpha: 0.22),
             blurRadius: 28,
             offset: const Offset(0, 16),
           ),
@@ -995,7 +995,7 @@ class _HomePromoBanner extends StatelessWidget {
                 child: Icon(
                   Icons.delivery_dining,
                   size: 172,
-                  color: Colors.white.withOpacity(0.09),
+                  color: Colors.white.withValues(alpha: 0.09),
                 ),
               ),
               Padding(
@@ -1049,7 +1049,7 @@ class _HomePromoBanner extends StatelessWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.84),
+                              color: Colors.white.withValues(alpha: 0.84),
                               fontWeight: FontWeight.w700,
                               height: 1.28,
                             ),
@@ -1062,10 +1062,10 @@ class _HomePromoBanner extends StatelessWidget {
                       width: 78,
                       height: 98,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.18),
+                          color: Colors.white.withValues(alpha: 0.18),
                         ),
                       ),
                       child: const Icon(
@@ -1339,7 +1339,7 @@ class _HomeOfferBanner extends StatelessWidget {
           borderRadius: radius,
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF10231A).withOpacity(0.20),
+              color: const Color(0xFF10231A).withValues(alpha: 0.20),
               blurRadius: 30,
               offset: const Offset(0, 16),
             ),
@@ -1362,9 +1362,9 @@ class _HomeOfferBanner extends StatelessWidget {
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Colors.black.withOpacity(0.05),
-                        Colors.black.withOpacity(0.34),
-                        Colors.black.withOpacity(0.82),
+                        Colors.black.withValues(alpha: 0.05),
+                        Colors.black.withValues(alpha: 0.34),
+                        Colors.black.withValues(alpha: 0.82),
                       ],
                       stops: const [0.0, 0.45, 1.0],
                     ),
@@ -1373,7 +1373,7 @@ class _HomeOfferBanner extends StatelessWidget {
                 DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: radius,
-                    border: Border.all(color: Colors.white.withOpacity(0.18)),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
                   ),
                 ),
                 Padding(
@@ -1423,7 +1423,7 @@ class _HomeOfferBanner extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           fontWeight: FontWeight.w700,
                           height: 1.24,
                         ),
@@ -1437,10 +1437,10 @@ class _HomeOfferBanner extends StatelessWidget {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.16),
+                            color: Colors.white.withValues(alpha: 0.16),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.18),
+                              color: Colors.white.withValues(alpha: 0.18),
                             ),
                           ),
                           child: Row(
@@ -1458,7 +1458,7 @@ class _HomeOfferBanner extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: Colors.white.withOpacity(0.92),
+                                    color: Colors.white.withValues(alpha: 0.92),
                                     fontWeight: FontWeight.w800,
                                     fontSize: 12,
                                   ),
@@ -1588,7 +1588,7 @@ class _CustomerBottomNavigation extends StatelessWidget {
         border: const Border(top: BorderSide(color: _customerLine)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF10231A).withOpacity(0.07),
+            color: const Color(0xFF10231A).withValues(alpha: 0.07),
             blurRadius: 22,
             offset: const Offset(0, -8),
           ),
@@ -1662,7 +1662,7 @@ class _HomeFreshPicksHeader extends StatelessWidget {
             decoration: BoxDecoration(
               color: _customerPrimaryLight,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: _customerPrimary.withOpacity(0.12)),
+              border: Border.all(color: _customerPrimary.withValues(alpha: 0.12)),
             ),
             child: const Icon(
               Icons.local_florist_outlined,
@@ -1876,7 +1876,7 @@ class _HomeActionTile extends StatelessWidget {
         height: tileHeight,
         decoration: BoxDecoration(
           borderRadius: radius,
-          border: Border.all(color: accent.withOpacity(0.20)),
+          border: Border.all(color: accent.withValues(alpha: 0.20)),
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -1889,7 +1889,7 @@ class _HomeActionTile extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: accent.withOpacity(0.13),
+              color: accent.withValues(alpha: 0.13),
               blurRadius: 24,
               offset: const Offset(0, 12),
             ),
@@ -1930,7 +1930,7 @@ class _HomeActionTile extends StatelessWidget {
                   bottom: -18,
                   child: Icon(
                     icon,
-                    color: accent.withOpacity(0.065),
+                    color: accent.withValues(alpha: 0.065),
                     size: backgroundIconSize,
                   ),
                 ),
@@ -1951,10 +1951,10 @@ class _HomeActionTile extends StatelessWidget {
                             width: arrowSize,
                             height: arrowSize,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.86),
+                              color: Colors.white.withValues(alpha: 0.86),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: accent.withOpacity(0.20),
+                                color: accent.withValues(alpha: 0.20),
                               ),
                             ),
                             child: Icon(
@@ -2021,11 +2021,11 @@ class _HomeActionIconBadge extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        color: Colors.white.withOpacity(0.88),
-        border: Border.all(color: accent.withOpacity(0.18)),
+        color: Colors.white.withValues(alpha: 0.88),
+        border: Border.all(color: accent.withValues(alpha: 0.18)),
         boxShadow: [
           BoxShadow(
-            color: accent.withOpacity(0.12),
+            color: accent.withValues(alpha: 0.12),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -2904,7 +2904,7 @@ class _CartSummaryPanel extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: _customerPrimary.withOpacity(0.2),
+            color: _customerPrimary.withValues(alpha: 0.2),
             blurRadius: 28,
             offset: const Offset(0, 16),
           ),
@@ -2926,7 +2926,7 @@ class _CartSummaryPanel extends StatelessWidget {
                               values: {'count': itemCount},
                             ),
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.82),
+                    color: Colors.white.withValues(alpha: 0.82),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -2945,7 +2945,7 @@ class _CartSummaryPanel extends StatelessWidget {
                       ? context.t('Attached list for admin pricing')
                       : context.t('Catalog subtotal before delivery'),
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
+                    color: Colors.white.withValues(alpha: 0.8),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -2956,9 +2956,9 @@ class _CartSummaryPanel extends StatelessWidget {
             width: 62,
             height: 62,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.14),
+              color: Colors.white.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white.withOpacity(0.18)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
             ),
             child: const Icon(
               Icons.shopping_bag_outlined,
@@ -4169,7 +4169,7 @@ class _CheckoutSummary extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: _customerPrimary.withOpacity(0.2),
+            color: _customerPrimary.withValues(alpha: 0.2),
             blurRadius: 28,
             offset: const Offset(0, 16),
           ),
@@ -4184,7 +4184,7 @@ class _CheckoutSummary extends StatelessWidget {
                 Text(
                   context.t('Estimated total'),
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.82),
+                    color: Colors.white.withValues(alpha: 0.82),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -4201,7 +4201,7 @@ class _CheckoutSummary extends StatelessWidget {
                 Text(
                   context.t('Review payment and delivery details'),
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
+                    color: Colors.white.withValues(alpha: 0.8),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -4212,9 +4212,9 @@ class _CheckoutSummary extends StatelessWidget {
             width: 58,
             height: 58,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.14),
+              color: Colors.white.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white.withOpacity(0.18)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
             ),
             child: const Icon(
               Icons.payments_outlined,
@@ -4929,7 +4929,7 @@ class OrderTile extends StatelessWidget {
             width: 52,
             height: 52,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(Icons.receipt_long_outlined, color: color),
@@ -5187,7 +5187,7 @@ class _DeliveryReviewCard extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: _customerGold.withOpacity(0.14),
+                  color: _customerGold.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
@@ -5529,7 +5529,7 @@ class _OrderTerminalHero extends StatelessWidget {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: color, size: 38),
@@ -5863,7 +5863,7 @@ class _OrderItemRow extends StatelessWidget {
             decoration: BoxDecoration(
               color: item.isAvailable
                   ? _customerPrimaryLight
-                  : _customerDanger.withOpacity(0.1),
+                  : _customerDanger.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
@@ -6214,7 +6214,7 @@ class _SupportScreenState extends State<SupportScreen> {
                               height: 46,
                               decoration: BoxDecoration(
                                 color: _statusAccent(tickets[index].status)
-                                    .withOpacity(0.1),
+                                    .withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Icon(
@@ -6339,7 +6339,7 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
               },
             ),
         ],
-        backgroundColor: _customerBackground.withOpacity(0.96),
+        backgroundColor: _customerBackground.withValues(alpha: 0.96),
         foregroundColor: _customerInk,
         shape: const Border(bottom: BorderSide(color: _customerLine)),
       ),
@@ -6433,7 +6433,7 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF163526).withOpacity(0.06),
+                          color: const Color(0xFF163526).withValues(alpha: 0.06),
                           blurRadius: 16,
                           offset: const Offset(0, 8),
                         ),
@@ -7063,7 +7063,7 @@ class _ProfileHeader extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: _customerPrimary.withOpacity(0.2),
+            color: _customerPrimary.withValues(alpha: 0.2),
             blurRadius: 28,
             offset: const Offset(0, 16),
           ),
@@ -7075,9 +7075,9 @@ class _ProfileHeader extends StatelessWidget {
             width: 68,
             height: 68,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.16),
+              color: Colors.white.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white.withOpacity(0.22)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
             ),
             child: Center(
               child: Text(
@@ -7109,7 +7109,7 @@ class _ProfileHeader extends StatelessWidget {
                 Text(
                   profile.phone,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.84),
+                    color: Colors.white.withValues(alpha: 0.84),
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -7117,7 +7117,7 @@ class _ProfileHeader extends StatelessWidget {
                 Text(
                   context.t(profile.role),
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.72),
+                    color: Colors.white.withValues(alpha: 0.72),
                     fontWeight: FontWeight.w700,
                   ),
                 ),

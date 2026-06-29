@@ -162,7 +162,7 @@ class _AdminOrderSheetScreenState extends State<AdminOrderSheetScreen> {
             border: const Border(top: BorderSide(color: _sheetLine)),
             boxShadow: [
               BoxShadow(
-                color: _sheetInk.withOpacity(0.08),
+                color: _sheetInk.withValues(alpha: 0.08),
                 blurRadius: 24,
                 offset: const Offset(0, -8),
               ),
@@ -264,7 +264,7 @@ class _SheetHero extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: _sheetPrimary.withOpacity(0.22),
+            color: _sheetPrimary.withValues(alpha: 0.22),
             blurRadius: 22,
             offset: const Offset(0, 10),
           ),
@@ -279,7 +279,7 @@ class _SheetHero extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.14),
+                  color: Colors.white.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
@@ -303,7 +303,7 @@ class _SheetHero extends StatelessWidget {
                     Text(
                       DateFormat.yMMMd().add_jm().format(order.createdAt),
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.76),
+                        color: Colors.white.withValues(alpha: 0.76),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -316,7 +316,7 @@ class _SheetHero extends StatelessWidget {
           Text(
             'Everything the shop needs in one view',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.88),
+              color: Colors.white.withValues(alpha: 0.88),
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -356,9 +356,9 @@ class _HeroChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.12),
+        color: Colors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.16)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -404,7 +404,7 @@ class _SheetSection extends StatelessWidget {
         border: Border.all(color: _sheetLine),
         boxShadow: [
           BoxShadow(
-            color: _sheetInk.withOpacity(0.045),
+            color: _sheetInk.withValues(alpha: 0.045),
             blurRadius: 18,
             offset: const Offset(0, 7),
           ),
@@ -419,7 +419,7 @@ class _SheetSection extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: _sheetPrimary.withOpacity(0.1),
+                  color: _sheetPrimary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Stack(
@@ -601,7 +601,7 @@ class _ManualOrderItem extends StatelessWidget {
             height: 26,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: _sheetPrimary.withOpacity(0.12),
+              color: _sheetPrimary.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: Text(
