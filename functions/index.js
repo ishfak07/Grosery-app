@@ -722,16 +722,22 @@ exports.submitDeliveryReview = onCall(async (request) => {
       Number.isInteger(order.deliveryRating) &&
       order.deliveryRating >= 1 &&
       order.deliveryRating <= 5;
+    const creditedStars = Number(order.deliveryRewardStarsCredited);
+    const previousCreditedStars =
+      Number.isInteger(creditedStars) && creditedStars >= 0 ?
+        creditedStars :
+        hadDeliveryReview ? Number(order.deliveryRating) : 0;
+    const rewardStarDelta = rating - previousCreditedStars;
     const now = admin.firestore.Timestamp.now();
     const orderUpdate = {
       deliveryRating: rating,
       deliveryReview: review,
       deliveryReviewedAt: now,
+      deliveryRewardStarsCredited: rating,
     };
-    if (!hadDeliveryReview) {
-      orderUpdate.deliveryRewardStarsCredited = rating;
+    if (rewardStarDelta !== 0) {
       transaction.update(deliveryBoyRef, {
-        deliveryRewardStars: rewardStars + rating,
+        deliveryRewardStars: Math.max(0, rewardStars + rewardStarDelta),
         updatedAt: now,
       });
     }
@@ -1387,12 +1393,21 @@ async function initializeDeliveryRewardStarsInTransaction({
       .collection("orders")
       .where("assignedDeliveryBoyId", "==", deliveryBoyRef.id),
   );
-  const stars = reviewedOrders.docs.reduce((total, orderDoc) => {
-    const rating = Number(orderDoc.data().deliveryRating);
-    return Number.isInteger(rating) && rating >= 1 && rating <= 5 ?
-      total + rating :
-      total;
-  }, 0);
+  let stars = 0;
+  reviewedOrders.docs.forEach((orderDoc) => {
+    const order = orderDoc.data();
+    const rating = Number(order.deliveryRating);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return;
+    }
+    stars += rating;
+    const creditedStars = Number(order.deliveryRewardStarsCredited);
+    if (!Number.isInteger(creditedStars) || creditedStars < 0) {
+      transaction.update(orderDoc.ref, {
+        deliveryRewardStarsCredited: rating,
+      });
+    }
+  });
 
   transaction.update(deliveryBoyRef, {
     deliveryRewardStars: stars,

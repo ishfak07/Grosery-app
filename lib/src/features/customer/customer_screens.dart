@@ -5288,22 +5288,33 @@ class _DeliveryRatingStars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final canSelect = onSelected != null;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        for (var value = 1; value <= 5; value++)
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.symmetric(horizontal: 3),
-            constraints: const BoxConstraints(),
-            tooltip: context.t('{rating} stars', values: {'rating': value}),
-            onPressed: onSelected == null ? null : () => onSelected!(value),
-            icon: Icon(
-              value <= rating ? Icons.star_rounded : Icons.star_border_rounded,
-              color: value <= rating ? _customerGold : _customerLine,
-              size: iconSize,
+        for (var value = 1; value <= 5; value++) ...[
+          Semantics(
+            button: canSelect,
+            selected: value <= rating,
+            label: context.tNow('{rating} stars', values: {'rating': value}),
+            child: InkResponse(
+              onTap: canSelect ? () => onSelected!(value) : null,
+              radius: iconSize * 0.7,
+              containedInkWell: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+                child: Icon(
+                  value <= rating
+                      ? Icons.star_rounded
+                      : Icons.star_border_rounded,
+                  color: value <= rating ? _customerGold : _customerMuted,
+                  size: iconSize,
+                ),
+              ),
             ),
           ),
+          if (value < 5) const SizedBox(width: 2),
+        ],
       ],
     );
   }
@@ -5314,126 +5325,210 @@ Future<void> _showDeliveryReviewDialog(
   OrderModel order,
 ) async {
   final pageContext = context;
-  var selectedRating = order.deliveryRating;
-  var isSaving = false;
-  final reviewController = TextEditingController(text: order.deliveryReview);
+  final appState = context.read<AppState>();
 
-  try {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            Future<void> submit() async {
-              if (selectedRating == 0) {
-                showSnack(context, 'Choose a star rating before submitting.');
-                return;
-              }
-              setDialogState(() => isSaving = true);
-              try {
-                await pageContext
-                    .read<AppState>()
-                    .authService
-                    .submitDeliveryReview(
-                      orderId: order.orderId,
-                      rating: selectedRating,
-                      review: reviewController.text,
-                    );
-                if (dialogContext.mounted) {
-                  Navigator.of(dialogContext).pop();
-                }
-                if (pageContext.mounted) {
-                  showSnack(
-                    pageContext,
-                    'Delivery review saved. Thank you!',
-                  );
-                }
-              } catch (error) {
-                if (pageContext.mounted) {
-                  showSnack(pageContext, error.toString());
-                  setDialogState(() => isSaving = false);
-                }
-              }
-            }
-
-            return AlertDialog(
-              title: Text(
-                context.t(
-                  order.hasDeliveryReview
-                      ? 'Edit delivery review'
-                      : 'Rate your delivery',
-                ),
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      context.t(
-                        'Your feedback helps us improve every delivery.',
-                      ),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: _customerMuted,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    _DeliveryRatingStars(
-                      rating: selectedRating,
-                      iconSize: 36,
-                      onSelected: isSaving
-                          ? null
-                          : (rating) {
-                              setDialogState(() => selectedRating = rating);
-                            },
-                    ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: reviewController,
-                      enabled: !isSaving,
-                      maxLength: 500,
-                      minLines: 3,
-                      maxLines: 5,
-                      decoration: InputDecoration(
-                        labelText: context.t('Review (optional)'),
-                        hintText: context.t(
-                          'Tell us what went well or what can improve.',
-                        ),
-                        alignLabelWithHint: true,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed:
-                      isSaving ? null : () => Navigator.of(dialogContext).pop(),
-                  child: Text(context.t('Cancel')),
-                ),
-                FilledButton.icon(
-                  onPressed: isSaving ? null : submit,
-                  icon: isSaving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.send_outlined),
-                  label: Text(
-                    context.t(isSaving ? 'Saving' : 'Submit review'),
-                  ),
-                ),
-              ],
+  final saved = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _DeliveryReviewDialog(
+          order: order,
+          title: pageContext.tNow(
+            order.hasDeliveryReview
+                ? 'Edit delivery review'
+                : 'Rate your delivery',
+          ),
+          helperText: pageContext.tNow(
+            'Your feedback helps us improve every delivery.',
+          ),
+          reviewLabel: pageContext.tNow('Review (optional)'),
+          reviewHint: pageContext.tNow(
+            'Tell us what went well or what can improve.',
+          ),
+          requiredRatingMessage: pageContext.tNow(
+            'Choose a star rating before submitting.',
+          ),
+          cancelLabel: pageContext.tNow('Cancel'),
+          submitLabel: pageContext.tNow('Submit review'),
+          savingLabel: pageContext.tNow('Saving'),
+          submitReview: ({
+            required orderId,
+            required rating,
+            required review,
+          }) {
+            return appState.authService.submitDeliveryReview(
+              orderId: orderId,
+              rating: rating,
+              review: review,
             );
           },
-        );
-      },
+        ),
+      ) ??
+      false;
+
+  if (saved && pageContext.mounted) {
+    showSnack(pageContext, 'Delivery review saved. Thank you!');
+  }
+}
+
+class _DeliveryReviewDialog extends StatefulWidget {
+  const _DeliveryReviewDialog({
+    required this.order,
+    required this.title,
+    required this.helperText,
+    required this.reviewLabel,
+    required this.reviewHint,
+    required this.requiredRatingMessage,
+    required this.cancelLabel,
+    required this.submitLabel,
+    required this.savingLabel,
+    required this.submitReview,
+  });
+
+  final OrderModel order;
+  final String title;
+  final String helperText;
+  final String reviewLabel;
+  final String reviewHint;
+  final String requiredRatingMessage;
+  final String cancelLabel;
+  final String submitLabel;
+  final String savingLabel;
+  final Future<void> Function({
+    required String orderId,
+    required int rating,
+    required String review,
+  }) submitReview;
+
+  @override
+  State<_DeliveryReviewDialog> createState() => _DeliveryReviewDialogState();
+}
+
+class _DeliveryReviewDialogState extends State<_DeliveryReviewDialog> {
+  late int _selectedRating;
+  late final TextEditingController _reviewController;
+  var _isSaving = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedRating = widget.order.deliveryRating;
+    _reviewController =
+        TextEditingController(text: widget.order.deliveryReview);
+  }
+
+  @override
+  void dispose() {
+    _reviewController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (_selectedRating == 0) {
+      setState(() => _errorMessage = widget.requiredRatingMessage);
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await widget.submitReview(
+        orderId: widget.order.orderId,
+        rating: _selectedRating,
+        review: _reviewController.text,
+      );
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isSaving = false;
+        _errorMessage = context.tNow(appFriendlyErrorMessage(error));
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.helperText,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: _customerMuted,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 14),
+            _DeliveryRatingStars(
+              rating: _selectedRating,
+              iconSize: 36,
+              onSelected: _isSaving
+                  ? null
+                  : (rating) {
+                      setState(() {
+                        _selectedRating = rating;
+                        _errorMessage = null;
+                      });
+                    },
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: _customerDanger,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+            const SizedBox(height: 14),
+            TextField(
+              controller: _reviewController,
+              enabled: !_isSaving,
+              maxLength: 500,
+              minLines: 3,
+              maxLines: 5,
+              decoration: InputDecoration(
+                labelText: widget.reviewLabel,
+                hintText: widget.reviewHint,
+                alignLabelWithHint: true,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
+          child: Text(widget.cancelLabel),
+        ),
+        FilledButton.icon(
+          onPressed: _isSaving ? null : _submit,
+          icon: _isSaving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.send_outlined),
+          label: Text(_isSaving ? widget.savingLabel : widget.submitLabel),
+        ),
+      ],
     );
-  } finally {
-    reviewController.dispose();
   }
 }
 
