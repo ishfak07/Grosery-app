@@ -6,7 +6,7 @@ flow changes.
 
 ## Public URLs
 
-- Privacy policy: `https://grocery-delivery-app-388bc.web.app/privacy`
+- Privacy policy: `https://symphonious-fairy-287a12.netlify.app/`
 - Account deletion: `https://grocery-delivery-app-388bc.web.app/delete-account`
 
 ## Google Play Data Safety

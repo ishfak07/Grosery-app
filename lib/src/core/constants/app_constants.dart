@@ -14,7 +14,7 @@ class AppConstants {
   static const bankBranch = 'Puttalam';
   static const bankAccountNumber = '89001476';
   static const privacyPolicyUrl =
-      'https://grocery-delivery-app-388bc.web.app/privacy';
+      'https://symphonious-fairy-287a12.netlify.app/';
   static const accountDeletionUrl =
       'https://grocery-delivery-app-388bc.web.app/delete-account';
 
