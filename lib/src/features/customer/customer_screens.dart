@@ -5901,7 +5901,9 @@ class _ActiveOrderTrackingView extends StatelessWidget {
         const SizedBox(height: 16),
         _OrderContentSections(
           order: order,
-          showAttachedListPriceNotice: true,
+          showAttachedListPriceNotice: _shouldShowAttachedListPriceNotice(
+            order,
+          ),
         ),
         const SizedBox(height: 18),
         _OrderSupportButton(order: order),
@@ -6706,6 +6708,10 @@ bool _shouldShowFinalBillBreakdown(OrderModel order) {
   };
   return finalBillStatuses.contains(order.orderStatus) ||
       (order.hasShoppingList && order.listAmountsReviewed);
+}
+
+bool _shouldShowAttachedListPriceNotice(OrderModel order) {
+  return order.hasShoppingList && !_shouldShowFinalBillBreakdown(order);
 }
 
 class _OrderBillBreakdown extends StatelessWidget {

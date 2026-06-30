@@ -297,6 +297,16 @@ class AuthService {
     }
   }
 
+  Future<void> markAssignedOrderPaymentCollected(String orderId) async {
+    try {
+      await _functions.httpsCallable('markAssignedOrderPaymentCollected').call({
+        'orderId': orderId,
+      });
+    } on FirebaseFunctionsException catch (error) {
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
   Future<void> submitDeliveryReview({
     required String orderId,
     required int rating,

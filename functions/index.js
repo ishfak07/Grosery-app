@@ -661,6 +661,54 @@ exports.markAssignedOrderDelivered = onCall(async (request) => {
   return {ok: true};
 });
 
+exports.markAssignedOrderPaymentCollected = onCall(async (request) => {
+  const deliveryBoy = await requireDeliveryBoy(request);
+  const orderId = assertRequiredText(request.data?.orderId, "Order");
+  const db = admin.firestore();
+  const orderRef = db.collection("orders").doc(orderId);
+  const orderDoc = await orderRef.get();
+  if (!orderDoc.exists) {
+    throw new HttpsError("not-found", "Order not found.");
+  }
+  const order = orderDoc.data();
+  if (order.assignedDeliveryBoyId !== deliveryBoy.uid) {
+    throw new HttpsError(
+      "permission-denied",
+      "This order is not assigned to you.",
+    );
+  }
+  if (terminalOrderStatuses.has(order.orderStatus)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Closed orders cannot be changed by delivery boys.",
+    );
+  }
+  if (order.paymentStatus === "collected") {
+    return {ok: true};
+  }
+
+  const now = admin.firestore.Timestamp.now();
+  const notificationRef = db.collection("notifications").doc();
+  const batch = db.batch();
+  batch.update(orderRef, {
+    paymentStatus: "collected",
+    updatedAt: now,
+  });
+  batch.set(notificationRef, {
+    notificationId: notificationRef.id,
+    userId: order.userId || "",
+    recipientRole: "user",
+    title: `Payment collected for order ${orderDoc.id}`,
+    body: "Your payment has been marked as collected.",
+    type: "order",
+    relatedId: orderDoc.id,
+    isRead: false,
+    createdAt: now,
+  });
+  await batch.commit();
+  return {ok: true};
+});
+
 exports.submitDeliveryReview = onCall(async (request) => {
   const customer = await requireCustomer(request);
 

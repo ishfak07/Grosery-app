@@ -798,11 +798,15 @@ class _DeliveryOrderCard extends StatefulWidget {
 
 class _DeliveryOrderCardState extends State<_DeliveryOrderCard> {
   var _isSaving = false;
+  var _isSavingPayment = false;
 
   @override
   Widget build(BuildContext context) {
     final order = widget.order;
     final canDeliver = order.orderStatus == 'Out for Delivery';
+    final canCollectPayment = !_isClosedOrder(order) &&
+        order.assignedDeliveryBoyId.isNotEmpty &&
+        order.paymentStatus != 'collected';
     return _DeliveryCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -877,23 +881,70 @@ class _DeliveryOrderCardState extends State<_DeliveryOrderCard> {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: FilledButton.icon(
-                  onPressed: canDeliver && !_isSaving ? _markDelivered : null,
-                  icon: _isSaving
+                child: OutlinedButton.icon(
+                  onPressed:
+                      canCollectPayment && !_isSavingPayment && !_isSaving
+                          ? _markPaymentCollected
+                          : null,
+                  icon: _isSavingPayment
                       ? const SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.verified_outlined),
-                  label: Text(_isSaving ? 'Saving' : 'Delivered'),
+                      : const Icon(Icons.payments_outlined),
+                  label: Text(
+                    order.paymentStatus == 'collected'
+                        ? 'Collected'
+                        : _isSavingPayment
+                            ? 'Saving'
+                            : 'Payment',
+                  ),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: canDeliver && !_isSaving && !_isSavingPayment
+                  ? _markDelivered
+                  : null,
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.verified_outlined),
+              label: Text(_isSaving ? 'Saving' : 'Delivered'),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _markPaymentCollected() async {
+    setState(() => _isSavingPayment = true);
+    try {
+      await context
+          .read<AppState>()
+          .authService
+          .markAssignedOrderPaymentCollected(widget.order.orderId);
+      if (mounted) {
+        showSnack(context, 'Payment marked collected.');
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingPayment = false);
+      }
+    }
   }
 
   Future<void> _markDelivered() async {
@@ -920,6 +971,12 @@ class _DeliveryOrderCardState extends State<_DeliveryOrderCard> {
   Future<void> _launchPhone(String phone) async {
     await launchUrl(Uri(scheme: 'tel', path: phone));
   }
+}
+
+bool _isClosedOrder(OrderModel order) {
+  return order.orderStatus == 'Delivered' ||
+      order.orderStatus == 'Cancelled' ||
+      order.orderStatus == 'Rejected';
 }
 
 class _DeliveryCustomerReview extends StatelessWidget {
