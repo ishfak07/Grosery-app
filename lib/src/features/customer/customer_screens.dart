@@ -5848,48 +5848,15 @@ class _ActiveOrderTrackingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shortOrderId = order.orderId.substring(0, 8);
     return _CustomerScrollView(
       children: [
-        _CustomerCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      context.t(
-                        'Order {id}',
-                        values: {
-                          'id': order.orderId.substring(0, 8),
-                        },
-                      ),
-                      style: const TextStyle(
-                        color: _customerInk,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 18,
-                      ),
-                    ),
-                  ),
-                  StatusChip(status: order.orderStatus),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _AmountRow('Total', order.totalAmount.money, isStrong: true),
-              _AmountRow(
-                'Payment',
-                '${context.t(order.paymentMethod)} (${context.t(order.paymentStatus)})',
-              ),
-              if (order.hasAssignedDeliveryContact) ...[
-                const Divider(height: 24),
-                _DeliveryContactSummary(order: order),
-              ],
-              if (order.adminNotes.isNotEmpty) ...[
-                const Divider(height: 24),
-                _AdminNoteSummary(order: order),
-              ],
-            ],
-          ),
+        _TrackingHeroCard(
+          orderId: shortOrderId,
+          status: order.orderStatus,
+          total: order.totalAmount.money,
+          payment:
+              '${context.t(order.paymentMethod)} (${context.t(order.paymentStatus)})',
         ),
         if (_shouldShowFinalBillBreakdown(order)) ...[
           const SizedBox(height: 16),
@@ -5898,6 +5865,14 @@ class _ActiveOrderTrackingView extends StatelessWidget {
         ],
         const SizedBox(height: 16),
         _TrackingSteps(status: order.orderStatus),
+        if (order.hasAssignedDeliveryContact) ...[
+          const SizedBox(height: 16),
+          _CustomerCard(child: _DeliveryContactSummary(order: order)),
+        ],
+        if (order.adminNotes.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _CustomerCard(child: _AdminNoteSummary(order: order)),
+        ],
         const SizedBox(height: 16),
         _OrderContentSections(
           order: order,
@@ -6810,6 +6785,255 @@ class _OrderItemRow extends StatelessWidget {
   }
 }
 
+class _TrackingHeroCard extends StatelessWidget {
+  const _TrackingHeroCard({
+    required this.orderId,
+    required this.status,
+    required this.total,
+    required this.payment,
+  });
+
+  final String orderId;
+  final String status;
+  final String total;
+  final String payment;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _trackingStatusColor(status);
+    const statuses = AppConstants.customerTrackingStatuses;
+    final currentIndex = statuses.indexOf(status);
+    final effectiveIndex = currentIndex < 0 ? 0 : currentIndex;
+    final progress = statuses.length <= 1
+        ? 1.0
+        : (effectiveIndex / (statuses.length - 1)).clamp(0.0, 1.0);
+
+    return _CustomerCard(
+      padding: EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                const Color(0xFF123326),
+                _customerPrimary,
+                accent.withValues(alpha: 0.92),
+              ],
+            ),
+          ),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                context
+                                    .t('Order {id}', values: {'id': orderId}),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 22,
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                context.t('Live order progress'),
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.78),
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        _TrackingStatusPill(status: status, color: accent),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: progress),
+                      duration: const Duration(milliseconds: 850),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, _) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(999),
+                              child: LinearProgressIndicator(
+                                value: value,
+                                minHeight: 8,
+                                backgroundColor:
+                                    Colors.white.withValues(alpha: 0.22),
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  _customerGold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${(value * 100).round()}% ${context.t('complete')}',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.82),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _TrackingMetric(
+                            icon: Icons.payments_outlined,
+                            label: 'Total',
+                            value: total,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _TrackingMetric(
+                            icon: Icons.account_balance_wallet_outlined,
+                            label: 'Payment',
+                            value: payment,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackingStatusPill extends StatelessWidget {
+  const _TrackingStatusPill({required this.status, required this.color});
+
+  final String status;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 156),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: color == _customerWarning ? _customerGold : Colors.white,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              context.t(status),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrackingMetric extends StatelessWidget {
+  const _TrackingMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: Colors.white, size: 20),
+          const SizedBox(height: 9),
+          Text(
+            context.t(label),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.72),
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              height: 1.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TrackingSteps extends StatelessWidget {
   const _TrackingSteps({required this.status});
 
@@ -6821,12 +7045,61 @@ class _TrackingSteps extends StatelessWidget {
     final currentIndex = statuses.indexOf(status);
     final effectiveIndex = currentIndex < 0 ? 0 : currentIndex;
     final isTerminalStatus = status == 'Cancelled' || status == 'Rejected';
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final progress = statuses.length <= 1
+        ? 1.0
+        : (effectiveIndex / (statuses.length - 1)).clamp(0.0, 1.0);
     return _CustomerCard(
-      child: Padding(
-        padding: EdgeInsets.zero,
+      padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: progress),
+        duration: const Duration(milliseconds: 900),
+        curve: Curves.easeOutCubic,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: _trackingStatusColor(status).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    _trackingStatusIcon(status),
+                    color: _trackingStatusColor(status),
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.t('Tracking status'),
+                        style: const TextStyle(
+                          color: _customerInk,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        context.t(status),
+                        style: TextStyle(
+                          color: _trackingStatusColor(status),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
             for (var i = 0; i < statuses.length; i++)
               Builder(
                 builder: (context) {
@@ -6834,75 +7107,275 @@ class _TrackingSteps extends StatelessWidget {
                   final isComplete = isTerminalStatus
                       ? i == 0 || isCurrent
                       : i <= effectiveIndex;
-                  final stepColor = isCurrent
-                      ? _currentStepColor(status, primaryColor)
-                      : primaryColor;
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      bottom: i == statuses.length - 1 ? 0 : 4,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Column(
-                          children: [
-                            Icon(
-                              isComplete
-                                  ? Icons.check_circle
-                                  : Icons.radio_button_unchecked,
-                              color: isComplete
-                                  ? stepColor
-                                  : const Color(0xFFB8C2BB),
-                            ),
-                            if (i != statuses.length - 1)
-                              Container(
-                                height: 30,
-                                width: 2,
-                                color: !isTerminalStatus && i < effectiveIndex
-                                    ? primaryColor
-                                    : const Color(0xFFDDE5DD),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              context.t(statuses[i]),
-                              style: TextStyle(
-                                color:
-                                    isCurrent ? _customerInk : _customerMuted,
-                                fontWeight: isCurrent
-                                    ? FontWeight.w900
-                                    : FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  return _TrackingStepTile(
+                    title: statuses[i],
+                    index: i,
+                    isLast: i == statuses.length - 1,
+                    isCurrent: isCurrent,
+                    isComplete: isComplete,
                   );
                 },
               ),
           ],
         ),
+        builder: (context, value, child) {
+          return Stack(
+            children: [
+              Positioned(
+                left: 20,
+                top: 76,
+                bottom: 33,
+                child: Container(
+                  width: 3,
+                  decoration: BoxDecoration(
+                    color: _customerLine,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 20,
+                top: 76,
+                bottom: 33,
+                child: FractionallySizedBox(
+                  heightFactor: value,
+                  alignment: Alignment.topCenter,
+                  child: Container(
+                    width: 3,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [_customerPrimary, _customerGold],
+                      ),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+              ),
+              child!,
+            ],
+          );
+        },
       ),
     );
   }
+}
 
-  Color _currentStepColor(String status, Color fallback) {
-    switch (status) {
-      case 'Cancelled':
-      case 'Rejected':
-      case 'Item Unavailable':
-        return const Color(0xFFC83A2B);
-      case 'Need Clarification':
-      case 'Bill Updated':
-        return const Color(0xFFB66D00);
-      default:
-        return fallback;
-    }
+class _TrackingStepTile extends StatelessWidget {
+  const _TrackingStepTile({
+    required this.title,
+    required this.index,
+    required this.isLast,
+    required this.isCurrent,
+    required this.isComplete,
+  });
+
+  final String title;
+  final int index;
+  final bool isLast;
+  final bool isCurrent;
+  final bool isComplete;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isCurrent
+        ? _trackingStatusColor(title)
+        : isComplete
+            ? _customerPrimary
+            : _customerMuted;
+    return _FadeSlideIn(
+      index: index,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: isComplete
+                    ? color.withValues(alpha: 0.13)
+                    : _customerBackground,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isComplete
+                      ? color.withValues(alpha: 0.28)
+                      : _customerLine,
+                  width: isCurrent ? 2 : 1,
+                ),
+                boxShadow: isCurrent
+                    ? [
+                        BoxShadow(
+                          color: color.withValues(alpha: 0.22),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Icon(
+                isComplete
+                    ? _trackingStatusIcon(title)
+                    : Icons.radio_button_unchecked,
+                color: color,
+                size: isCurrent ? 23 : 21,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 11,
+                ),
+                decoration: BoxDecoration(
+                  color: isCurrent
+                      ? color.withValues(alpha: 0.08)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isCurrent
+                        ? color.withValues(alpha: 0.18)
+                        : Colors.transparent,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        context.t(title),
+                        style: TextStyle(
+                          color: isCurrent ? _customerInk : color,
+                          fontWeight:
+                              isCurrent ? FontWeight.w900 : FontWeight.w800,
+                          height: 1.25,
+                        ),
+                      ),
+                    ),
+                    if (isCurrent) ...[
+                      const SizedBox(width: 8),
+                      _TrackingPulseDot(color: color),
+                    ] else if (isComplete) ...[
+                      const SizedBox(width: 8),
+                      Icon(Icons.done, color: color, size: 18),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackingPulseDot extends StatefulWidget {
+  const _TrackingPulseDot({required this.color});
+
+  final Color color;
+
+  @override
+  State<_TrackingPulseDot> createState() => _TrackingPulseDotState();
+}
+
+class _TrackingPulseDotState extends State<_TrackingPulseDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final value = Curves.easeInOut.transform(_controller.value);
+        return Container(
+          width: 10 + value * 4,
+          height: 10 + value * 4,
+          decoration: BoxDecoration(
+            color: widget.color.withValues(alpha: 0.28 + value * 0.26),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: widget.color,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+Color _trackingStatusColor(String status) {
+  switch (status) {
+    case 'Cancelled':
+    case 'Rejected':
+    case 'Item Unavailable':
+      return _customerDanger;
+    case 'Pending':
+    case 'Need Clarification':
+    case 'Bill Updated':
+      return _customerWarning;
+    case 'Accepted':
+    case 'Shopping Started':
+    case 'Out for Delivery':
+      return _customerBlue;
+    case 'Delivered':
+      return _customerPrimary;
+    default:
+      return _customerMuted;
+  }
+}
+
+IconData _trackingStatusIcon(String status) {
+  switch (status) {
+    case 'Pending':
+      return Icons.schedule_rounded;
+    case 'Accepted':
+      return Icons.verified_outlined;
+    case 'Need Clarification':
+      return Icons.contact_support_outlined;
+    case 'Shopping Started':
+      return Icons.shopping_cart_checkout_rounded;
+    case 'Bill Updated':
+      return Icons.receipt_long_outlined;
+    case 'Out for Delivery':
+      return Icons.delivery_dining_rounded;
+    case 'Delivered':
+      return Icons.check_circle_outline_rounded;
+    case 'Rejected':
+    case 'Cancelled':
+    case 'Item Unavailable':
+      return Icons.cancel_outlined;
+    default:
+      return Icons.radio_button_checked;
   }
 }
 
