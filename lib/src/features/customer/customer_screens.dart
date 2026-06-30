@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -234,6 +235,7 @@ class _PressableState extends State<_Pressable> {
 
 class _FadeSlideIn extends StatelessWidget {
   const _FadeSlideIn({
+    super.key,
     required this.child,
     this.index = 0,
   });
@@ -563,6 +565,7 @@ class CustomerHomeScreen extends StatelessWidget {
                     title: 'Photo list',
                     subtitle: 'Send list photo',
                     accent: _customerBlue,
+                    featured: true,
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => const UploadBillScreen(),
@@ -728,7 +731,8 @@ class _HomeHeader extends StatelessWidget {
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
-                                        color: Colors.white.withValues(alpha: 0.82),
+                                        color: Colors.white
+                                            .withValues(alpha: 0.82),
                                         height: 1.24,
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,
@@ -1373,7 +1377,8 @@ class _HomeOfferBanner extends StatelessWidget {
                 DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: radius,
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.18)),
                   ),
                 ),
                 Padding(
@@ -1662,7 +1667,8 @@ class _HomeFreshPicksHeader extends StatelessWidget {
             decoration: BoxDecoration(
               color: _customerPrimaryLight,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: _customerPrimary.withValues(alpha: 0.12)),
+              border:
+                  Border.all(color: _customerPrimary.withValues(alpha: 0.12)),
             ),
             child: const Icon(
               Icons.local_florist_outlined,
@@ -1793,6 +1799,7 @@ class _HomeActionSpec {
     required this.subtitle,
     required this.accent,
     required this.onTap,
+    this.featured = false,
   });
 
   final IconData icon;
@@ -1800,6 +1807,7 @@ class _HomeActionSpec {
   final String subtitle;
   final Color accent;
   final VoidCallback onTap;
+  final bool featured;
 }
 
 class _HomeActionGrid extends StatelessWidget {
@@ -1817,6 +1825,46 @@ class _HomeActionGrid extends StatelessWidget {
             : compact
                 ? 8.0
                 : 12.0;
+        final featured = actions.where((action) => action.featured).toList();
+        final secondary = actions.where((action) => !action.featured).toList();
+
+        if (featured.isNotEmpty && secondary.isNotEmpty) {
+          return Column(
+            children: [
+              for (var i = 0; i < featured.length; i++) ...[
+                _HomeActionTile(
+                  icon: featured[i].icon,
+                  title: featured[i].title,
+                  subtitle: featured[i].subtitle,
+                  accent: featured[i].accent,
+                  onTap: featured[i].onTap,
+                  compact: compact,
+                  featured: true,
+                ),
+                if (i != featured.length - 1) SizedBox(height: spacing),
+              ],
+              SizedBox(height: spacing),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < secondary.length; i++) ...[
+                    Expanded(
+                      child: _HomeActionTile(
+                        icon: secondary[i].icon,
+                        title: secondary[i].title,
+                        subtitle: secondary[i].subtitle,
+                        accent: secondary[i].accent,
+                        onTap: secondary[i].onTap,
+                        compact: compact,
+                      ),
+                    ),
+                    if (i != secondary.length - 1) SizedBox(width: spacing),
+                  ],
+                ],
+              ),
+            ],
+          );
+        }
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1830,6 +1878,7 @@ class _HomeActionGrid extends StatelessWidget {
                   accent: actions[i].accent,
                   onTap: actions[i].onTap,
                   compact: compact,
+                  featured: actions[i].featured,
                 ),
               ),
               if (i != actions.length - 1) SizedBox(width: spacing),
@@ -1849,6 +1898,7 @@ class _HomeActionTile extends StatelessWidget {
     required this.accent,
     required this.onTap,
     this.compact = false,
+    this.featured = false,
   });
 
   final IconData icon;
@@ -1857,17 +1907,52 @@ class _HomeActionTile extends StatelessWidget {
   final Color accent;
   final VoidCallback onTap;
   final bool compact;
+  final bool featured;
 
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(8);
-    final tileHeight = compact ? 140.0 : 150.0;
-    final contentPadding = compact
-        ? const EdgeInsets.fromLTRB(10, 12, 9, 12)
-        : const EdgeInsets.fromLTRB(15, 15, 14, 14);
-    final badgeSize = compact ? 40.0 : 48.0;
-    final arrowSize = compact ? 26.0 : 30.0;
-    final backgroundIconSize = compact ? 82.0 : 96.0;
+    final tileHeight = featured
+        ? compact
+            ? 126.0
+            : 136.0
+        : compact
+            ? 116.0
+            : 132.0;
+    final contentPadding = featured
+        ? compact
+            ? const EdgeInsets.fromLTRB(15, 14, 14, 14)
+            : const EdgeInsets.fromLTRB(18, 17, 18, 17)
+        : compact
+            ? const EdgeInsets.fromLTRB(10, 12, 9, 12)
+            : const EdgeInsets.fromLTRB(15, 15, 14, 14);
+    final badgeSize = featured
+        ? compact
+            ? 50.0
+            : 56.0
+        : compact
+            ? 40.0
+            : 48.0;
+    final arrowSize = featured
+        ? compact
+            ? 34.0
+            : 38.0
+        : compact
+            ? 26.0
+            : 30.0;
+    final backgroundIconSize = featured
+        ? compact
+            ? 118.0
+            : 138.0
+        : compact
+            ? 82.0
+            : 96.0;
+    final titleColor = featured ? Colors.white : _customerInk;
+    final subtitleColor =
+        featured ? Colors.white.withValues(alpha: 0.84) : _customerMuted;
+    final arrowBackground = featured
+        ? Colors.white.withValues(alpha: 0.92)
+        : Colors.white.withValues(alpha: 0.86);
 
     return _Pressable(
       child: AnimatedContainer(
@@ -1876,22 +1961,32 @@ class _HomeActionTile extends StatelessWidget {
         height: tileHeight,
         decoration: BoxDecoration(
           borderRadius: radius,
-          border: Border.all(color: accent.withValues(alpha: 0.20)),
+          border: Border.all(
+            color: featured
+                ? Colors.white.withValues(alpha: 0.16)
+                : accent.withValues(alpha: 0.20),
+          ),
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Colors.white,
-              Color.lerp(Colors.white, accent, 0.065)!,
-              Color.lerp(Colors.white, accent, 0.11)!,
-            ],
+            colors: featured
+                ? [
+                    Color.lerp(accent, Colors.white, 0.05)!,
+                    accent,
+                    Color.lerp(accent, Colors.black, 0.22)!,
+                  ]
+                : [
+                    Colors.white,
+                    Color.lerp(Colors.white, accent, 0.065)!,
+                    Color.lerp(Colors.white, accent, 0.11)!,
+                  ],
             stops: const [0.0, 0.62, 1.0],
           ),
           boxShadow: [
             BoxShadow(
-              color: accent.withValues(alpha: 0.13),
-              blurRadius: 24,
-              offset: const Offset(0, 12),
+              color: accent.withValues(alpha: featured ? 0.24 : 0.13),
+              blurRadius: featured ? 28 : 24,
+              offset: Offset(0, featured ? 14 : 12),
             ),
           ],
         ),
@@ -1925,12 +2020,24 @@ class _HomeActionTile extends StatelessWidget {
                     child: const SizedBox(width: 5),
                   ),
                 ),
+                if (featured)
+                  Positioned(
+                    left: -22,
+                    top: -42,
+                    child: Icon(
+                      Icons.receipt_long_outlined,
+                      color: Colors.white.withValues(alpha: 0.055),
+                      size: 118,
+                    ),
+                  ),
                 Positioned(
-                  right: -16,
-                  bottom: -18,
+                  right: featured ? -10 : -16,
+                  bottom: featured ? -26 : -18,
                   child: Icon(
                     icon,
-                    color: accent.withValues(alpha: 0.065),
+                    color: featured
+                        ? Colors.white.withValues(alpha: 0.12)
+                        : accent.withValues(alpha: 0.065),
                     size: backgroundIconSize,
                   ),
                 ),
@@ -1945,22 +2052,31 @@ class _HomeActionTile extends StatelessWidget {
                             icon: icon,
                             accent: accent,
                             size: badgeSize,
+                            featured: featured,
                           ),
                           const Spacer(),
                           Container(
                             width: arrowSize,
                             height: arrowSize,
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.86),
+                              color: arrowBackground,
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: accent.withValues(alpha: 0.20),
+                                color: featured
+                                    ? Colors.white.withValues(alpha: 0.22)
+                                    : accent.withValues(alpha: 0.20),
                               ),
                             ),
                             child: Icon(
                               Icons.arrow_forward,
                               color: accent,
-                              size: compact ? 15 : 16,
+                              size: featured
+                                  ? compact
+                                      ? 19
+                                      : 21
+                                  : compact
+                                      ? 15
+                                      : 16,
                             ),
                           ),
                         ],
@@ -1972,9 +2088,19 @@ class _HomeActionTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style:
                             Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: _customerInk,
-                                  fontSize: compact ? 13 : null,
-                                  height: compact ? 1.05 : null,
+                                  color: titleColor,
+                                  fontSize: featured
+                                      ? compact
+                                          ? 22
+                                          : 24
+                                      : compact
+                                          ? 13
+                                          : null,
+                                  height: featured
+                                      ? 1.0
+                                      : compact
+                                          ? 1.05
+                                          : null,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 0,
                                 ),
@@ -1985,8 +2111,14 @@ class _HomeActionTile extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: _customerMuted,
-                          fontSize: compact ? 10.8 : 12,
+                          color: subtitleColor,
+                          fontSize: featured
+                              ? compact
+                                  ? 13
+                                  : 14
+                              : compact
+                                  ? 10.8
+                                  : 12,
                           fontWeight: FontWeight.w700,
                           height: compact ? 1.18 : 1.22,
                         ),
@@ -2008,11 +2140,13 @@ class _HomeActionIconBadge extends StatelessWidget {
     required this.icon,
     required this.accent,
     this.size = 46,
+    this.featured = false,
   });
 
   final IconData icon;
   final Color accent;
   final double size;
+  final bool featured;
 
   @override
   Widget build(BuildContext context) {
@@ -2021,13 +2155,19 @@ class _HomeActionIconBadge extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        color: Colors.white.withValues(alpha: 0.88),
-        border: Border.all(color: accent.withValues(alpha: 0.18)),
+        color: featured
+            ? Colors.white.withValues(alpha: 0.92)
+            : Colors.white.withValues(alpha: 0.88),
+        border: Border.all(
+          color: featured
+              ? Colors.white.withValues(alpha: 0.22)
+              : accent.withValues(alpha: 0.18),
+        ),
         boxShadow: [
           BoxShadow(
-            color: accent.withValues(alpha: 0.12),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            color: accent.withValues(alpha: featured ? 0.22 : 0.12),
+            blurRadius: featured ? 16 : 12,
+            offset: Offset(0, featured ? 8 : 6),
           ),
         ],
       ),
@@ -3072,44 +3212,739 @@ class _CartItemTile extends StatelessWidget {
   }
 }
 
-class _UploadPlaceholder extends StatelessWidget {
-  const _UploadPlaceholder();
+class _UploadHeaderScene extends StatefulWidget {
+  const _UploadHeaderScene({required this.hasImage});
+
+  final bool hasImage;
+
+  @override
+  State<_UploadHeaderScene> createState() => _UploadHeaderSceneState();
+}
+
+class _UploadHeaderSceneState extends State<_UploadHeaderScene>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _FadeSlideIn(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final sweep = -0.85 + (_controller.value * 1.7);
+          final float = math.sin(_controller.value * math.pi * 2) * 5;
+          return Container(
+            height: 216,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF0E5435),
+                  Color(0xFF19744B),
+                  Color(0xFF2E6F9E),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _customerPrimary.withValues(alpha: 0.24),
+                  blurRadius: 30,
+                  offset: const Offset(0, 16),
+                ),
+              ],
+            ),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned(
+                  right: -18,
+                  top: -34,
+                  child: Icon(
+                    Icons.document_scanner_outlined,
+                    color: Colors.white.withValues(alpha: 0.08),
+                    size: 178,
+                  ),
+                ),
+                Positioned(
+                  right: 4,
+                  bottom: -2 + float,
+                  child: _UploadFloatingPaper(scanAlignment: sweep),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 116,
+                  top: 0,
+                  bottom: 0,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.18),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              widget.hasImage
+                                  ? Icons.check_circle
+                                  : Icons.flash_on,
+                              color: Colors.white,
+                              size: 15,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              context.t(
+                                widget.hasImage
+                                    ? 'Photo attached'
+                                    : 'Fast list upload',
+                              ),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        context.t('Send your grocery list photo'),
+                        style:
+                            Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0,
+                                  height: 1.02,
+                                ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        context.t(
+                          'We will read your list, price the items, and update your bill.',
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.84),
+                          fontWeight: FontWeight.w700,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _UploadFloatingPaper extends StatelessWidget {
+  const _UploadFloatingPaper({required this.scanAlignment});
+
+  final double scanAlignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 104,
+      height: 132,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.42)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.16),
+            blurRadius: 22,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 44,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: _customerBlue.withValues(alpha: 0.82),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                const SizedBox(height: 13),
+                for (var i = 0; i < 5; i++) ...[
+                  Row(
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: _customerPrimary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Container(
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE3ECE7),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (i != 4) const SizedBox(height: 10),
+                ],
+              ],
+            ),
+          ),
+          Align(
+            alignment: Alignment(0, scanAlignment),
+            child: Container(
+              height: 3,
+              decoration: BoxDecoration(
+                color: _customerPrimary.withValues(alpha: 0.72),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: _customerPrimary.withValues(alpha: 0.28),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UploadPhotoStage extends StatelessWidget {
+  const _UploadPhotoStage({
+    required this.hasImage,
+    required this.path,
+    required this.onPick,
+  });
+
+  final bool hasImage;
+  final String? path;
+  final VoidCallback onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: hasImage && path != null
+          ? _FadeSlideIn(
+              key: ValueKey(path),
+              child: _BillImagePreview(path: path!),
+            )
+          : _AnimatedUploadPlaceholder(
+              key: const ValueKey('empty-upload-placeholder'),
+              onPick: onPick,
+            ),
+    );
+  }
+}
+
+class _AnimatedUploadPlaceholder extends StatefulWidget {
+  const _AnimatedUploadPlaceholder({super.key, required this.onPick});
+
+  final VoidCallback onPick;
+
+  @override
+  State<_AnimatedUploadPlaceholder> createState() =>
+      _AnimatedUploadPlaceholderState();
+}
+
+class _AnimatedUploadPlaceholderState extends State<_AnimatedUploadPlaceholder>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _Pressable(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final scanY = -0.85 + (_controller.value * 1.7);
+          final pulse =
+              0.94 + (math.sin(_controller.value * math.pi * 2) * 0.04);
+          return Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: widget.onPick,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(minHeight: 318),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: _customerLine),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _customerPrimary.withValues(alpha: 0.08),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white,
+                      Color(0xFFF5FBF8),
+                    ],
+                  ),
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          gradient: RadialGradient(
+                            center: const Alignment(0.2, -0.25),
+                            radius: 0.86,
+                            colors: [
+                              _customerPrimaryLight.withValues(alpha: 0.72),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: Align(
+                        alignment: Alignment(0, scanY),
+                        child: Container(
+                          height: 3,
+                          margin: const EdgeInsets.symmetric(horizontal: 22),
+                          decoration: BoxDecoration(
+                            color: _customerPrimary.withValues(alpha: 0.34),
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _customerPrimary.withValues(alpha: 0.20),
+                                blurRadius: 12,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 12,
+                      top: 12,
+                      child: _UploadCornerMark(
+                        alignment: Alignment.topLeft,
+                        color: _customerPrimary.withValues(alpha: 0.34),
+                      ),
+                    ),
+                    Positioned(
+                      right: 12,
+                      top: 12,
+                      child: _UploadCornerMark(
+                        alignment: Alignment.topRight,
+                        color: _customerPrimary.withValues(alpha: 0.34),
+                      ),
+                    ),
+                    Positioned(
+                      left: 12,
+                      bottom: 12,
+                      child: _UploadCornerMark(
+                        alignment: Alignment.bottomLeft,
+                        color: _customerPrimary.withValues(alpha: 0.34),
+                      ),
+                    ),
+                    Positioned(
+                      right: 12,
+                      bottom: 12,
+                      child: _UploadCornerMark(
+                        alignment: Alignment.bottomRight,
+                        color: _customerPrimary.withValues(alpha: 0.34),
+                      ),
+                    ),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Transform.scale(
+                          scale: pulse,
+                          child: Container(
+                            width: 94,
+                            height: 94,
+                            decoration: BoxDecoration(
+                              color: _customerPrimaryLight,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _customerPrimary.withValues(alpha: 0.10),
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.add_photo_alternate_outlined,
+                              color: _customerPrimary,
+                              size: 46,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          context.t('Place your list photo here'),
+                          textAlign: TextAlign.center,
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: _customerInk,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0,
+                                  ),
+                        ),
+                        const SizedBox(height: 7),
+                        Text(
+                          context.t(
+                            'Handwritten, printed, or shop list photos are accepted.',
+                          ),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: _customerMuted,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _UploadCornerMark extends StatelessWidget {
+  const _UploadCornerMark({
+    required this.alignment,
+    required this.color,
+  });
+
+  final Alignment alignment;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final left = alignment.x < 0;
+    final top = alignment.y < 0;
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: Stack(
+        children: [
+          Positioned(
+            left: left ? 0 : null,
+            right: left ? null : 0,
+            top: top ? 0 : null,
+            bottom: top ? null : 0,
+            child: Container(
+              width: 20,
+              height: 3,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+          Positioned(
+            left: left ? 0 : null,
+            right: left ? null : 0,
+            top: top ? 0 : null,
+            bottom: top ? null : 0,
+            child: Container(
+              width: 3,
+              height: 20,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UploadInfoPanel extends StatelessWidget {
+  const _UploadInfoPanel({required this.hasImage});
+
+  final bool hasImage;
 
   @override
   Widget build(BuildContext context) {
     return _CustomerCard(
-      padding: const EdgeInsets.all(22),
-      child: Column(
+      padding: const EdgeInsets.all(12),
+      child: Row(
         children: [
           Container(
-            width: 78,
-            height: 78,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: _customerPrimaryLight,
+              color: hasImage ? _customerPrimaryLight : const Color(0xFFEAF3F9),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(
-              Icons.add_photo_alternate_outlined,
-              color: _customerPrimary,
-              size: 38,
+            child: Icon(
+              hasImage ? Icons.verified_outlined : Icons.tips_and_updates,
+              color: hasImage ? _customerPrimary : _customerBlue,
+              size: 23,
             ),
           ),
-          const SizedBox(height: 14),
-          Text(
-            context.t('No list photo selected'),
-            style: const TextStyle(
-              color: _customerInk,
-              fontWeight: FontWeight.w900,
-              fontSize: 16,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.t(
+                    hasImage ? 'Ready for checkout' : 'For best results',
+                  ),
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  context.t(
+                    hasImage
+                        ? 'Continue when your list is clear and readable.'
+                        : 'Use bright light and keep the full list inside the frame.',
+                  ),
+                  style: const TextStyle(
+                    color: _customerMuted,
+                    fontWeight: FontWeight.w700,
+                    height: 1.28,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UploadActionBar extends StatelessWidget {
+  const _UploadActionBar({
+    required this.hasImage,
+    required this.onGallery,
+    required this.onCamera,
+    required this.onRemove,
+    required this.onCheckout,
+  });
+
+  final bool hasImage;
+  final VoidCallback onGallery;
+  final VoidCallback onCamera;
+  final VoidCallback onRemove;
+  final VoidCallback onCheckout;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.98),
+          border: const Border(top: BorderSide(color: _customerLine)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF163526).withValues(alpha: 0.10),
+              blurRadius: 22,
+              offset: const Offset(0, -8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: PrimaryActionButton(
+                    label: hasImage ? 'Change photo' : 'Choose photo',
+                    icon: Icons.photo_library,
+                    onPressed: onGallery,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 118,
+                  child: OutlinedButton.icon(
+                    onPressed: onCamera,
+                    icon: const Icon(Icons.photo_camera, size: 19),
+                    label: Text(context.t(hasImage ? 'Retake' : 'Camera')),
+                  ),
+                ),
+              ],
+            ),
+            if (hasImage) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 118,
+                    child: OutlinedButton.icon(
+                      onPressed: onRemove,
+                      icon: const Icon(Icons.delete_outline, size: 19),
+                      label: Text(context.t('Remove')),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: PrimaryActionButton(
+                      label: 'Continue to checkout',
+                      icon: Icons.payments,
+                      onPressed: onCheckout,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UploadStepStrip extends StatelessWidget {
+  const _UploadStepStrip();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        Expanded(
+          child: _UploadStepChip(
+            icon: Icons.photo_camera_outlined,
+            label: 'Capture',
+          ),
+        ),
+        SizedBox(width: 8),
+        Expanded(
+          child: _UploadStepChip(
+            icon: Icons.fact_check_outlined,
+            label: 'Review',
+          ),
+        ),
+        SizedBox(width: 8),
+        Expanded(
+          child: _UploadStepChip(
+            icon: Icons.payments_outlined,
+            label: 'Bill',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _UploadStepChip extends StatelessWidget {
+  const _UploadStepChip({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 72,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.86),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _customerLine),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: _customerPrimary, size: 21),
           const SizedBox(height: 6),
           Text(
-            context.t('Use gallery or camera to attach your list.'),
-            textAlign: TextAlign.center,
+            context.t(label),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              color: _customerMuted,
-              fontWeight: FontWeight.w600,
+              color: _customerInk,
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
             ),
           ),
         ],
@@ -3124,103 +3959,65 @@ class UploadBillScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    Future<void> choosePhoto() async {
+      final imageFile = await pickImageFromGallery();
+      if (imageFile == null) {
+        return;
+      }
+      if (!context.mounted) {
+        return;
+      }
+      await appState.setBillImagePath(imageFile.path);
+    }
+
+    Future<void> takePhoto() async {
+      final imageFile = await takePhotoFromCamera();
+      if (imageFile == null) {
+        return;
+      }
+      if (!context.mounted) {
+        return;
+      }
+      await appState.setBillImagePath(imageFile.path);
+    }
+
     return _CustomerScaffold(
       title: 'Upload list',
       body: _CustomerScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
         children: [
-          _CustomerCard(
-            child: Row(
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: _customerPrimaryLight,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.receipt_long,
-                    color: _customerPrimary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    context.t(
-                      'Upload a clear handwritten, printed, or shop list photo. Admin will review it and update your final bill.',
-                    ),
-                    style: const TextStyle(
-                      color: _customerMuted,
-                      fontWeight: FontWeight.w700,
-                      height: 1.35,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          _UploadHeaderScene(
+            hasImage: appState.hasBillImage,
           ),
           const SizedBox(height: 16),
-          if (appState.hasBillImage)
-            _BillImagePreview(path: appState.billImagePath!)
-          else
-            const _UploadPlaceholder(),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: PrimaryActionButton(
-                  label: appState.hasBillImage ? 'Gallery' : 'Choose photo',
-                  icon: Icons.photo_library,
-                  onPressed: () async {
-                    final imageFile = await pickImageFromGallery();
-                    if (imageFile == null) {
-                      return;
-                    }
-                    if (!context.mounted) {
-                      return;
-                    }
-                    await appState.setBillImagePath(imageFile.path);
-                  },
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    final imageFile = await takePhotoFromCamera();
-                    if (imageFile == null) {
-                      return;
-                    }
-                    if (!context.mounted) {
-                      return;
-                    }
-                    await appState.setBillImagePath(imageFile.path);
-                  },
-                  icon: const Icon(Icons.photo_camera),
-                  label: Text(
-                    context.t(appState.hasBillImage ? 'Retake' : 'Camera'),
-                  ),
-                ),
-              ),
-            ],
+          _UploadPhotoStage(
+            hasImage: appState.hasBillImage,
+            path: appState.billImagePath,
+            onPick: choosePhoto,
           ),
-          if (appState.hasBillImage) ...[
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: () => appState.setBillImagePath(null),
-              icon: const Icon(Icons.delete_outline),
-              label: Text(context.t('Remove photo')),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton.icon(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const CheckoutScreen()),
-              ),
-              icon: const Icon(Icons.payments),
-              label: Text(context.t('Continue to checkout')),
-            ),
-          ],
+          const SizedBox(height: 16),
+          const _FadeSlideIn(
+            index: 2,
+            child: _UploadStepStrip(),
+          ),
+          const SizedBox(height: 12),
+          _FadeSlideIn(
+            index: 3,
+            child: _UploadInfoPanel(hasImage: appState.hasBillImage),
+          ),
+          SizedBox(height: appState.hasBillImage ? 126 : 74),
         ],
+      ),
+      bottomNavigationBar: _UploadActionBar(
+        hasImage: appState.hasBillImage,
+        onGallery: choosePhoto,
+        onCamera: takePhoto,
+        onRemove: () => appState.setBillImagePath(null),
+        onCheckout: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const CheckoutScreen(),
+          ),
+        ),
       ),
     );
   }
@@ -6528,7 +7325,8 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF163526).withValues(alpha: 0.06),
+                          color:
+                              const Color(0xFF163526).withValues(alpha: 0.06),
                           blurRadius: 16,
                           offset: const Offset(0, 8),
                         ),
