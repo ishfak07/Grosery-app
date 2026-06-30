@@ -5896,25 +5896,22 @@ class _DeliveredOrderCompletionView extends StatelessWidget {
   Widget build(BuildContext context) {
     return _CustomerScrollView(
       children: [
-        _OrderTerminalHero(
-          icon: Icons.check_circle_outline,
-          color: _customerPrimary,
-          status: order.orderStatus,
-          title: 'Thank you for your order!',
-          message:
-              'Your groceries have been delivered successfully. We hope everything reached you safely.',
-        ),
+        _DeliveredSuccessHero(order: order),
+        const SizedBox(height: 16),
+        _TrackingSteps(status: order.orderStatus),
         const SizedBox(height: 16),
         const _CustomerSectionHeader(
           title: 'Amount details',
           subtitle: 'Final bill summary',
         ),
-        _OrderBillBreakdown(order: order),
+        _DeliveredBillBreakdown(order: order),
         const SizedBox(height: 12),
-        _OrderSummaryCard(order: order),
+        _DeliveredOrderSnapshot(order: order),
         if (order.hasAssignedDeliveryContact) ...[
           const SizedBox(height: 12),
-          _CustomerCard(child: _DeliveryContactSummary(order: order)),
+          _DeliveredInfoPanel(
+            child: _DeliveryContactSummary(order: order),
+          ),
         ],
         if (order.assignedDeliveryBoyId.isNotEmpty) ...[
           const SizedBox(height: 12),
@@ -5936,6 +5933,560 @@ class _DeliveredOrderCompletionView extends StatelessWidget {
         const SizedBox(height: 8),
         _OrderSupportButton(order: order),
       ],
+    );
+  }
+}
+
+class _DeliveredSuccessHero extends StatelessWidget {
+  const _DeliveredSuccessHero({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerCard(
+      padding: EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF0F2B21),
+                Color(0xFF176B45),
+                Color(0xFF2E6F9E),
+              ],
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
+            child: Column(
+              children: [
+                const _DeliveredCheckMark(),
+                const SizedBox(height: 18),
+                Text(
+                  context.t('Thank you for your order!'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0,
+                    height: 1.12,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  context.t(
+                    'Your groceries have been delivered successfully. We hope everything reached you safely.',
+                  ),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.80),
+                    fontWeight: FontWeight.w700,
+                    height: 1.42,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DeliveredHeroMetric(
+                        icon: Icons.receipt_long_outlined,
+                        label: 'Order',
+                        value: '#${order.orderId.substring(0, 8)}',
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _DeliveredHeroMetric(
+                        icon: Icons.payments_outlined,
+                        label: 'Paid',
+                        value: order.totalAmount.money,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _DeliveredStatusBanner(status: order.orderStatus),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DeliveredCheckMark extends StatefulWidget {
+  const _DeliveredCheckMark();
+
+  @override
+  State<_DeliveredCheckMark> createState() => _DeliveredCheckMarkState();
+}
+
+class _DeliveredCheckMarkState extends State<_DeliveredCheckMark>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final value = Curves.easeOutBack.transform(_controller.value);
+        return Transform.scale(
+          scale: 0.72 + value * 0.28,
+          child: Container(
+            width: 92,
+            height: 92,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+            ),
+            child: Center(
+              child: Container(
+                width: 62,
+                height: 62,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_rounded,
+                  color: _customerPrimary,
+                  size: 40,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DeliveredHeroMetric extends StatelessWidget {
+  const _DeliveredHeroMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.white, size: 20),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.t(label),
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.68),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveredStatusBanner extends StatelessWidget {
+  const _DeliveredStatusBanner({required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 900),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, _) {
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.verified_rounded,
+                    color: _customerGold,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      context.t(status),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${(value * 100).round()}%',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.78),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: value,
+                  minHeight: 7,
+                  backgroundColor: Colors.white.withValues(alpha: 0.20),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    _customerGold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DeliveredBillBreakdown extends StatelessWidget {
+  const _DeliveredBillBreakdown({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _DeliveredMoneyRow(
+            icon: Icons.shopping_basket_outlined,
+            label: 'Cart items',
+            value: order.cartItemsAmount.money,
+          ),
+          _DeliveredMoneyRow(
+            icon: Icons.photo_camera_outlined,
+            label: 'Photo list items',
+            value: order.photoListAmount.money,
+          ),
+          _DeliveredMoneyRow(
+            icon: Icons.edit_note_outlined,
+            label: 'Manual list items',
+            value: order.manualListAmount.money,
+          ),
+          const Divider(height: 24),
+          _DeliveredMoneyRow(
+            icon: Icons.receipt_outlined,
+            label: 'Order subtotal',
+            value: order.subtotal.money,
+          ),
+          _DeliveredMoneyRow(
+            icon: Icons.local_shipping_outlined,
+            label: 'Delivery charge',
+            value: order.deliveryCharge.money,
+          ),
+          _DeliveredMoneyRow(
+            icon: Icons.design_services_outlined,
+            label: 'Service charge',
+            value: order.serviceCharge.money,
+          ),
+          const Divider(height: 24),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _customerPrimaryLight,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: _customerPrimary.withValues(alpha: 0.16),
+              ),
+            ),
+            child: _DeliveredMoneyRow(
+              icon: Icons.task_alt_rounded,
+              label: 'Grand total',
+              value: order.totalAmount.money,
+              isStrong: true,
+              bottomPadding: 0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveredMoneyRow extends StatelessWidget {
+  const _DeliveredMoneyRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.isStrong = false,
+    this.bottomPadding = 10,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool isStrong;
+  final double bottomPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomPadding),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: isStrong
+                  ? _customerPrimary.withValues(alpha: 0.12)
+                  : _customerBackground,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: _customerLine),
+            ),
+            child: Icon(
+              icon,
+              color: isStrong ? _customerPrimary : _customerMuted,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              context.t(label),
+              style: TextStyle(
+                color: _customerInk,
+                fontWeight: isStrong ? FontWeight.w900 : FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            value,
+            textAlign: TextAlign.end,
+            style: TextStyle(
+              color: isStrong ? _customerPrimary : _customerInk,
+              fontSize: isStrong ? 17 : 15,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveredOrderSnapshot extends StatelessWidget {
+  const _DeliveredOrderSnapshot({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: _customerBlue.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.inventory_2_outlined,
+                  color: _customerBlue,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.t('Order summary'),
+                      style: const TextStyle(
+                        color: _customerInk,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '#${order.orderId.substring(0, 8)}',
+                      style: const TextStyle(
+                        color: _customerMuted,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              StatusChip(status: order.orderStatus),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _DeliveredSnapshotTile(
+                  label: 'Payment',
+                  value:
+                      '${context.t(order.paymentMethod)} (${context.t(order.paymentStatus)})',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DeliveredSnapshotTile(
+                  label: 'Total',
+                  value: order.totalAmount.money,
+                  isStrong: true,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveredSnapshotTile extends StatelessWidget {
+  const _DeliveredSnapshotTile({
+    required this.label,
+    required this.value,
+    this.isStrong = false,
+  });
+
+  final String label;
+  final String value;
+  final bool isStrong;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isStrong ? _customerPrimaryLight : _customerBackground,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _customerLine),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            context.t(label),
+            style: const TextStyle(
+              color: _customerMuted,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: isStrong ? _customerPrimary : _customerInk,
+              fontWeight: FontWeight.w900,
+              height: 1.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeliveredInfoPanel extends StatelessWidget {
+  const _DeliveredInfoPanel({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerCard(
+      padding: const EdgeInsets.all(16),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              color: _customerAccent.withValues(alpha: 0.55),
+              width: 3,
+            ),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: child,
+        ),
+      ),
     );
   }
 }
