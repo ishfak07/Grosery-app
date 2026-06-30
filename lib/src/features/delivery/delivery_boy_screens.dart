@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/i18n/app_localizations.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/common_widgets.dart';
 import '../../models/models.dart';
@@ -43,7 +44,10 @@ class _DeliveryBoyDashboardScreenState
 
   Future<void> _initializeRewardStars() async {
     try {
-      await context.read<AppState>().authService.initializeDeliveryRewardStars();
+      await context
+          .read<AppState>()
+          .authService
+          .initializeDeliveryRewardStars();
     } catch (_) {
       // The profile stream will retry naturally after the backend is available.
     }
@@ -62,7 +66,7 @@ class _DeliveryBoyDashboardScreenState
     return Scaffold(
       backgroundColor: _deliveryBackground,
       appBar: AppBar(
-        title: const Text('Delivery dashboard'),
+        title: Text(context.t('Delivery dashboard')),
         backgroundColor: _deliveryBackground.withValues(alpha: 0.96),
         foregroundColor: _deliveryInk,
         surfaceTintColor: Colors.transparent,
@@ -102,101 +106,101 @@ class _DeliveryBoyDashboardScreenState
                     child: CustomScrollView(
                       physics: appRefreshScrollPhysics,
                       slivers: [
-                      const SliverToBoxAdapter(child: SizedBox(height: 16)),
-                      SliverToBoxAdapter(
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 820),
-                            child: _DeliveryDashboardHero(
-                              deliveryBoyName: profile.fullName,
-                              activeCount: activeOrders.length,
+                        const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                        SliverToBoxAdapter(
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 820),
+                              child: _DeliveryDashboardHero(
+                                deliveryBoyName: profile.fullName,
+                                activeCount: activeOrders.length,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 14)),
-                      SliverToBoxAdapter(
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 820),
-                            child: _DeliveryRewardCard(profile: profile),
+                        const SliverToBoxAdapter(child: SizedBox(height: 14)),
+                        SliverToBoxAdapter(
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 820),
+                              child: _DeliveryRewardCard(profile: profile),
+                            ),
                           ),
                         ),
-                      ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 14)),
-                      SliverToBoxAdapter(
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 820),
-                            child: _DeliveryPerformanceGrid(orders: orders),
+                        const SliverToBoxAdapter(child: SizedBox(height: 14)),
+                        SliverToBoxAdapter(
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 820),
+                              child: _DeliveryPerformanceGrid(orders: orders),
+                            ),
                           ),
                         ),
-                      ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 20)),
-                      SliverToBoxAdapter(
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 820),
-                            child: _DeliverySectionHeading(
+                        const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                        SliverToBoxAdapter(
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 820),
+                              child: _DeliverySectionHeading(
+                                bucket: _selectedBucket,
+                                count: visibleOrders.length,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SliverToBoxAdapter(child: SizedBox(height: 10)),
+                        SliverToBoxAdapter(
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 820),
+                              child: _DeliveryHistoryFilterBar(
+                                selected: _selectedBucket,
+                                activeCount: activeOrders.length,
+                                historyCount: historyOrders.length,
+                                allCount: orders.length,
+                                onSelected: (bucket) {
+                                  setState(() => _selectedBucket = bucket);
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                        if (visibleOrders.isEmpty)
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: _DeliveryEmptyOrders(
                               bucket: _selectedBucket,
-                              count: visibleOrders.length,
+                              hasAnyOrders: orders.isNotEmpty,
                             ),
-                          ),
-                        ),
-                      ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 10)),
-                      SliverToBoxAdapter(
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 820),
-                            child: _DeliveryHistoryFilterBar(
-                              selected: _selectedBucket,
-                              activeCount: activeOrders.length,
-                              historyCount: historyOrders.length,
-                              allCount: orders.length,
-                              onSelected: (bucket) {
-                                setState(() => _selectedBucket = bucket);
+                          )
+                        else
+                          SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                if (index.isOdd) {
+                                  return const SizedBox(height: 12);
+                                }
+                                final order = visibleOrders[index ~/ 2];
+                                return Align(
+                                  alignment: Alignment.topCenter,
+                                  child: ConstrainedBox(
+                                    constraints:
+                                        const BoxConstraints(maxWidth: 820),
+                                    child: _DeliveryOrderCard(order: order),
+                                  ),
+                                );
                               },
+                              childCount: visibleOrders.length * 2 - 1,
                             ),
                           ),
-                        ),
-                      ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 12)),
-                      if (visibleOrders.isEmpty)
-                        SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: _DeliveryEmptyOrders(
-                            bucket: _selectedBucket,
-                            hasAnyOrders: orders.isNotEmpty,
-                          ),
-                        )
-                      else
-                        SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              if (index.isOdd) {
-                                return const SizedBox(height: 12);
-                              }
-                              final order = visibleOrders[index ~/ 2];
-                              return Align(
-                                alignment: Alignment.topCenter,
-                                child: ConstrainedBox(
-                                  constraints:
-                                      const BoxConstraints(maxWidth: 820),
-                                  child: _DeliveryOrderCard(order: order),
-                                ),
-                              );
-                            },
-                            childCount: visibleOrders.length * 2 - 1,
-                          ),
-                        ),
-                      if (visibleOrders.isNotEmpty)
-                        const SliverToBoxAdapter(child: SizedBox(height: 28)),
+                        if (visibleOrders.isNotEmpty)
+                          const SliverToBoxAdapter(child: SizedBox(height: 28)),
                       ],
                     ),
                   );
@@ -282,9 +286,9 @@ class _DeliveryRewardCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'LKR 1,000 star reward',
-                      style: TextStyle(
+                    Text(
+                      context.t('LKR 1,000 star reward'),
+                      style: const TextStyle(
                         color: _deliveryInk,
                         fontWeight: FontWeight.w900,
                       ),
@@ -292,8 +296,14 @@ class _DeliveryRewardCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       rewardReady
-                          ? 'LKR $stars is available from your stars'
-                          : '$remaining stars until 1,000 stars',
+                          ? context.t(
+                              'LKR {amount} is available from your stars',
+                              values: {'amount': stars},
+                            )
+                          : context.t(
+                              '{count} stars until 1,000 stars',
+                              values: {'count': remaining},
+                            ),
                       style: const TextStyle(
                         color: _deliveryMuted,
                         fontSize: 12,
@@ -319,14 +329,15 @@ class _DeliveryRewardCard extends StatelessWidget {
               value: progress,
               minHeight: 9,
               backgroundColor: const Color(0xFFF1E6D6),
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(_deliveryWarning),
+              valueColor: const AlwaysStoppedAnimation<Color>(_deliveryWarning),
             ),
           ),
           const SizedBox(height: 10),
-          const Text(
-            '1 star = LKR 1. You can ask the admin for a partial or full payment.',
-            style: TextStyle(
+          Text(
+            context.t(
+              '1 star = LKR 1. You can ask the admin for a partial or full payment.',
+            ),
+            style: const TextStyle(
               color: _deliveryMuted,
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -414,18 +425,18 @@ class _DeliveryDashboardHero extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.white24),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.circle,
                           size: 8,
                           color: Color(0xFF8CE3B7),
                         ),
-                        SizedBox(width: 7),
+                        const SizedBox(width: 7),
                         Text(
-                          'Ready for delivery',
-                          style: TextStyle(
+                          context.t('Ready for delivery'),
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
@@ -438,7 +449,13 @@ class _DeliveryDashboardHero extends StatelessWidget {
               ),
               const SizedBox(height: 18),
               Text(
-                '$greeting, $firstName',
+                context.t(
+                  '{greeting}, {name}',
+                  values: {
+                    'greeting': context.t(greeting),
+                    'name': context.t(firstName),
+                  },
+                ),
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
@@ -448,10 +465,15 @@ class _DeliveryDashboardHero extends StatelessWidget {
               const SizedBox(height: 7),
               Text(
                 activeCount == 0
-                    ? 'You are all caught up. New assignments will appear here.'
+                    ? context.t(
+                        'You are all caught up. New assignments will appear here.',
+                      )
                     : activeCount == 1
-                        ? 'You have 1 delivery waiting for you.'
-                        : 'You have $activeCount deliveries waiting for you.',
+                        ? context.t('You have 1 delivery waiting for you.')
+                        : context.t(
+                            'You have {count} deliveries waiting for you.',
+                            values: {'count': activeCount},
+                          ),
                 style: const TextStyle(
                   color: Color(0xFFD9F0E4),
                   fontWeight: FontWeight.w600,
@@ -475,7 +497,8 @@ class _DeliveryPerformanceGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final delivered =
         orders.where((order) => order.orderStatus == 'Delivered').toList();
-    final reviewed = delivered.where((order) => order.hasDeliveryReview).toList();
+    final reviewed =
+        delivered.where((order) => order.hasDeliveryReview).toList();
     final averageRating = reviewed.isEmpty
         ? 0.0
         : reviewed.fold<int>(
@@ -517,10 +540,15 @@ class _DeliveryPerformanceGrid extends StatelessWidget {
       ),
       _DeliveryMetric(
         label: 'Customer rating',
-        value: reviewed.isEmpty ? 'New' : averageRating.toStringAsFixed(1),
+        value: reviewed.isEmpty
+            ? context.t('New')
+            : averageRating.toStringAsFixed(1),
         detail: reviewed.isEmpty
-            ? 'No reviews yet'
-            : '${reviewed.length} ${reviewed.length == 1 ? 'review' : 'reviews'}',
+            ? context.t('No reviews yet')
+            : reviewed.length == 1
+                ? context.t('1 review')
+                : context
+                    .t('{count} reviews', values: {'count': reviewed.length}),
         icon: Icons.star_rounded,
         color: _deliveryWarning,
       ),
@@ -530,8 +558,7 @@ class _DeliveryPerformanceGrid extends StatelessWidget {
       builder: (context, constraints) {
         const gap = 10.0;
         final columns = constraints.maxWidth >= 700 ? 4 : 2;
-        final width =
-            (constraints.maxWidth - (gap * (columns - 1))) / columns;
+        final width = (constraints.maxWidth - (gap * (columns - 1))) / columns;
         return Wrap(
           spacing: gap,
           runSpacing: gap,
@@ -587,7 +614,7 @@ class _DeliveryMetricCard extends StatelessWidget {
           ),
           const SizedBox(height: 3),
           Text(
-            metric.label,
+            context.t(metric.label),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -635,7 +662,7 @@ class _DeliverySectionHeading extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            title,
+            context.t(title),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: _deliveryInk,
                   fontWeight: FontWeight.w900,
@@ -716,7 +743,7 @@ class _DeliveryHistoryFilterBar extends StatelessWidget {
               size: 16,
               color: isSelected ? Colors.white : _deliveryPrimary,
             ),
-            label: Text('${option.label} (${option.count})'),
+            label: Text('${context.t(option.label)} (${option.count})'),
             labelStyle: TextStyle(
               color: isSelected ? Colors.white : _deliveryInk,
               fontWeight: FontWeight.w900,
@@ -876,7 +903,7 @@ class _DeliveryOrderCardState extends State<_DeliveryOrderCard> {
                 child: OutlinedButton.icon(
                   onPressed: () => _launchPhone(order.customerPhone),
                   icon: const Icon(Icons.call),
-                  label: const Text('Call customer'),
+                  label: Text(context.t('Call customer')),
                 ),
               ),
               const SizedBox(width: 10),
@@ -895,10 +922,10 @@ class _DeliveryOrderCardState extends State<_DeliveryOrderCard> {
                       : const Icon(Icons.payments_outlined),
                   label: Text(
                     order.paymentStatus == 'collected'
-                        ? 'Collected'
+                        ? context.t('Collected')
                         : _isSavingPayment
-                            ? 'Saving'
-                            : 'Payment',
+                            ? context.t('Saving')
+                            : context.t('Payment'),
                   ),
                 ),
               ),
@@ -918,7 +945,7 @@ class _DeliveryOrderCardState extends State<_DeliveryOrderCard> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.verified_outlined),
-              label: Text(_isSaving ? 'Saving' : 'Delivered'),
+              label: Text(context.t(_isSaving ? 'Saving' : 'Delivered')),
             ),
           ),
         ],
@@ -934,7 +961,7 @@ class _DeliveryOrderCardState extends State<_DeliveryOrderCard> {
           .authService
           .markAssignedOrderPaymentCollected(widget.order.orderId);
       if (mounted) {
-        showSnack(context, 'Payment marked collected.');
+        showSnack(context, context.tNow('Payment marked collected.'));
       }
     } catch (error) {
       if (mounted) {
@@ -955,7 +982,7 @@ class _DeliveryOrderCardState extends State<_DeliveryOrderCard> {
           .authService
           .markAssignedOrderDelivered(widget.order.orderId);
       if (mounted) {
-        showSnack(context, 'Order marked delivered.');
+        showSnack(context, context.tNow('Order marked delivered.'));
       }
     } catch (error) {
       if (mounted) {
@@ -1241,7 +1268,7 @@ class _DeliveryAmountRow extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              label,
+              context.t(label),
               style: TextStyle(
                 color: isStrong ? _deliveryInk : _deliveryMuted,
                 fontWeight: isStrong ? FontWeight.w900 : FontWeight.w700,
@@ -1300,7 +1327,7 @@ class _DeliveryItemRow extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
-                '${item.quantity} x ${item.price.money} / ${item.unit}',
+                '${item.quantity} x ${item.price.money} / ${context.t(item.unit)}',
                 style: const TextStyle(
                   color: _deliveryMuted,
                   fontWeight: FontWeight.w700,
@@ -1340,7 +1367,7 @@ class _DeliveryInfoRow extends StatelessWidget {
           SizedBox(
             width: 118,
             child: Text(
-              label,
+              context.t(label),
               style: const TextStyle(
                 color: _deliveryMuted,
                 fontWeight: FontWeight.w700,
@@ -1349,7 +1376,7 @@ class _DeliveryInfoRow extends StatelessWidget {
           ),
           Expanded(
             child: Text(
-              value,
+              context.t(value),
               style: const TextStyle(
                 color: _deliveryInk,
                 fontWeight: FontWeight.w800,

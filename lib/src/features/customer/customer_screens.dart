@@ -5720,72 +5720,134 @@ class OrderTile extends StatelessWidget {
           builder: (_) => OrderTrackingScreen(orderId: order.orderId),
         ),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final details = _OrderTileDetails(order: order);
+          final status = ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: constraints.maxWidth < 380
+                  ? constraints.maxWidth - 64
+                  : constraints.maxWidth * 0.42,
             ),
-            child: Icon(Icons.receipt_long_outlined, color: color),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.t(
-                    'Order {id}',
-                    values: {'id': order.orderId.substring(0, 8)},
-                  ),
-                  style: const TextStyle(
-                    color: _customerInk,
-                    fontWeight: FontWeight.w900,
-                  ),
+            child: Align(
+              alignment: constraints.maxWidth < 380
+                  ? Alignment.centerLeft
+                  : Alignment.centerRight,
+              child: StatusChip(status: order.orderStatus),
+            ),
+          );
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                const SizedBox(height: 5),
-                Text(
-                  DateFormat.yMMMd().add_jm().format(order.createdAt),
+                child: Icon(Icons.receipt_long_outlined, color: color),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: constraints.maxWidth < 380
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          details,
+                          const SizedBox(height: 10),
+                          status,
+                        ],
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: details),
+                          const SizedBox(width: 10),
+                          status,
+                        ],
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _OrderTileDetails extends StatelessWidget {
+  const _OrderTileDetails({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    final shortId = order.orderId.length <= 8
+        ? order.orderId
+        : order.orderId.substring(0, 8);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          context.t(
+            'Order {id}',
+            values: {'id': shortId},
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: _customerInk,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          DateFormat.yMMMd().add_jm().format(order.createdAt),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: _customerMuted,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          order.totalAmount.money,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: _customerPrimary,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        if (order.hasDeliveryReview) ...[
+          const SizedBox(height: 5),
+          Row(
+            children: [
+              const Icon(Icons.star, color: _customerGold, size: 16),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  context.t(
+                    '{rating}/5 delivery rating',
+                    values: {'rating': order.deliveryRating},
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _customerMuted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  order.totalAmount.money,
-                  style: const TextStyle(
-                    color: _customerPrimary,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                if (order.hasDeliveryReview) ...[
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      const Icon(Icons.star, color: _customerGold, size: 16),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${order.deliveryRating}/5 delivery rating',
-                        style: const TextStyle(
-                          color: _customerMuted,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
+              ),
+            ],
           ),
-          StatusChip(status: order.orderStatus),
         ],
-      ),
+      ],
     );
   }
 }

@@ -376,7 +376,8 @@ class _OfflineConnectionMessageState extends State<_OfflineConnectionMessage>
                             width: 58,
                             height: 58,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE86F4A).withValues(alpha: 0.18),
+                              color: const Color(0xFFE86F4A)
+                                  .withValues(alpha: 0.18),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Icon(
@@ -499,6 +500,8 @@ class StatusChip extends StatelessWidget {
       ),
       child: Text(
         context.t(status),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: color,
           fontWeight: FontWeight.w700,
