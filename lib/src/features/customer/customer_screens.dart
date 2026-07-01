@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -71,7 +72,12 @@ class _CustomerScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pageBody = _CustomerBackdrop(
+      child: AppRefreshIndicator(child: body),
+    );
+
     return Scaffold(
+      extendBody: true,
       backgroundColor: _customerBackground,
       appBar: AppBar(
         title: Text(context.t(title)),
@@ -80,10 +86,19 @@ class _CustomerScaffold extends StatelessWidget {
         foregroundColor: _customerInk,
         shape: const Border(bottom: BorderSide(color: _customerLine)),
       ),
-      body: _CustomerBackdrop(
-        child: AppRefreshIndicator(child: body),
-      ),
-      bottomNavigationBar: bottomNavigationBar,
+      body: bottomNavigationBar == null
+          ? pageBody
+          : Stack(
+              children: [
+                Positioned.fill(child: pageBody),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: bottomNavigationBar!,
+                ),
+              ],
+            ),
     );
   }
 }
@@ -1587,62 +1602,255 @@ class _CustomerBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: const Border(top: BorderSide(color: _customerLine)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF10231A).withValues(alpha: 0.07),
-            blurRadius: 22,
-            offset: const Offset(0, -8),
-          ),
-        ],
+    final items = [
+      _CustomerNavItemData(
+        icon: Icons.home_outlined,
+        selectedIcon: Icons.home,
+        label: context.t('Home'),
       ),
-      child: SafeArea(
-        top: false,
-        child: NavigationBar(
-          selectedIndex: selectedIndex,
-          height: 70,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          onDestinationSelected: (index) {
-            if (index == selectedIndex && index == 0) {
-              return;
-            }
-            final routes = [
-              null,
-              const OrderHistoryScreen(),
-              const SupportScreen(),
-              const ProfileScreen(),
-            ];
-            final route = routes[index];
-            if (route != null) {
-              Navigator.of(context)
-                  .push(MaterialPageRoute(builder: (_) => route));
-            }
-          },
-          destinations: [
-            NavigationDestination(
-              icon: const Icon(Icons.home_outlined),
-              selectedIcon: const Icon(Icons.home),
-              label: context.t('Home'),
+      _CustomerNavItemData(
+        icon: Icons.receipt_long_outlined,
+        selectedIcon: Icons.receipt_long,
+        label: context.t('Orders'),
+      ),
+      _CustomerNavItemData(
+        icon: Icons.support_agent_outlined,
+        selectedIcon: Icons.support_agent,
+        label: context.t('Support'),
+      ),
+      _CustomerNavItemData(
+        icon: Icons.person_outline,
+        selectedIcon: Icons.person,
+        label: context.t('Profile'),
+      ),
+    ];
+
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF10231A).withValues(alpha: 0.15),
+              blurRadius: 32,
+              offset: const Offset(0, 14),
             ),
-            NavigationDestination(
-              icon: const Icon(Icons.receipt_long_outlined),
-              selectedIcon: const Icon(Icons.receipt_long),
-              label: context.t('Orders'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.support_agent_outlined),
-              selectedIcon: const Icon(Icons.support_agent),
-              label: context.t('Support'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.person_outline),
-              selectedIcon: const Icon(Icons.person),
-              label: context.t('Profile'),
+            BoxShadow(
+              color: _customerPrimary.withValues(alpha: 0.07),
+              blurRadius: 18,
+              offset: const Offset(0, -4),
             ),
           ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: _customerPrimaryLight.withValues(alpha: 0.88),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: _customerPrimary.withValues(alpha: 0.12),
+                  width: 1.2,
+                ),
+              ),
+              child: SizedBox(
+                height: 72,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    AnimatedAlign(
+                      duration: const Duration(milliseconds: 360),
+                      curve: Curves.easeOutBack,
+                      alignment: Alignment(
+                        -1 + (selectedIndex * 2 / (items.length - 1)),
+                        0,
+                      ),
+                      child: FractionallySizedBox(
+                        widthFactor: 1 / items.length,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 8,
+                          ),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(22),
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Colors.white.withValues(alpha: 0.92),
+                                  const Color(0xFFDDF1E5),
+                                ],
+                              ),
+                              border: Border.all(
+                                color: _customerPrimary.withValues(
+                                  alpha: 0.12,
+                                ),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      _customerPrimary.withValues(alpha: 0.16),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        for (var index = 0; index < items.length; index++)
+                          Expanded(
+                            child: _CustomerGlassNavItem(
+                              data: items[index],
+                              selected: index == selectedIndex,
+                              onTap: () => _selectDestination(
+                                context,
+                                index,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _selectDestination(BuildContext context, int index) {
+    if (index == selectedIndex && index == 0) {
+      return;
+    }
+    final routes = [
+      null,
+      const OrderHistoryScreen(),
+      const SupportScreen(),
+      const ProfileScreen(),
+    ];
+    final route = routes[index];
+    if (route != null) {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => route));
+    }
+  }
+}
+
+class _CustomerNavItemData {
+  const _CustomerNavItemData({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+}
+
+class _CustomerGlassNavItem extends StatelessWidget {
+  const _CustomerGlassNavItem({
+    required this.data,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _CustomerNavItemData data;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: data.label,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          splashColor: _customerPrimary.withValues(alpha: 0.08),
+          highlightColor: Colors.white.withValues(alpha: 0.18),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(end: selected ? 1 : 0),
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              final color = Color.lerp(
+                _customerMuted,
+                _customerPrimary,
+                value,
+              )!;
+              return Transform.translate(
+                offset: Offset(0, -2 * value),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Transform.scale(
+                      scale: 1 + (0.15 * value),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        switchInCurve: Curves.easeOutBack,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: ScaleTransition(
+                              scale: Tween<double>(
+                                begin: 0.82,
+                                end: 1,
+                              ).animate(animation),
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Icon(
+                          selected ? data.selectedIcon : data.icon,
+                          key: ValueKey('${data.label}-$selected'),
+                          color: color,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 11.5,
+                        height: 1,
+                        fontWeight:
+                            selected ? FontWeight.w900 : FontWeight.w700,
+                        letterSpacing: 0,
+                      ),
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 220),
+                        opacity: selected ? 1 : 0.72,
+                        child: Text(
+                          data.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
