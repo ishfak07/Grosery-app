@@ -543,75 +543,93 @@ class CustomerHomeScreen extends StatelessWidget {
       return const _CustomerLogoutTransition();
     }
     return Scaffold(
+      extendBody: true,
       backgroundColor: _customerBackground,
-      body: _CustomerBackdrop(
-        child: AppRefreshIndicator(
-          child: _CustomerScrollView(
-            padding: const EdgeInsets.fromLTRB(0, 10, 0, 28),
-            safeAreaTop: true,
-            children: [
-              FirebaseSetupBanner(appState: appState),
-              _HomeHeader(
-                profile: profile,
-                cartCount: appState.cartCount,
-              ),
-              const SizedBox(height: 14),
-              _HomeSearchCallout(
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ProductListScreen()),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const _HomeOffersCarousel(),
-              const SizedBox(height: 18),
-              _HomeActionGrid(
-                actions: [
-                  _HomeActionSpec(
-                    icon: Icons.shopping_bag_outlined,
-                    title: 'Items',
-                    subtitle: 'Pick the items you need.',
-                    accent: _customerPrimary,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ShopListScreen()),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: _CustomerBackdrop(
+              child: AppRefreshIndicator(
+                child: _CustomerScrollView(
+                  padding: const EdgeInsets.fromLTRB(0, 10, 0, 108),
+                  safeAreaTop: true,
+                  children: [
+                    FirebaseSetupBanner(appState: appState),
+                    _HomeHeader(
+                      profile: profile,
+                      cartCount: appState.cartCount,
                     ),
-                  ),
-                  _HomeActionSpec(
-                    icon: Icons.document_scanner_outlined,
-                    title: 'Photo list',
-                    subtitle: 'Send list photo',
-                    accent: _customerBlue,
-                    featured: true,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const UploadBillScreen(),
+                    const SizedBox(height: 14),
+                    _HomeSearchCallout(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ProductListScreen(),
+                        ),
                       ),
                     ),
-                  ),
-                  _HomeActionSpec(
-                    icon: Icons.edit_note,
-                    title: 'Manual list',
-                    subtitle: 'Type your grocery list',
-                    accent: _customerAccent,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const ManualListScreen(),
+                    const SizedBox(height: 16),
+                    const _HomeOffersCarousel(),
+                    const SizedBox(height: 18),
+                    _HomeActionGrid(
+                      actions: [
+                        _HomeActionSpec(
+                          icon: Icons.shopping_bag_outlined,
+                          title: 'Items',
+                          subtitle: 'Pick the items you need.',
+                          accent: _customerPrimary,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const ShopListScreen(),
+                            ),
+                          ),
+                        ),
+                        _HomeActionSpec(
+                          icon: Icons.document_scanner_outlined,
+                          title: 'Photo list',
+                          subtitle: 'Send list photo',
+                          accent: _customerBlue,
+                          featured: true,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const UploadBillScreen(),
+                            ),
+                          ),
+                        ),
+                        _HomeActionSpec(
+                          icon: Icons.edit_note,
+                          title: 'Manual list',
+                          subtitle: 'Type your grocery list',
+                          accent: _customerAccent,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const ManualListScreen(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    _HomeFreshPicksHeader(
+                      onAction: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ProductListScreen(),
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              _HomeFreshPicksHeader(
-                onAction: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ProductListScreen()),
+                    const _RecentProductsGrid(),
+                  ],
                 ),
               ),
-              const _RecentProductsGrid(),
-            ],
+            ),
           ),
-        ),
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _CustomerBottomNavigation(selectedIndex: 0),
+          ),
+        ],
       ),
-      bottomNavigationBar: const _CustomerBottomNavigation(selectedIndex: 0),
     );
   }
 }
@@ -1625,102 +1643,116 @@ class _CustomerBottomNavigation extends StatelessWidget {
       ),
     ];
 
+    const pillRadius = 32.0;
+
     return SafeArea(
       top: false,
-      minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF10231A).withValues(alpha: 0.15),
-              blurRadius: 32,
-              offset: const Offset(0, 14),
-            ),
-            BoxShadow(
-              color: _customerPrimary.withValues(alpha: 0.07),
-              blurRadius: 18,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: _customerPrimaryLight.withValues(alpha: 0.88),
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(
-                  color: _customerPrimary.withValues(alpha: 0.12),
-                  width: 1.2,
-                ),
+      minimum: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      child: Material(
+        type: MaterialType.transparency,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(pillRadius),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF10231A).withValues(alpha: 0.12),
+                blurRadius: 28,
+                offset: const Offset(0, 10),
               ),
-              child: SizedBox(
-                height: 72,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    AnimatedAlign(
-                      duration: const Duration(milliseconds: 360),
-                      curve: Curves.easeOutBack,
-                      alignment: Alignment(
-                        -1 + (selectedIndex * 2 / (items.length - 1)),
-                        0,
-                      ),
-                      child: FractionallySizedBox(
-                        widthFactor: 1 / items.length,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 8,
-                          ),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(22),
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Colors.white.withValues(alpha: 0.92),
-                                  const Color(0xFFDDF1E5),
+              BoxShadow(
+                color: _customerPrimary.withValues(alpha: 0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(pillRadius),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(pillRadius),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.72),
+                      _customerPrimaryLight.withValues(alpha: 0.52),
+                    ],
+                  ),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.55),
+                    width: 1.1,
+                  ),
+                ),
+                child: SizedBox(
+                  height: 68,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      AnimatedAlign(
+                        duration: const Duration(milliseconds: 360),
+                        curve: Curves.easeOutBack,
+                        alignment: Alignment(
+                          -1 + (selectedIndex * 2 / (items.length - 1)),
+                          0,
+                        ),
+                        child: FractionallySizedBox(
+                          widthFactor: 1 / items.length,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 7,
+                            ),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(24),
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.white.withValues(alpha: 0.94),
+                                    const Color(0xFFDDF1E5)
+                                        .withValues(alpha: 0.88),
+                                  ],
+                                ),
+                                border: Border.all(
+                                  color: _customerPrimary.withValues(
+                                    alpha: 0.14,
+                                  ),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: _customerPrimary.withValues(
+                                      alpha: 0.14,
+                                    ),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 6),
+                                  ),
                                 ],
                               ),
-                              border: Border.all(
-                                color: _customerPrimary.withValues(
-                                  alpha: 0.12,
-                                ),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color:
-                                      _customerPrimary.withValues(alpha: 0.16),
-                                  blurRadius: 18,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    Row(
-                      children: [
-                        for (var index = 0; index < items.length; index++)
-                          Expanded(
-                            child: _CustomerGlassNavItem(
-                              data: items[index],
-                              selected: index == selectedIndex,
-                              onTap: () => _selectDestination(
-                                context,
-                                index,
+                      Row(
+                        children: [
+                          for (var index = 0; index < items.length; index++)
+                            Expanded(
+                              child: _CustomerGlassNavItem(
+                                data: items[index],
+                                selected: index == selectedIndex,
+                                onTap: () => _selectDestination(
+                                  context,
+                                  index,
+                                ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
