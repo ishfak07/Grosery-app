@@ -4663,44 +4663,42 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     context.t('Payment method'),
                     style: const TextStyle(fontWeight: FontWeight.w900),
                   ),
-                  RadioListTile<String>(
-                    contentPadding: EdgeInsets.zero,
-                    value: AppConstants.paymentMethodCod,
+                  RadioGroup<String>(
                     groupValue: selectedPaymentMethod,
-                    onChanged: paymentSettings.codEnabled
-                        ? (value) {
-                            if (value != null) {
-                              setState(() => _paymentMethod = value);
-                            }
-                          }
-                        : null,
-                    title: Text(context.t('Cash on Delivery')),
-                    subtitle: Text(
-                      context.t(
-                        paymentSettings.codEnabled
-                            ? 'Pay by cash when your order is delivered.'
-                            : 'Temporarily unavailable.',
-                      ),
-                    ),
-                  ),
-                  RadioListTile<String>(
-                    contentPadding: EdgeInsets.zero,
-                    value: AppConstants.paymentMethodBankTransfer,
-                    groupValue: selectedPaymentMethod,
-                    onChanged: paymentSettings.bankTransferEnabled
-                        ? (value) {
-                            if (value != null) {
-                              setState(() => _paymentMethod = value);
-                            }
-                          }
-                        : null,
-                    title: Text(context.t('Bank transfer')),
-                    subtitle: Text(
-                      context.t(
-                        paymentSettings.bankTransferEnabled
-                            ? 'Transfer to the store account and upload your receipt.'
-                            : 'Temporarily unavailable.',
-                      ),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _paymentMethod = value);
+                      }
+                    },
+                    child: Column(
+                      children: [
+                        RadioListTile<String>(
+                          contentPadding: EdgeInsets.zero,
+                          value: AppConstants.paymentMethodCod,
+                          enabled: paymentSettings.codEnabled,
+                          title: Text(context.t('Cash on Delivery')),
+                          subtitle: Text(
+                            context.t(
+                              paymentSettings.codEnabled
+                                  ? 'Pay by cash when your order is delivered.'
+                                  : 'Temporarily unavailable.',
+                            ),
+                          ),
+                        ),
+                        RadioListTile<String>(
+                          contentPadding: EdgeInsets.zero,
+                          value: AppConstants.paymentMethodBankTransfer,
+                          enabled: paymentSettings.bankTransferEnabled,
+                          title: Text(context.t('Bank transfer')),
+                          subtitle: Text(
+                            context.t(
+                              paymentSettings.bankTransferEnabled
+                                  ? 'Transfer to the store account and upload your receipt.'
+                                  : 'Temporarily unavailable.',
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   if (!hasPaymentMethods) ...[
@@ -4786,10 +4784,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (_isSubmitting) {
       return;
     }
+    final appState = context.read<AppState>();
+    final shopHours = appState.shopHoursSettings;
+    if (!shopHours.isOpenAt(DateTime.now())) {
+      await _showShopClosedDialog(shopHours);
+      return;
+    }
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    final appState = context.read<AppState>();
     final paymentMethod =
         appState.paymentSettings.availablePaymentMethodOrNull(_paymentMethod);
     if (paymentMethod == null) {
@@ -4823,7 +4826,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
     } catch (error) {
       if (mounted) {
-        showSnack(context, error.toString());
+        if (_isShopClosedError(error)) {
+          await _showShopClosedDialog(
+              context.read<AppState>().shopHoursSettings);
+        } else {
+          showSnack(context, error.toString());
+        }
       }
     } finally {
       if (mounted) {
@@ -4846,6 +4854,211 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
     setState(() => _receiptImagePath = imageFile.path);
+  }
+
+  bool _isShopClosedError(Object error) {
+    return error.toString().contains('Shop is closed.');
+  }
+
+  Future<void> _showShopClosedDialog(ShopHoursSettings settings) {
+    return showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Shop closed',
+      barrierColor: Colors.black.withValues(alpha: 0.46),
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return _ShopClosedDialog(settings: settings);
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.92, end: 1).animate(curved),
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.05),
+                end: Offset.zero,
+              ).animate(curved),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ShopClosedDialog extends StatelessWidget {
+  const _ShopClosedDialog({required this.settings});
+
+  final ShopHoursSettings settings;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Material(
+            color: Colors.transparent,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.96),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.72),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color:
+                              const Color(0xFF10231A).withValues(alpha: 0.22),
+                          blurRadius: 32,
+                          offset: const Offset(0, 20),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.85, end: 1),
+                          duration: const Duration(milliseconds: 520),
+                          curve: Curves.elasticOut,
+                          builder: (context, value, child) {
+                            return Transform.scale(
+                              scale: value,
+                              child: child,
+                            );
+                          },
+                          child: Container(
+                            width: 82,
+                            height: 82,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Color(0xFF176B45),
+                                  Color(0xFFE86F4A),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      _customerAccent.withValues(alpha: 0.28),
+                                  blurRadius: 24,
+                                  offset: const Offset(0, 12),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.access_time,
+                              color: Colors.white,
+                              size: 42,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        const Text(
+                          'Shop closed',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: _customerInk,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          settings.closedMessage,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: _customerMuted,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            height: 1.45,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 11,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _customerPrimaryLight,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: _customerLine),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.schedule_outlined,
+                                color: _customerPrimary,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  settings.rangeLabel,
+                                  textAlign: TextAlign.center,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: _customerPrimary,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: () => Navigator.of(context).pop(),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: _customerPrimary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            icon: const Icon(Icons.check),
+                            label: const Text(
+                              'Got it',
+                              style: TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

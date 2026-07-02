@@ -44,6 +44,7 @@ class AppState extends ChangeNotifier {
   StreamSubscription<UserProfile?>? _profileSubscription;
   StreamSubscription<CheckoutChargeSettings>?
       _checkoutChargeSettingsSubscription;
+  StreamSubscription<ShopHoursSettings>? _shopHoursSettingsSubscription;
   StreamSubscription<PaymentSettings>? _paymentSettingsSubscription;
 
   bool _isInitializing = true;
@@ -57,6 +58,8 @@ class AppState extends ChangeNotifier {
   CheckoutChargeSettings _checkoutChargeSettings =
       CheckoutChargeSettings.defaults;
   bool _hasLoadedCheckoutChargeSettings = false;
+  ShopHoursSettings _shopHoursSettings = ShopHoursSettings.defaults;
+  bool _hasLoadedShopHoursSettings = false;
   PaymentSettings _paymentSettings = PaymentSettings.defaults;
   bool _hasLoadedPaymentSettings = false;
   String? _notificationsConfiguredForProfileKey;
@@ -80,6 +83,9 @@ class AppState extends ChangeNotifier {
   bool get hasManualList => _manualListText.trim().isNotEmpty;
   CheckoutChargeSettings get checkoutChargeSettings => _checkoutChargeSettings;
   bool get hasLoadedCheckoutChargeSettings => _hasLoadedCheckoutChargeSettings;
+  ShopHoursSettings get shopHoursSettings => _shopHoursSettings;
+  bool get hasLoadedShopHoursSettings => _hasLoadedShopHoursSettings;
+  bool get isShopOpenNow => _shopHoursSettings.isOpenAt(DateTime.now());
   PaymentSettings get paymentSettings => _paymentSettings;
   bool get hasLoadedPaymentSettings => _hasLoadedPaymentSettings;
   int get cartCount =>
@@ -128,6 +134,7 @@ class AppState extends ChangeNotifier {
     }
     if (user == null) {
       await _checkoutChargeSettingsSubscription?.cancel();
+      await _shopHoursSettingsSubscription?.cancel();
       await _paymentSettingsSubscription?.cancel();
       if (!_isCurrentAuthUser(user)) {
         return;
@@ -135,6 +142,8 @@ class AppState extends ChangeNotifier {
       _profile = null;
       _checkoutChargeSettings = CheckoutChargeSettings.defaults;
       _hasLoadedCheckoutChargeSettings = false;
+      _shopHoursSettings = ShopHoursSettings.defaults;
+      _hasLoadedShopHoursSettings = false;
       _paymentSettings = PaymentSettings.defaults;
       _hasLoadedPaymentSettings = false;
       _notificationsConfiguredForProfileKey = null;
@@ -145,6 +154,7 @@ class AppState extends ChangeNotifier {
     }
 
     _watchCheckoutChargeSettings();
+    _watchShopHoursSettings();
     _watchPaymentSettings();
 
     _profileSubscription = firestoreService.watchUserProfile(user.uid).listen(
@@ -189,6 +199,28 @@ class AppState extends ChangeNotifier {
       },
       onError: (_) {
         _hasLoadedCheckoutChargeSettings = true;
+        notifyListeners();
+      },
+    );
+  }
+
+  void _watchShopHoursSettings() {
+    if (!firebaseAvailable) {
+      _shopHoursSettings = ShopHoursSettings.defaults;
+      _hasLoadedShopHoursSettings = true;
+      return;
+    }
+    unawaited(_shopHoursSettingsSubscription?.cancel());
+    _hasLoadedShopHoursSettings = false;
+    _shopHoursSettingsSubscription =
+        firestoreService.watchShopHoursSettings().listen(
+      (settings) {
+        _shopHoursSettings = settings;
+        _hasLoadedShopHoursSettings = true;
+        notifyListeners();
+      },
+      onError: (_) {
+        _hasLoadedShopHoursSettings = true;
         notifyListeners();
       },
     );
@@ -320,6 +352,7 @@ class AppState extends ChangeNotifier {
     _profile = user;
     await _applyProfileLanguage(user);
     _watchCheckoutChargeSettings();
+    _watchShopHoursSettings();
     _watchPaymentSettings();
     notifyListeners();
     await _configureNotificationsForProfile(user);
@@ -338,6 +371,8 @@ class AppState extends ChangeNotifier {
     _notificationsConfiguredForProfileKey = null;
     _checkoutChargeSettings = CheckoutChargeSettings.defaults;
     _hasLoadedCheckoutChargeSettings = false;
+    _shopHoursSettings = ShopHoursSettings.defaults;
+    _hasLoadedShopHoursSettings = false;
     _paymentSettings = PaymentSettings.defaults;
     _hasLoadedPaymentSettings = false;
     notifyListeners();
@@ -352,6 +387,7 @@ class AppState extends ChangeNotifier {
         }
       }
       await _checkoutChargeSettingsSubscription?.cancel();
+      await _shopHoursSettingsSubscription?.cancel();
       await _paymentSettingsSubscription?.cancel();
       await authService.logout();
     } finally {
@@ -370,6 +406,7 @@ class AppState extends ChangeNotifier {
       await _profileSubscription?.cancel();
       _profileSubscription = null;
       await _checkoutChargeSettingsSubscription?.cancel();
+      await _shopHoursSettingsSubscription?.cancel();
       await _paymentSettingsSubscription?.cancel();
       await notificationService.detachUser();
       await localStorageService.clearPrivateAccountData();
@@ -380,6 +417,8 @@ class AppState extends ChangeNotifier {
       _notificationsConfiguredForProfileKey = null;
       _checkoutChargeSettings = CheckoutChargeSettings.defaults;
       _hasLoadedCheckoutChargeSettings = false;
+      _shopHoursSettings = ShopHoursSettings.defaults;
+      _hasLoadedShopHoursSettings = false;
       _paymentSettings = PaymentSettings.defaults;
       _hasLoadedPaymentSettings = false;
     } finally {
@@ -406,6 +445,7 @@ class AppState extends ChangeNotifier {
     _preferredLanguageCode = languageCode;
     await localStorageService.savePreferredLanguageCode(languageCode);
     _watchCheckoutChargeSettings();
+    _watchShopHoursSettings();
     _watchPaymentSettings();
     notifyListeners();
     await _configureNotificationsForProfile(_profile);
@@ -431,6 +471,27 @@ class AppState extends ChangeNotifier {
     await firestoreService.saveCheckoutChargeSettings(settings);
     _checkoutChargeSettings = settings;
     _hasLoadedCheckoutChargeSettings = true;
+    notifyListeners();
+  }
+
+  Future<void> updateShopHoursSettings({
+    required int openingMinutes,
+    required int closingMinutes,
+  }) async {
+    if (openingMinutes < 0 ||
+        openingMinutes >= ShopHoursSettings.minutesPerDay ||
+        closingMinutes < 0 ||
+        closingMinutes >= ShopHoursSettings.minutesPerDay) {
+      throw StateError('Enter valid shop opening and closing times.');
+    }
+    final settings = ShopHoursSettings(
+      openingMinutes: openingMinutes,
+      closingMinutes: closingMinutes,
+      updatedAt: DateTime.now(),
+    );
+    await firestoreService.saveShopHoursSettings(settings);
+    _shopHoursSettings = settings;
+    _hasLoadedShopHoursSettings = true;
     notifyListeners();
   }
 
@@ -603,6 +664,9 @@ class AppState extends ChangeNotifier {
         'Add products, upload a shopping list, or type a manual list before checkout.',
       );
     }
+    if (!_shopHoursSettings.isOpenAt(DateTime.now())) {
+      throw StateError(_shopHoursSettings.closedMessage);
+    }
     if (!_paymentSettings.hasAvailablePaymentMethod) {
       throw StateError('Payment methods are temporarily unavailable.');
     }
@@ -687,6 +751,7 @@ class AppState extends ChangeNotifier {
     _authSubscription?.cancel();
     _profileSubscription?.cancel();
     _checkoutChargeSettingsSubscription?.cancel();
+    _shopHoursSettingsSubscription?.cancel();
     _paymentSettingsSubscription?.cancel();
     unawaited(connectivityService.dispose());
     notificationService.dispose();

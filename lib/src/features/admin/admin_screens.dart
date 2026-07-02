@@ -692,7 +692,7 @@ class AdminDashboardScreen extends StatelessWidget {
                 _AdminTile(
                   icon: Icons.tune,
                   title: 'Checkout',
-                  subtitle: 'Fees and payments',
+                  subtitle: 'Fees, payments, hours',
                   accent: _adminViolet,
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
@@ -913,6 +913,8 @@ class _AdminCheckoutChargeSettingsScreenState
   final _bankName = TextEditingController();
   final _bankBranch = TextEditingController();
   final _bankAccountNumber = TextEditingController();
+  var _openingMinutes = 0;
+  var _closingMinutes = 0;
   var _codEnabled = true;
   var _bankTransferEnabled = true;
   var _isSaving = false;
@@ -935,11 +937,16 @@ class _AdminCheckoutChargeSettingsScreenState
     super.didChangeDependencies();
     final appState = context.watch<AppState>();
     if (!appState.hasLoadedCheckoutChargeSettings ||
+        !appState.hasLoadedShopHoursSettings ||
         !appState.hasLoadedPaymentSettings ||
         _hasUserEdited) {
       return;
     }
-    _syncFields(appState.checkoutChargeSettings, appState.paymentSettings);
+    _syncFields(
+      appState.checkoutChargeSettings,
+      appState.shopHoursSettings,
+      appState.paymentSettings,
+    );
   }
 
   @override
@@ -961,12 +968,15 @@ class _AdminCheckoutChargeSettingsScreenState
 
   void _syncFields(
     CheckoutChargeSettings chargeSettings,
+    ShopHoursSettings shopHoursSettings,
     PaymentSettings paymentSettings,
   ) {
     final deliveryText = chargeSettings.deliveryCharge.toStringAsFixed(2);
     final serviceText = chargeSettings.serviceCharge.toStringAsFixed(2);
     if (_delivery.text == deliveryText &&
         _service.text == serviceText &&
+        _openingMinutes == shopHoursSettings.openingMinutes &&
+        _closingMinutes == shopHoursSettings.closingMinutes &&
         _bankAccountName.text == paymentSettings.bankAccountName &&
         _bankName.text == paymentSettings.bankName &&
         _bankBranch.text == paymentSettings.bankBranch &&
@@ -978,6 +988,8 @@ class _AdminCheckoutChargeSettingsScreenState
     _isSyncingFields = true;
     _delivery.text = deliveryText;
     _service.text = serviceText;
+    _openingMinutes = shopHoursSettings.openingMinutes;
+    _closingMinutes = shopHoursSettings.closingMinutes;
     _bankAccountName.text = paymentSettings.bankAccountName;
     _bankName.text = paymentSettings.bankName;
     _bankBranch.text = paymentSettings.bankBranch;
@@ -991,6 +1003,7 @@ class _AdminCheckoutChargeSettingsScreenState
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final hasLoadedSettings = appState.hasLoadedCheckoutChargeSettings &&
+        appState.hasLoadedShopHoursSettings &&
         appState.hasLoadedPaymentSettings;
     return _AdminScaffold(
       title: 'Checkout settings',
@@ -1043,6 +1056,49 @@ class _AdminCheckoutChargeSettingsScreenState
                                 labelText: 'Service charge',
                                 prefixIcon: Icon(Icons.receipt_outlined),
                               ),
+                            ),
+                            const SizedBox(height: 18),
+                            const Divider(height: 1),
+                            const SizedBox(height: 18),
+                            const _AdminSectionHeader(
+                              title: 'Shop opening hours',
+                              icon: Icons.schedule_outlined,
+                            ),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final opening = _ShopTimePicker(
+                                  label: 'Opening time',
+                                  time: ShopHoursSettings.formatMinutes(
+                                    _openingMinutes,
+                                  ),
+                                  icon: Icons.wb_sunny_outlined,
+                                  onTap: () => _pickShopTime(opening: true),
+                                );
+                                final closing = _ShopTimePicker(
+                                  label: 'Closing time',
+                                  time: ShopHoursSettings.formatMinutes(
+                                    _closingMinutes,
+                                  ),
+                                  icon: Icons.nightlight_outlined,
+                                  onTap: () => _pickShopTime(opening: false),
+                                );
+                                if (constraints.maxWidth >= 560) {
+                                  return Row(
+                                    children: [
+                                      Expanded(child: opening),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: closing),
+                                    ],
+                                  );
+                                }
+                                return Column(
+                                  children: [
+                                    opening,
+                                    const SizedBox(height: 12),
+                                    closing,
+                                  ],
+                                );
+                              },
                             ),
                             const SizedBox(height: 18),
                             const Divider(height: 1),
@@ -1182,6 +1238,38 @@ class _AdminCheckoutChargeSettingsScreenState
     return amount;
   }
 
+  Future<void> _pickShopTime({required bool opening}) async {
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: _timeOfDayFromMinutes(
+        opening ? _openingMinutes : _closingMinutes,
+      ),
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    setState(() {
+      if (opening) {
+        _openingMinutes = _minutesFromTimeOfDay(selected);
+      } else {
+        _closingMinutes = _minutesFromTimeOfDay(selected);
+      }
+      _hasUserEdited = true;
+    });
+  }
+
+  TimeOfDay _timeOfDayFromMinutes(int minutes) {
+    final normalized = minutes.clamp(0, ShopHoursSettings.minutesPerDay - 1);
+    return TimeOfDay(
+      hour: normalized ~/ 60,
+      minute: normalized % 60,
+    );
+  }
+
+  int _minutesFromTimeOfDay(TimeOfDay time) {
+    return time.hour * 60 + time.minute;
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -1194,6 +1282,10 @@ class _AdminCheckoutChargeSettingsScreenState
       await appState.updateCheckoutChargeSettings(
         deliveryCharge: delivery,
         serviceCharge: service,
+      );
+      await appState.updateShopHoursSettings(
+        openingMinutes: _openingMinutes,
+        closingMinutes: _closingMinutes,
       );
       await appState.updatePaymentSettings(
         codEnabled: _codEnabled,
@@ -1216,6 +1308,72 @@ class _AdminCheckoutChargeSettingsScreenState
         setState(() => _isSaving = false);
       }
     }
+  }
+}
+
+class _ShopTimePicker extends StatelessWidget {
+  const _ShopTimePicker({
+    required this.label,
+    required this.time,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final String time;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFF8FBF8),
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _adminLine),
+          ),
+          child: Row(
+            children: [
+              _AdminIconBadge(icon: icon, color: _adminPrimary, size: 40),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: _adminMuted,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      time,
+                      style: const TextStyle(
+                        color: _adminInk,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.edit_calendar_outlined, color: _adminMuted),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

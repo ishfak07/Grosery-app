@@ -115,6 +115,140 @@ class CheckoutChargeSettings {
   }
 }
 
+class ShopHoursSettings {
+  const ShopHoursSettings({
+    required this.openingMinutes,
+    required this.closingMinutes,
+    required this.updatedAt,
+  });
+
+  static const int minutesPerDay = 24 * 60;
+
+  static ShopHoursSettings get defaults => ShopHoursSettings(
+        openingMinutes: 0,
+        closingMinutes: 0,
+        updatedAt: DateTime.now(),
+      );
+
+  final int openingMinutes;
+  final int closingMinutes;
+  final DateTime updatedAt;
+
+  bool get isOpenAllDay => openingMinutes == closingMinutes;
+  String get openingTimeLabel => formatMinutes(openingMinutes);
+  String get closingTimeLabel => formatMinutes(closingMinutes);
+  String get rangeLabel =>
+      isOpenAllDay ? 'Open all day' : '$openingTimeLabel - $closingTimeLabel';
+  String get closedMessage =>
+      'Shop is closed. Please come back at $openingTimeLabel.';
+
+  bool isOpenAt(DateTime value) {
+    if (isOpenAllDay) {
+      return true;
+    }
+    final currentMinutes = value.hour * 60 + value.minute;
+    if (openingMinutes < closingMinutes) {
+      return currentMinutes >= openingMinutes &&
+          currentMinutes <= closingMinutes;
+    }
+    return currentMinutes >= openingMinutes || currentMinutes <= closingMinutes;
+  }
+
+  ShopHoursSettings copyWith({
+    int? openingMinutes,
+    int? closingMinutes,
+    DateTime? updatedAt,
+  }) {
+    return ShopHoursSettings(
+      openingMinutes: openingMinutes ?? this.openingMinutes,
+      closingMinutes: closingMinutes ?? this.closingMinutes,
+      updatedAt: updatedAt ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'openingMinutes': openingMinutes,
+      'closingMinutes': closingMinutes,
+      'updatedAt': _writeDate(updatedAt),
+    };
+  }
+
+  factory ShopHoursSettings.fromMap(Map<String, dynamic>? map) {
+    final fallback = ShopHoursSettings.defaults;
+    if (map == null) {
+      return fallback;
+    }
+    return ShopHoursSettings(
+      openingMinutes: _readMinuteOfDay(
+        map['openingMinutes'] ?? map['openingTime'],
+        fallback.openingMinutes,
+      ),
+      closingMinutes: _readMinuteOfDay(
+        map['closingMinutes'] ?? map['closingTime'],
+        fallback.closingMinutes,
+      ),
+      updatedAt: _readDate(map['updatedAt']),
+    );
+  }
+
+  static String formatMinutes(int minutes) {
+    final normalized = minutes.clamp(0, minutesPerDay - 1);
+    final hour24 = normalized ~/ 60;
+    final minute = normalized % 60;
+    final period = hour24 >= 12 ? 'PM' : 'AM';
+    final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
+    return '$hour12:${minute.toString().padLeft(2, '0')} $period';
+  }
+
+  static int _readMinuteOfDay(dynamic value, int fallback) {
+    if (value is num) {
+      final minutes = value.toInt();
+      if (minutes >= 0 && minutes < minutesPerDay) {
+        return minutes;
+      }
+    }
+    if (value is String) {
+      final parsed = _tryParseTimeText(value);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return fallback;
+  }
+
+  static int? _tryParseTimeText(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    final match =
+        RegExp(r'^(\d{1,2}):(\d{2})(?:\s*([AaPp][Mm]))?$').firstMatch(trimmed);
+    if (match == null) {
+      return null;
+    }
+    final hour = int.tryParse(match.group(1) ?? '');
+    final minute = int.tryParse(match.group(2) ?? '');
+    if (hour == null || minute == null || minute < 0 || minute > 59) {
+      return null;
+    }
+    final period = match.group(3)?.toUpperCase();
+    if (period == null) {
+      if (hour < 0 || hour > 23) {
+        return null;
+      }
+      return hour * 60 + minute;
+    }
+    if (hour < 1 || hour > 12) {
+      return null;
+    }
+    final hour24 = period == 'AM'
+        ? (hour == 12 ? 0 : hour)
+        : (hour == 12 ? 12 : hour + 12);
+    return hour24 * 60 + minute;
+  }
+}
+
 class PaymentSettings {
   const PaymentSettings({
     required this.codEnabled,

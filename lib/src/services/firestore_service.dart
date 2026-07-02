@@ -47,6 +47,8 @@ class FirestoreService {
 
   DocumentReference<Map<String, dynamic>> get _checkoutChargesDoc =>
       _appSettings.doc('checkout_charges');
+  DocumentReference<Map<String, dynamic>> get _shopHoursDoc =>
+      _appSettings.doc('shop_hours');
   DocumentReference<Map<String, dynamic>> get _paymentSettingsDoc =>
       _appSettings.doc('payment_methods');
 
@@ -65,6 +67,19 @@ class FirestoreService {
     CheckoutChargeSettings settings,
   ) {
     return _checkoutChargesDoc.set(settings.toMap(), SetOptions(merge: true));
+  }
+
+  Stream<ShopHoursSettings> watchShopHoursSettings() {
+    if (!_firebaseAvailable) {
+      return Stream<ShopHoursSettings>.value(ShopHoursSettings.defaults);
+    }
+    return _shopHoursDoc.snapshots().map(
+          (doc) => ShopHoursSettings.fromMap(doc.data()),
+        );
+  }
+
+  Future<void> saveShopHoursSettings(ShopHoursSettings settings) {
+    return _shopHoursDoc.set(settings.toMap(), SetOptions(merge: true));
   }
 
   Stream<PaymentSettings> watchPaymentSettings() {
