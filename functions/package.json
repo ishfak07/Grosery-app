@@ -2,6 +2,10 @@
   "name": "grocerydelivery-functions",
   "private": true,
   "main": "index.js",
+  "scripts": {
+    "cleanup:release:dry-run": "node scripts/cleanup_release_data.js --project grocery-delivery-app-388bc",
+    "cleanup:release": "node scripts/cleanup_release_data.js --project grocery-delivery-app-388bc --confirm-project grocery-delivery-app-388bc --yes"
+  },
   "engines": {
     "node": "22"
   },
