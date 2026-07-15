@@ -46,9 +46,9 @@ class ShopOrderPdfService {
   }) async {
     final document = pw.Document(
       theme: theme,
-      title: 'Shop order ${order.orderId}',
+      title: 'Order preparation ${order.orderId}',
       author: 'Puttalam Drop',
-      subject: 'Combined shop purchase list',
+      subject: 'Combined order preparation list',
     );
     final placedAt = DateFormat('dd MMM yyyy, h:mm a').format(order.createdAt);
 
@@ -75,7 +75,7 @@ class ShopOrderPdfService {
                 ),
               ),
               pw.Text(
-                'SHOP ORDER SHEET',
+                'ORDER PREPARATION SHEET',
                 style: pw.TextStyle(
                   color: PdfColors.grey700,
                   fontWeight: pw.FontWeight.bold,
@@ -315,7 +315,7 @@ class ShopOrderPdfService {
                 if (item.shopName.trim().isNotEmpty) ...[
                   pw.SizedBox(height: 2),
                   pw.Text(
-                    'Shop: ${item.shopName}',
+                    'Category: ${item.shopName}',
                     style: const pw.TextStyle(
                       color: PdfColors.grey600,
                       fontSize: 8,

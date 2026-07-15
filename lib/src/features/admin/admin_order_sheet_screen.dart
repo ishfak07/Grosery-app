@@ -43,7 +43,7 @@ class _AdminOrderSheetScreenState extends State<AdminOrderSheetScreen> {
       backgroundColor: _sheetBackground,
       appBar: AppBar(
         title: const Text(
-          'Shop order sheet',
+          'Order preparation sheet',
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
         backgroundColor: _sheetBackground,
@@ -314,7 +314,7 @@ class _SheetHero extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Everything the shop needs in one view',
+            'Everything needed to prepare this order',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.88),
               fontWeight: FontWeight.w700,

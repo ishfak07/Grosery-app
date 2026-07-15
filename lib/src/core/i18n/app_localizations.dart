@@ -181,6 +181,7 @@ const _tamil = <String, String>{
   'Notifications': 'அறிவிப்புகள்',
   'Cart': 'கார்ட்',
   'Items': 'பொருட்கள்',
+  'Categories': 'வகைகள்',
   'Pick the items you need.':
       'உங்களுக்கு தேவையான பொருட்களை தேர்வு செய்யுங்கள்.',
   'Photo list': 'புகைப்பட பட்டியல்',
@@ -194,24 +195,26 @@ const _tamil = <String, String>{
   'Fast local delivery': 'வேகமான உள்ளூர் விநியோகம்',
   'Fresh groceries, photo lists, and COD in one smooth order.':
       'புதிய மளிகை, புகைப்பட பட்டியல்கள், COD அனைத்தும் ஒரே எளிய ஆர்டரில்.',
-  'We shop from trusted partners and keep you updated.':
+  'We source from trusted partners and keep you updated.':
       'நம்பகமான கூட்டாளர்களிடமிருந்து வாங்கி உங்களை தொடர்ந்து புதுப்பிப்போம்.',
   'No products yet': 'இன்னும் பொருட்கள் இல்லை',
   'Admin can add products from the admin dashboard.':
       'அட்மின் டாஷ்போர்டிலிருந்து பொருட்களை சேர்க்கலாம்.',
-  'No active shops': 'செயலில் உள்ள கடைகள் இல்லை',
+  'No active categories': 'செயலில் உள்ள வகைகள் இல்லை',
   'Products can still be browsed from the full catalog.':
       'முழு பட்டியலிலிருந்து பொருட்களை இன்னும் பார்க்கலாம்.',
   'Browse catalog': 'பட்டியலை பார்க்க',
   'Choose your Items': 'உங்கள் பொருட்களை தேர்வு செய்யுங்கள்',
+  'Choose a category': 'ஒரு வகையை தேர்வு செய்யுங்கள்',
   'Browse needed items near you':
       'உங்களுக்கருகில் தேவையான பொருட்களை பார்க்கவும்',
+  'Browse by item type': 'பொருள் வகைப்படி பார்க்கவும்',
   'Products': 'பொருட்கள்',
   'Search products': 'பொருட்களை தேடுங்கள்',
   'Clear search': 'தேடலை அழி',
   'No products found': 'பொருட்கள் கிடைக்கவில்லை',
-  'Try a different product name or shop.':
-      'வேறு பொருள் பெயர் அல்லது கடையை முயற்சிக்கவும்.',
+  'Try a different product name or category.':
+      'வேறு பொருள் பெயர் அல்லது வகையை முயற்சிக்கவும்.',
   'Could not load products': 'பொருட்களை ஏற்ற முடியவில்லை',
   'Firebase rules blocked product reads. Deploy the latest Firestore rules.':
       'Firebase விதிகள் பொருள் வாசிப்பை தடுத்தன. சமீபத்திய Firestore விதிகளை deploy செய்யுங்கள்.',
@@ -252,8 +255,10 @@ const _tamil = <String, String>{
   'Use gallery or camera to attach your list.':
       'உங்கள் பட்டியலை இணைக்க gallery அல்லது camera பயன்படுத்துங்கள்.',
   'Upload list': 'பட்டியலை பதிவேற்று',
-  'Upload a clear handwritten, printed, or shop list photo. Admin will review it and update your final bill.':
-      'தெளிவான கையெழுத்து, அச்சு அல்லது கடை பட்டியல் புகைப்படத்தை பதிவேற்றுங்கள். அட்மின் அதை சரிபார்த்து இறுதி பில்லைக் புதுப்பிப்பார்.',
+  'Upload a clear handwritten, printed, or shopping-list photo. Admin will review it and update your final bill.':
+      'தெளிவான கையெழுத்து, அச்சு அல்லது ஷாப்பிங் பட்டியல் புகைப்படத்தை பதிவேற்றுங்கள். அட்மின் அதை சரிபார்த்து இறுதி பில்லைக் புதுப்பிப்பார்.',
+  'Handwritten, printed, or shopping-list photos are accepted.':
+      'கையெழுத்து, அச்சு அல்லது ஷாப்பிங் பட்டியல் புகைப்படங்கள் ஏற்கப்படும்.',
   'Gallery': 'Gallery',
   'Choose photo': 'புகைப்படம் தேர்வு',
   'Retake': 'மீண்டும் எடு',
@@ -323,8 +328,8 @@ const _tamil = <String, String>{
   'All': 'அனைத்தும்',
   'Active': 'நடப்பில்',
   'Active orders': 'நடப்பில் உள்ள ஆர்டர்கள்',
-  'Orders being prepared, shopped, or delivered.':
-      'தயார் செய்யப்படும் அல்லது டெலிவரிக்கு வரும் ஆர்டர்கள்.',
+  'Orders being prepared, sourced, or delivered.':
+      'தயார் செய்யப்படும், பெறப்படும் அல்லது டெலிவரிக்கு வரும் ஆர்டர்கள்.',
   'No active orders': 'நடப்பில் ஆர்டர்கள் இல்லை',
   'Orders in progress will appear here.':
       'செயல்பாட்டில் உள்ள ஆர்டர்கள் இங்கே தோன்றும்.',

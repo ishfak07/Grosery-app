@@ -1081,7 +1081,7 @@ class _HomePromoBanner extends StatelessWidget {
                           const SizedBox(height: 8),
                           Text(
                             context.t(
-                              'We shop from trusted partners and keep you updated.',
+                              'We source from trusted partners and keep you updated.',
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -2423,7 +2423,7 @@ class ShopListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = context.read<AppState>().firestoreService;
     return _CustomerScaffold(
-      title: 'Items',
+      title: 'Categories',
       body: StreamBuilder<List<Shop>>(
         stream: store.watchShops(),
         builder: (context, snapshot) {
@@ -2434,8 +2434,8 @@ class ShopListScreen extends StatelessWidget {
           if (shops.isEmpty) {
             return RefreshableCenteredContent(
               child: EmptyState(
-                icon: Icons.store_mall_directory_outlined,
-                title: 'No active shops',
+                icon: Icons.category_outlined,
+                title: 'No active categories',
                 message: 'Products can still be browsed from the full catalog.',
                 action: ElevatedButton.icon(
                   onPressed: () => Navigator.of(context).push(
@@ -2451,8 +2451,8 @@ class ShopListScreen extends StatelessWidget {
           return _CustomerScrollView(
             children: [
               const _CustomerSectionHeader(
-                title: 'Choose your Items',
-                subtitle: 'Browse needed items near you',
+                title: 'Choose a category',
+                subtitle: 'Browse by item type',
               ),
               for (var index = 0; index < shops.length; index++) ...[
                 _FadeSlideIn(
@@ -2499,7 +2499,10 @@ class _ShopCard extends StatelessWidget {
               color: _customerPrimaryLight,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.storefront, color: _customerPrimary),
+            child: const Icon(
+              Icons.category_outlined,
+              color: _customerPrimary,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -2660,7 +2663,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
                     child: EmptyState(
                       icon: Icons.search_off,
                       title: 'No products found',
-                      message: 'Try a different product name or shop.',
+                      message: 'Try a different product name or category.',
                     ),
                   );
                 }
@@ -3902,7 +3905,7 @@ class _AnimatedUploadPlaceholderState extends State<_AnimatedUploadPlaceholder>
                         const SizedBox(height: 7),
                         Text(
                           context.t(
-                            'Handwritten, printed, or shop list photos are accepted.',
+                            'Handwritten, printed, or shopping-list photos are accepted.',
                           ),
                           textAlign: TextAlign.center,
                           style: const TextStyle(
@@ -4864,7 +4867,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
-      barrierLabel: 'Shop closed',
+      barrierLabel: 'Ordering closed',
       barrierColor: Colors.black.withValues(alpha: 0.46),
       transitionDuration: const Duration(milliseconds: 300),
       pageBuilder: (context, animation, secondaryAnimation) {
@@ -4974,7 +4977,7 @@ class _ShopClosedDialog extends StatelessWidget {
                         ),
                         const SizedBox(height: 18),
                         const Text(
-                          'Shop closed',
+                          'Ordering closed',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: _customerInk,
@@ -4985,7 +4988,10 @@ class _ShopClosedDialog extends StatelessWidget {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          settings.closedMessage,
+                          settings.closedMessage.replaceFirst(
+                            'Shop is closed.',
+                            'Ordering is closed.',
+                          ),
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: _customerMuted,
@@ -5969,7 +5975,7 @@ class _OrderHistoryFilters {
     label: 'Active',
     icon: Icons.local_shipping_outlined,
     heading: 'Active orders',
-    subtitle: 'Orders being prepared, shopped, or delivered.',
+    subtitle: 'Orders being prepared, sourced, or delivered.',
     emptyIcon: Icons.local_shipping_outlined,
     emptyTitle: 'No active orders',
     emptyMessage: 'Orders in progress will appear here.',

@@ -490,7 +490,7 @@ class _DashboardHero extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Manage orders, products, shops, customers, and support.',
+                  'Manage orders, products, categories, customers, and support.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Colors.white.withValues(alpha: 0.82),
                         height: 1.45,
@@ -723,9 +723,9 @@ class AdminDashboardScreen extends StatelessWidget {
                   ),
                 ),
                 _AdminTile(
-                  icon: Icons.storefront,
-                  title: 'Shops',
-                  subtitle: 'Partner shops',
+                  icon: Icons.category_outlined,
+                  title: 'Categories',
+                  subtitle: 'Item groups',
                   accent: _adminAccent,
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
@@ -1061,7 +1061,7 @@ class _AdminCheckoutChargeSettingsScreenState
                             const Divider(height: 1),
                             const SizedBox(height: 18),
                             const _AdminSectionHeader(
-                              title: 'Shop opening hours',
+                              title: 'Ordering hours',
                               icon: Icons.schedule_outlined,
                             ),
                             LayoutBuilder(
@@ -2591,8 +2591,8 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                                 ),
                               );
                             },
-                            icon: const Icon(Icons.storefront_outlined),
-                            label: const Text('View shop order sheet'),
+                            icon: const Icon(Icons.assignment_outlined),
+                            label: const Text('View preparation sheet'),
                           ),
                         ),
                       ],
@@ -5492,9 +5492,9 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                 children: [
                   if (shops.isEmpty)
                     const EmptyState(
-                      icon: Icons.storefront,
-                      title: 'Add a shop first',
-                      message: 'Products must be linked to a partner shop.',
+                      icon: Icons.category_outlined,
+                      title: 'Add a category first',
+                      message: 'Products must be linked to a category.',
                     ),
                   _AdminReveal(
                     child: _AdminCard(
@@ -5527,8 +5527,8 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                           DropdownButtonFormField<String>(
                             initialValue: _selectedShopId,
                             decoration: const InputDecoration(
-                              labelText: 'Shop',
-                              prefixIcon: Icon(Icons.storefront),
+                              labelText: 'Category',
+                              prefixIcon: Icon(Icons.category_outlined),
                             ),
                             items: shops
                                 .map(
@@ -5724,7 +5724,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
     }
     final selectedShop = _shopForId(shops, _selectedShopId);
     if (selectedShop == null) {
-      showSnack(context, 'Select a shop.');
+      showSnack(context, 'Select a category.');
       return;
     }
     setState(() => _isSaving = true);
@@ -5867,13 +5867,13 @@ class AdminShopManagementScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final appState = context.read<AppState>();
     return _AdminScaffold(
-      title: 'Manage shops',
+      title: 'Manage categories',
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: _adminInk,
         foregroundColor: Colors.white,
         onPressed: () => _showShopDialog(context),
         icon: const Icon(Icons.add),
-        label: const Text('Shop'),
+        label: const Text('Category'),
       ),
       body: _AdminPage(
         child: StreamBuilder<List<Shop>>(
@@ -5888,9 +5888,9 @@ class AdminShopManagementScreen extends StatelessWidget {
             if (shops.isEmpty) {
               return const RefreshableCenteredContent(
                 child: EmptyState(
-                  icon: Icons.storefront,
-                  title: 'No shops',
-                  message: 'Add partner shops before adding products.',
+                  icon: Icons.category_outlined,
+                  title: 'No categories',
+                  message: 'Add categories before adding products.',
                 ),
               );
             }
@@ -5934,12 +5934,14 @@ class AdminShopManagementScreen extends StatelessWidget {
           title: Row(
             children: [
               _AdminIconBadge(
-                icon: Icons.storefront,
+                icon: Icons.category_outlined,
                 color: shop == null ? _adminPrimary : _adminBlue,
                 size: 38,
               ),
               const SizedBox(width: 10),
-              Expanded(child: Text(shop == null ? 'Add shop' : 'Edit shop')),
+              Expanded(
+                child: Text(shop == null ? 'Add category' : 'Edit category'),
+              ),
             ],
           ),
           content: SingleChildScrollView(
@@ -5949,21 +5951,21 @@ class AdminShopManagementScreen extends StatelessWidget {
                 TextField(
                   controller: name,
                   decoration: const InputDecoration(
-                    labelText: 'Shop name',
-                    prefixIcon: Icon(Icons.storefront),
+                    labelText: 'Category name',
+                    prefixIcon: Icon(Icons.category_outlined),
                   ),
                 ),
                 const SizedBox(height: 8),
                 AppPhoneField(
                   controller: phone,
-                  label: 'Phone',
+                  label: 'Contact phone',
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: address,
                   decoration: const InputDecoration(
-                    labelText: 'Address',
-                    prefixIcon: Icon(Icons.location_on_outlined),
+                    labelText: 'Details',
+                    prefixIcon: Icon(Icons.notes_outlined),
                   ),
                   minLines: 2,
                   maxLines: 3,
@@ -6027,7 +6029,7 @@ class _AdminShopTile extends StatelessWidget {
       child: Row(
         children: [
           _AdminIconBadge(
-            icon: Icons.storefront,
+            icon: Icons.category_outlined,
             color: shop.isActive ? _adminPrimary : _adminMuted,
             size: 48,
           ),
