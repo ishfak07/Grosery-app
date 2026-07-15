@@ -48,7 +48,7 @@ class ShopOrderPdfService {
       theme: theme,
       title: 'Order preparation ${order.orderId}',
       author: 'Puttalam Drop',
-      subject: 'Combined order preparation list',
+      subject: 'Combined order preparation list', 
     );
     final placedAt = DateFormat('dd MMM yyyy, h:mm a').format(order.createdAt);
 
