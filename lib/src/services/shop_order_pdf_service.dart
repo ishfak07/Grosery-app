@@ -55,7 +55,7 @@ class ShopOrderPdfService {
     document.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
+        margin: const pw.EdgeInsets.all(32), 
         header: (context) => pw.Container(
           padding: const pw.EdgeInsets.only(bottom: 10),
           decoration: const pw.BoxDecoration(
