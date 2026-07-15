@@ -328,6 +328,54 @@ class _AdminPill extends StatelessWidget {
   }
 }
 
+class _AdminProgressPill extends StatelessWidget {
+  const _AdminProgressPill({
+    required this.label,
+    required this.color,
+  });
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AdminSectionHeader extends StatelessWidget {
   const _AdminSectionHeader({
     required this.title,
@@ -5418,6 +5466,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   String _stockStatus = 'available';
   String? _selectedShopId;
   String? _imagePath;
+  var _isPickingImage = false;
   var _isSaving = false;
 
   @override
@@ -5470,7 +5519,9 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
               _AdminAppBarButton(
                 tooltip: 'Remove product',
                 icon: Icons.delete_outline,
-                onPressed: _isSaving ? () {} : _confirmDeleteProduct,
+                onPressed: _isSaving || _isPickingImage
+                    ? () {}
+                    : _confirmDeleteProduct,
               ),
             ],
       body: _AdminPage(
@@ -5662,7 +5713,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                             children: [
                               Expanded(
                                 child: OutlinedButton.icon(
-                                  onPressed: _isSaving
+                                  onPressed: _isSaving || _isPickingImage
                                       ? null
                                       : () => _pickProductImage(
                                             fromCamera: false,
@@ -5674,7 +5725,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: OutlinedButton.icon(
-                                  onPressed: _isSaving
+                                  onPressed: _isSaving || _isPickingImage
                                       ? null
                                       : () => _pickProductImage(
                                             fromCamera: true,
@@ -5685,7 +5736,13 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                               ),
                             ],
                           ),
-                          if (_imagePath != null) ...[
+                          if (_isPickingImage) ...[
+                            const SizedBox(height: 10),
+                            const _AdminProgressPill(
+                              label: 'Preparing image cropper',
+                              color: _adminPrimary,
+                            ),
+                          ] else if (_imagePath != null) ...[
                             const SizedBox(height: 10),
                             const _AdminPill(
                               label: 'Product image selected',
@@ -5702,7 +5759,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                     label: 'Save product',
                     icon: Icons.save,
                     isLoading: _isSaving,
-                    onPressed: shops.isEmpty || _isSaving
+                    onPressed: shops.isEmpty || _isSaving || _isPickingImage
                         ? null
                         : () => _saveProduct(shops),
                   ),
@@ -5716,7 +5773,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   }
 
   Future<void> _saveProduct(List<Shop> shops) async {
-    if (_isSaving) {
+    if (_isSaving || _isPickingImage) {
       return;
     }
     if (!_formKey.currentState!.validate()) {
@@ -5774,7 +5831,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   }
 
   Future<void> _confirmDeleteProduct() async {
-    if (_isSaving) {
+    if (_isSaving || _isPickingImage) {
       return;
     }
     final product = widget.product;
@@ -5831,12 +5888,34 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
   }
 
   Future<void> _pickProductImage({required bool fromCamera}) async {
-    final imageFile =
-        fromCamera ? await takePhotoFromCamera() : await pickImageFromGallery();
-    if (!mounted || imageFile == null) {
+    if (_isSaving || _isPickingImage) {
       return;
     }
-    setState(() => _imagePath = imageFile.path);
+    setState(() => _isPickingImage = true);
+    try {
+      final imageFile = fromCamera
+          ? await takeProductPhotoForCrop()
+          : await pickProductImageFromGalleryForCrop();
+      if (!mounted || imageFile == null) {
+        return;
+      }
+      final croppedImage = await cropProductImageFile(
+        context: context,
+        imageFile: imageFile,
+      );
+      if (!mounted || croppedImage == null) {
+        return;
+      }
+      setState(() => _imagePath = croppedImage.path);
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPickingImage = false);
+      }
+    }
   }
 
   List<Shop> _uniqueShops(List<Shop> shops) {
