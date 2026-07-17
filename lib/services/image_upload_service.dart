@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
-
 class ImageUploadException implements Exception {
   const ImageUploadException(this.message);
 
@@ -17,13 +16,12 @@ class ImageUploadService {
   static const int maxUploadBytes = 8 * 1024 * 1024;
   static const String _cloudName = String.fromEnvironment(
     'CLOUDINARY_CLOUD_NAME',
-    defaultValue: 'dbflkn1ig',
+    defaultValue: 'dbflkn1g',
   );
   static const String _uploadPreset = String.fromEnvironment(
     'CLOUDINARY_UPLOAD_PRESET',
     defaultValue: 'grocery_unsigned',
   );
-
 
   static Future<String> uploadUserImage({
     required File imageFile,
@@ -116,7 +114,6 @@ class ImageUploadService {
       );
     }
   }
-
 
   static String _cloudinaryErrorMessage(String responseBody) {
     try {

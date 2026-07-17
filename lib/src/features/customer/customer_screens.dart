@@ -2155,7 +2155,7 @@ class _HomeActionTile extends StatelessWidget {
     final tileHeight = featured
         ? compact
             ? 126.0
-            : 136.0
+            : 140.0
         : compact
             ? 116.0
             : 132.0;
