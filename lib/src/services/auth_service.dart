@@ -205,6 +205,36 @@ class AuthService {
     }
   }
 
+  Future<void> updateCurrentUserPassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final user = _auth.currentUser;
+    final email = user?.email;
+    if (user == null || email == null || email.isEmpty) {
+      throw const AuthServiceException(
+        'Login again before changing the password.',
+      );
+    }
+    if (currentPassword.isEmpty) {
+      throw const AuthServiceException('Enter your current password.');
+    }
+    if (newPassword.length < 6) {
+      throw const AuthServiceException(
+        'Password must be at least 6 characters.',
+      );
+    }
+
+    try {
+      await user.reauthenticateWithCredential(
+        EmailAuthProvider.credential(email: email, password: currentPassword),
+      );
+      await user.updatePassword(newPassword);
+    } on FirebaseAuthException catch (error) {
+      throw AuthServiceException(_passwordUpdateErrorMessage(error));
+    }
+  }
+
   Future<void> createDeliveryBoyAccount({
     required String fullName,
     required String phone,
@@ -491,6 +521,26 @@ class AuthService {
         return 'Unable to complete account deletion. Please try again shortly.';
       default:
         return message ?? 'Request failed. Try again.';
+    }
+  }
+
+  String _passwordUpdateErrorMessage(FirebaseAuthException error) {
+    switch (error.code) {
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'Current password is incorrect.';
+      case 'weak-password':
+        return 'Password must be at least 6 characters.';
+      case 'requires-recent-login':
+        return 'Login again before changing the password.';
+      case 'network-request-failed':
+        return 'Network error. Check your connection and try again.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please wait a few minutes and try again.';
+      case 'user-disabled':
+        return 'This account is deactivated. Contact admin support.';
+      default:
+        return error.message ?? 'Unable to update password. Try again.';
     }
   }
 

@@ -815,6 +815,17 @@ class AdminDashboardScreen extends StatelessWidget {
                   ),
                 ),
                 _AdminTile(
+                  icon: Icons.admin_panel_settings_outlined,
+                  title: 'Admin login',
+                  subtitle: 'Reset password',
+                  accent: _adminPrimary,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AdminLoginPasswordResetScreen(),
+                    ),
+                  ),
+                ),
+                _AdminTile(
                   icon: Icons.person_remove_outlined,
                   title: 'Account deletion',
                   subtitle: 'Review web requests',
@@ -2302,8 +2313,9 @@ class _AdminOrderDateFilter extends StatelessWidget {
               foregroundColor: _adminInk,
               disabledForegroundColor: _adminMuted.withValues(alpha: 0.45),
               side: BorderSide(
-                color:
-                    onClear == null ? _adminLine.withValues(alpha: 0.6) : _adminLine,
+                color: onClear == null
+                    ? _adminLine.withValues(alpha: 0.6)
+                    : _adminLine,
               ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
@@ -2912,11 +2924,12 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                         icon: Icons.route_outlined,
                       ),
                       DropdownButtonFormField<String>(
-                        initialValue: AppConstants.selectableOrderStatuses.contains(
+                        initialValue:
+                            AppConstants.selectableOrderStatuses.contains(
                           _status,
                         )
-                            ? _status
-                            : null,
+                                ? _status
+                                : null,
                         decoration:
                             const InputDecoration(labelText: 'Order status'),
                         items: AppConstants.selectableOrderStatuses
@@ -7618,6 +7631,196 @@ class _AdminCustomerDeletionTile extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class AdminLoginPasswordResetScreen extends StatefulWidget {
+  const AdminLoginPasswordResetScreen({super.key});
+
+  @override
+  State<AdminLoginPasswordResetScreen> createState() =>
+      _AdminLoginPasswordResetScreenState();
+}
+
+class _AdminLoginPasswordResetScreenState
+    extends State<AdminLoginPasswordResetScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _currentPassword = TextEditingController();
+  final _newPassword = TextEditingController();
+  final _confirmPassword = TextEditingController();
+  var _isSaving = false;
+
+  @override
+  void dispose() {
+    _currentPassword.dispose();
+    _newPassword.dispose();
+    _confirmPassword.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = context.watch<AppState>().profile;
+    return _AdminScaffold(
+      title: 'Admin login reset',
+      body: _AdminPage(
+        maxWidth: 680,
+        child: ListView(
+          physics: appRefreshScrollPhysics,
+          padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
+          children: [
+            _AdminReveal(
+              child: _AdminCard(
+                child: Row(
+                  children: [
+                    const _AdminIconBadge(
+                      icon: Icons.admin_panel_settings_outlined,
+                      color: _adminPrimary,
+                      size: 52,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            profile?.fullName.isNotEmpty == true
+                                ? profile!.fullName
+                                : 'Admin account',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _adminInk,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            profile?.phone.isNotEmpty == true
+                                ? profile!.phone
+                                : 'Current login',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _adminMuted,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const _AdminPill(
+                      label: 'Admin',
+                      color: _adminPrimary,
+                      icon: Icons.verified_user_outlined,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const _AdminReveal(
+              index: 1,
+              child: _AdminNotice(
+                icon: Icons.info_outline,
+                color: _adminBlue,
+                message:
+                    'Enter the current admin password before saving a new login password.',
+              ),
+            ),
+            const SizedBox(height: 12),
+            _AdminReveal(
+              index: 2,
+              child: _AdminCard(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AppTextField(
+                        controller: _currentPassword,
+                        label: 'Current password',
+                        obscureText: true,
+                        validator: Validators.password,
+                        prefixIcon: Icons.lock_outline,
+                      ),
+                      const SizedBox(height: 12),
+                      AppTextField(
+                        controller: _newPassword,
+                        label: 'New password',
+                        obscureText: true,
+                        validator: Validators.password,
+                        prefixIcon: Icons.lock_reset,
+                      ),
+                      const SizedBox(height: 12),
+                      AppTextField(
+                        controller: _confirmPassword,
+                        label: 'Confirm new password',
+                        obscureText: true,
+                        validator: (value) => Validators.confirmPassword(
+                          value,
+                          _newPassword.text,
+                        ),
+                        prefixIcon: Icons.lock,
+                      ),
+                      const SizedBox(height: 18),
+                      FilledButton.icon(
+                        onPressed: _isSaving ? null : _savePassword,
+                        icon: _isSaving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.save),
+                        label: Text(
+                          _isSaving ? 'Updating password' : 'Update password',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _savePassword() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    if (_currentPassword.text == _newPassword.text) {
+      showSnack(context, 'New password must be different.');
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      await context.read<AppState>().authService.updateCurrentUserPassword(
+            currentPassword: _currentPassword.text,
+            newPassword: _newPassword.text,
+          );
+      if (!mounted) {
+        return;
+      }
+      _currentPassword.clear();
+      _newPassword.clear();
+      _confirmPassword.clear();
+      showSnack(context, 'Admin login password updated.');
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 }
 
