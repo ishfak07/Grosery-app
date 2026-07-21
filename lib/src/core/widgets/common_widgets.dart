@@ -881,6 +881,9 @@ String _cloudinaryUploadFriendlyMessage(String message, String lower) {
   if (lower.contains('upload preset')) {
     return 'Cloudinary upload preset is not ready. Please contact support.';
   }
+  if (lower.contains('invalid signature') || lower.contains('string to sign')) {
+    return 'Image upload setup is invalid. Please contact support.';
+  }
   if (lower.contains('invalid api key') || lower.contains('unknown api key')) {
     return 'Cloudinary image upload setup is invalid. Please contact support.';
   }

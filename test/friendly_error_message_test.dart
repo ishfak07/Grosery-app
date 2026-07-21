@@ -126,6 +126,17 @@ void main() {
     );
   });
 
+  test('hides Cloudinary invalid signature diagnostics from users', () {
+    expect(
+      appFriendlyErrorMessage(
+        const ImageUploadException(
+          'Cloudinary upload failed: Invalid Signature abc123. String to sign - allowed_formats=jpg&timestamp=1.',
+        ),
+      ),
+      'Image upload setup is invalid. Please contact support.',
+    );
+  });
+
   test('keeps local image validation failures readable', () {
     expect(
       appFriendlyErrorMessage(

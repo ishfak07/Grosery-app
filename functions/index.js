@@ -9,7 +9,7 @@ admin.initializeApp();
 
 const notificationChannelId = "puttalam_drop_alerts";
 const cloudinaryCloudName = defineString("CLOUDINARY_CLOUD_NAME", {
-  default: "dbflkn1g",
+  default: "dbflkn1ig",
 });
 const cloudinaryApiKey = defineString("CLOUDINARY_API_KEY");
 const cloudinaryApiSecret = defineSecret("CLOUDINARY_API_SECRET");
@@ -247,7 +247,6 @@ exports.signCloudinaryUpload = onCall(
       folder: uploadRequest.folder,
       public_id: uploadRequest.publicId,
       allowed_formats: cloudinaryAllowedFormats.join(","),
-      max_file_size: cloudinaryMaxImageBytes,
       overwrite: "false",
       tags: uploadRequest.tags.join(","),
       context: [
