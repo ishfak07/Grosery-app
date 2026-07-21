@@ -6,7 +6,7 @@ flow changes.
 
 ## Public URLs
 
-- Privacy policy: `https://symphonious-fairy-287a12.netlify.app/`
+- Privacy policy: `https://whatsconnect.sbs/privacy-policy/`
 - Account deletion: `https://grocery-delivery-app-388bc.web.app/delete-account`
 
 ## Google Play Data Safety
