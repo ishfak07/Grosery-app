@@ -5044,12 +5044,15 @@ class _AdminOfferFormScreenState extends State<AdminOfferFormScreen> {
       final appState = context.read<AppState>();
       final offerId = widget.offer?.offerId ?? const Uuid().v4();
       var imageUrl = widget.offer?.imageUrl ?? '';
+      var imagePublicId = widget.offer?.imagePublicId ?? '';
       if (_imagePath != null) {
-        imageUrl = await ImageUploadService.uploadCatalogImage(
+        final uploadedImage = await ImageUploadService.uploadCatalogImage(
           imageFile: File(_imagePath!),
           collection: 'offers',
           entityId: offerId,
         );
+        imageUrl = uploadedImage.secureUrl;
+        imagePublicId = uploadedImage.publicId;
       }
       final offer = Offer(
         offerId: offerId,
@@ -5058,6 +5061,7 @@ class _AdminOfferFormScreenState extends State<AdminOfferFormScreen> {
         caption: _caption.text.trim(),
         tamilCaption: _tamilCaption.text.trim(),
         imageUrl: imageUrl,
+        imagePublicId: imagePublicId,
         createdAt: widget.offer?.createdAt ?? DateTime.now(),
         isActive: _isActive,
         startDate: _startDate,
@@ -5802,12 +5806,15 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
       final appState = context.read<AppState>();
       final productId = widget.product?.productId ?? const Uuid().v4();
       var imageUrl = widget.product?.imageUrl ?? '';
+      var imagePublicId = widget.product?.imagePublicId ?? '';
       if (_imagePath != null) {
-        imageUrl = await ImageUploadService.uploadCatalogImage(
+        final uploadedImage = await ImageUploadService.uploadCatalogImage(
           imageFile: File(_imagePath!),
           collection: 'products',
           entityId: productId,
         );
+        imageUrl = uploadedImage.secureUrl;
+        imagePublicId = uploadedImage.publicId;
       }
       final now = DateTime.now();
       final productUnit = _isCustomUnit ? _customUnit.text.trim() : _unit;
@@ -5822,6 +5829,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         descriptionTamil: _descriptionTamil.text.trim(),
         price: double.parse(_price.text.trim()),
         imageUrl: imageUrl,
+        imagePublicId: imagePublicId,
         unit: productUnit,
         stockStatus: _stockStatus,
         isActive: widget.product?.isActive ?? true,

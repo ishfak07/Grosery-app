@@ -3,10 +3,23 @@ import 'package:grocerydelivery/services/image_upload_service.dart';
 import 'package:grocerydelivery/src/core/widgets/common_widgets.dart';
 
 void main() {
-  test('uses the configured Cloudinary upload endpoint by default', () {
+  test('routes checkout receipt images to signed Cloudinary receipts', () {
     expect(
-      ImageUploadService.cloudinaryUploadUriForDiagnostics().toString(),
-      'https://api.cloudinary.com/v1_1/dbflkn1g/image/upload',
+      ImageUploadService.uploadTypeForDiagnostics(
+        folder: 'orders/order-1',
+        fileName: 'payment-receipt',
+      ),
+      'payment_receipt',
+    );
+  });
+
+  test('routes checkout shopping list images to signed Cloudinary lists', () {
+    expect(
+      ImageUploadService.uploadTypeForDiagnostics(
+        folder: 'orders/order-1',
+        fileName: 'shopping-list',
+      ),
+      'order_shopping_list',
     );
   });
 
@@ -73,21 +86,21 @@ void main() {
     expect(
       appFriendlyErrorMessage(
         const ImageUploadException(
-          'Cloudinary upload is not configured. Add CLOUDINARY_CLOUD_NAME and CLOUDINARY_UPLOAD_PRESET.',
+          'Cloudinary upload is not configured.',
         ),
       ),
       'Cloudinary image upload is not configured. Please contact support.',
     );
   });
 
-  test('keeps Cloudinary upload preset errors readable', () {
+  test('keeps missing Cloudinary signed upload function readable', () {
     expect(
       appFriendlyErrorMessage(
         const ImageUploadException(
-          'Cloudinary upload failed: Upload preset must be specified when using unsigned upload.',
+          'Cloudinary upload service is not deployed.',
         ),
       ),
-      'Cloudinary upload preset is not ready. Please contact support.',
+      'Cloudinary image upload service is not deployed. Please contact support.',
     );
   });
 

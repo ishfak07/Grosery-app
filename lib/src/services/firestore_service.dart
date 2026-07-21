@@ -452,6 +452,8 @@ class FirestoreService {
       ..remove('photoListAmount')
       ..remove('manualListAmount')
       ..remove('listAmountsReviewed')
+      ..remove('uploadedImagePublicId')
+      ..remove('paymentReceiptImagePublicId')
       ..remove('rejectionReason')
       ..remove('assignedDeliveryBoyId')
       ..remove('assignedDeliveryPhone')
@@ -814,6 +816,7 @@ class FirestoreService {
       senderRole: user.role,
       message: message.trim(),
       imageUrl: '',
+      imagePublicId: '',
       createdAt: now,
     );
 
@@ -879,6 +882,7 @@ class FirestoreService {
     required UserProfile sender,
     required String message,
     String imageUrl = '',
+    String imagePublicId = '',
   }) async {
     final supportMessage = SupportMessage(
       messageId: _uuid.v4(),
@@ -887,6 +891,7 @@ class FirestoreService {
       senderRole: sender.role,
       message: message.trim(),
       imageUrl: imageUrl,
+      imagePublicId: imagePublicId,
       createdAt: DateTime.now(),
     );
 

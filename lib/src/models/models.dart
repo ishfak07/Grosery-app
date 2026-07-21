@@ -570,6 +570,7 @@ class Offer {
     required this.caption,
     required this.tamilCaption,
     required this.imageUrl,
+    required this.imagePublicId,
     required this.createdAt,
     required this.isActive,
     this.startDate,
@@ -582,6 +583,7 @@ class Offer {
   final String caption;
   final String tamilCaption;
   final String imageUrl;
+  final String imagePublicId;
   final DateTime createdAt;
   final bool isActive;
   final DateTime? startDate;
@@ -624,6 +626,7 @@ class Offer {
       'caption': caption,
       'tamilCaption': tamilCaption,
       'imageUrl': imageUrl,
+      'imagePublicId': imagePublicId,
       'createdAt': _writeDate(createdAt),
       'isActive': isActive,
       'startDate': startDate == null ? null : _writeDate(startDate!),
@@ -639,6 +642,7 @@ class Offer {
       caption: map['caption'] as String? ?? '',
       tamilCaption: map['tamilCaption'] as String? ?? '',
       imageUrl: map['imageUrl'] as String? ?? '',
+      imagePublicId: map['imagePublicId'] as String? ?? '',
       createdAt: _readDate(map['createdAt']),
       isActive: map['isActive'] as bool? ?? true,
       startDate: _readOptionalDate(map['startDate']),
@@ -659,6 +663,7 @@ class Product {
     required this.descriptionTamil,
     required this.price,
     required this.imageUrl,
+    required this.imagePublicId,
     required this.unit,
     required this.stockStatus,
     required this.isActive,
@@ -676,6 +681,7 @@ class Product {
   final String descriptionTamil;
   final double price;
   final String imageUrl;
+  final String imagePublicId;
   final String unit;
   final String stockStatus;
   final bool isActive;
@@ -710,6 +716,7 @@ class Product {
     String? descriptionTamil,
     double? price,
     String? imageUrl,
+    String? imagePublicId,
     String? unit,
     String? stockStatus,
     bool? isActive,
@@ -725,6 +732,7 @@ class Product {
       descriptionTamil: descriptionTamil ?? this.descriptionTamil,
       price: price ?? this.price,
       imageUrl: imageUrl ?? this.imageUrl,
+      imagePublicId: imagePublicId ?? this.imagePublicId,
       unit: unit ?? this.unit,
       stockStatus: stockStatus ?? this.stockStatus,
       isActive: isActive ?? this.isActive,
@@ -745,6 +753,7 @@ class Product {
       'descriptionTamil': descriptionTamil,
       'price': price,
       'imageUrl': imageUrl,
+      'imagePublicId': imagePublicId,
       'unit': unit,
       'stockStatus': stockStatus,
       'isActive': isActive,
@@ -765,6 +774,7 @@ class Product {
       descriptionTamil: map['descriptionTamil'] as String? ?? '',
       price: (map['price'] as num?)?.toDouble() ?? 0,
       imageUrl: map['imageUrl'] as String? ?? '',
+      imagePublicId: map['imagePublicId'] as String? ?? '',
       unit: map['unit'] as String? ?? 'piece',
       stockStatus: map['stockStatus'] as String? ?? 'available',
       isActive: map['isActive'] as bool? ?? true,
@@ -965,8 +975,10 @@ class OrderModel {
     required this.customerAddress,
     required this.items,
     required this.uploadedImageUrl,
+    required this.uploadedImagePublicId,
     required this.manualListText,
     required this.paymentReceiptImageUrl,
+    required this.paymentReceiptImagePublicId,
     required this.orderNotes,
     required this.cartItemsAmount,
     required this.photoListAmount,
@@ -998,8 +1010,10 @@ class OrderModel {
   final String customerAddress;
   final List<OrderItem> items;
   final String uploadedImageUrl;
+  final String uploadedImagePublicId;
   final String manualListText;
   final String paymentReceiptImageUrl;
+  final String paymentReceiptImagePublicId;
   final String orderNotes;
   final double cartItemsAmount;
   final double photoListAmount;
@@ -1052,6 +1066,7 @@ class OrderModel {
   OrderModel copyWith({
     List<OrderItem>? items,
     String? paymentReceiptImageUrl,
+    String? paymentReceiptImagePublicId,
     String? orderStatus,
     String? adminNotes,
     String? rejectionReason,
@@ -1079,9 +1094,12 @@ class OrderModel {
       customerAddress: customerAddress,
       items: items ?? this.items,
       uploadedImageUrl: uploadedImageUrl,
+      uploadedImagePublicId: uploadedImagePublicId,
       manualListText: manualListText,
       paymentReceiptImageUrl:
           paymentReceiptImageUrl ?? this.paymentReceiptImageUrl,
+      paymentReceiptImagePublicId:
+          paymentReceiptImagePublicId ?? this.paymentReceiptImagePublicId,
       orderNotes: orderNotes,
       cartItemsAmount: cartItemsAmount ?? this.cartItemsAmount,
       photoListAmount: photoListAmount ?? this.photoListAmount,
@@ -1119,7 +1137,9 @@ class OrderModel {
       'customerAddress': customerAddress,
       'items': items.map((item) => item.toMap()).toList(),
       'uploadedImageUrl': uploadedImageUrl,
+      'uploadedImagePublicId': uploadedImagePublicId,
       'paymentReceiptImageUrl': paymentReceiptImageUrl,
+      'paymentReceiptImagePublicId': paymentReceiptImagePublicId,
       'orderNotes': _orderNotesForStorage(
         orderNotes: customerNotes,
         manualListText: effectiveManualListText,
@@ -1198,8 +1218,11 @@ class OrderModel {
       customerAddress: map['customerAddress'] as String? ?? '',
       items: items,
       uploadedImageUrl: uploadedImageUrl,
+      uploadedImagePublicId: map['uploadedImagePublicId'] as String? ?? '',
       manualListText: manualListText,
       paymentReceiptImageUrl: map['paymentReceiptImageUrl'] as String? ?? '',
+      paymentReceiptImagePublicId:
+          map['paymentReceiptImagePublicId'] as String? ?? '',
       orderNotes: _orderNotesWithoutManualList(rawOrderNotes),
       cartItemsAmount: cartItemsAmount,
       photoListAmount: photoListAmount,
@@ -1623,6 +1646,7 @@ class SupportMessage {
     required this.senderRole,
     required this.message,
     required this.imageUrl,
+    required this.imagePublicId,
     required this.createdAt,
   });
 
@@ -1632,6 +1656,7 @@ class SupportMessage {
   final String senderRole;
   final String message;
   final String imageUrl;
+  final String imagePublicId;
   final DateTime createdAt;
 
   Map<String, dynamic> toMap() {
@@ -1642,6 +1667,7 @@ class SupportMessage {
       'senderRole': senderRole,
       'message': message,
       'imageUrl': imageUrl,
+      'imagePublicId': imagePublicId,
       'createdAt': _writeDate(createdAt),
     };
   }
@@ -1654,6 +1680,7 @@ class SupportMessage {
       senderRole: map['senderRole'] as String? ?? 'user',
       message: map['message'] as String? ?? '',
       imageUrl: map['imageUrl'] as String? ?? '',
+      imagePublicId: map['imagePublicId'] as String? ?? '',
       createdAt: _readDate(map['createdAt']),
     );
   }

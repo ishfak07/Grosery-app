@@ -9024,13 +9024,16 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
     try {
       final appState = context.read<AppState>();
       var imageUrl = '';
+      var imagePublicId = '';
       if (_imagePath != null) {
-        imageUrl = await ImageUploadService.uploadUserImage(
+        final uploadedImage = await ImageUploadService.uploadUserImage(
           imageFile: File(_imagePath!),
           ownerUid: appState.profile!.uid,
           folder: 'support/${widget.ticket.ticketId}',
           fileName: 'message-${DateTime.now().millisecondsSinceEpoch}',
         );
+        imageUrl = uploadedImage.secureUrl;
+        imagePublicId = uploadedImage.publicId;
       }
       await appState.firestoreService.sendSupportMessage(
         ticket: widget.ticket,
@@ -9038,6 +9041,7 @@ class _SupportThreadScreenState extends State<SupportThreadScreen> {
         message:
             _message.text.trim().isEmpty ? 'Image attached' : _message.text,
         imageUrl: imageUrl,
+        imagePublicId: imagePublicId,
       );
       if (mounted) {
         _message.clear();

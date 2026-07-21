@@ -872,6 +872,12 @@ String _cloudinaryUploadFriendlyMessage(String message, String lower) {
       lower.contains('cloudinary_upload_preset')) {
     return 'Cloudinary image upload is not configured. Please contact support.';
   }
+  if (lower.contains('service is not deployed')) {
+    return 'Cloudinary image upload service is not deployed. Please contact support.';
+  }
+  if (lower.contains('service is unavailable')) {
+    return appOfflineMessage;
+  }
   if (lower.contains('upload preset')) {
     return 'Cloudinary upload preset is not ready. Please contact support.';
   }

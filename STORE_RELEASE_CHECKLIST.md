@@ -33,6 +33,39 @@ Notes:
 - The release build no longer uses the debug signing key. It requires `android/key.properties`.
 - If Firebase Android auth/API integrations depend on SHA certificates, add the upload/app signing SHA-1 and SHA-256 values in Firebase Console.
 
+## Cloudinary Upload Signing
+
+Images upload to Cloudinary through signed direct uploads. The Flutter app never
+contains the Cloudinary API secret.
+
+1. Set the API secret in Firebase Secret Manager:
+
+   ```powershell
+   firebase functions:secrets:set CLOUDINARY_API_SECRET --project grocery-delivery-app-388bc
+   ```
+
+2. Configure the non-secret Function params for the same Cloudinary product
+   environment. The simplest path is to let the Firebase CLI prompt for them
+   on the first deploy:
+
+   ```text
+   CLOUDINARY_CLOUD_NAME
+   CLOUDINARY_API_KEY
+   ```
+
+   You can also predefine them in the project Functions params env file used by
+   the Firebase CLI.
+
+3. Deploy Functions and Firestore rules before testing uploads:
+
+   ```powershell
+   firebase deploy --project grocery-delivery-app-388bc --only functions,firestore:rules
+   ```
+
+The signing Function restricts uploads to image resources, 8 MB maximum size,
+`jpg`, `jpeg`, `png`, `webp`, `heic`, and `heif`, and server-generated folders
+under `puttalam-drop/`.
+
 ## iOS / App Store
 
 1. Use a Mac with Xcode 26 or later and a current Flutter stable SDK that supports Xcode 26 and iOS 26.
@@ -80,11 +113,12 @@ before these URLs and workflows are considered live.
 - The source and Firestore rules no longer contain a bootstrap administrator backdoor.
 - Delete any old Firebase Authentication account created with the former fixed debug administrator password, or reset it to a strong unique credential.
 - Create the real Firebase administrator account and set only its Firestore profile to `role: "admin"`.
-- New uploads use authenticated Firebase Storage rules. The old unsigned
-  Cloudinary preset is no longer referenced by the app and should be disabled
-  in Cloudinary after any legacy build is retired.
-- Legacy Cloudinary URLs discovered during deletion are removed from customer
-  records and placed in the admin-only `legacy_media_cleanup` queue.
+- New uploads use signed Cloudinary parameters from the `signCloudinaryUpload`
+  Firebase Function. Never put the Cloudinary API secret in Flutter source.
+- Old unsigned Cloudinary presets should be disabled after any legacy build is
+  retired.
+- Cloudinary URLs and public IDs discovered during deletion are removed from
+  customer records and placed in the admin-only `legacy_media_cleanup` queue.
 - Deploy Firestore rules, Storage rules, Cloud Functions, and Hosting before
   store review.
 

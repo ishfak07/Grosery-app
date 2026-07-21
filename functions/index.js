@@ -1,5 +1,6 @@
 const admin = require("firebase-admin");
 const crypto = require("crypto");
+const {defineSecret, defineString} = require("firebase-functions/params");
 const {onDocumentCreated} = require("firebase-functions/v2/firestore");
 const {HttpsError, onCall, onRequest} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
@@ -7,6 +8,14 @@ const {onSchedule} = require("firebase-functions/v2/scheduler");
 admin.initializeApp();
 
 const notificationChannelId = "puttalam_drop_alerts";
+const cloudinaryCloudName = defineString("CLOUDINARY_CLOUD_NAME", {
+  default: "dbflkn1g",
+});
+const cloudinaryApiKey = defineString("CLOUDINARY_API_KEY");
+const cloudinaryApiSecret = defineSecret("CLOUDINARY_API_SECRET");
+const cloudinaryAllowedFormats = ["jpg", "jpeg", "png", "webp", "heic", "heif"];
+const cloudinaryMaxImageBytes = 8 * 1024 * 1024;
+const cloudinaryBaseFolder = "puttalam-drop";
 const terminalOrderStatuses = new Set([
   "Delivered",
   "Cancelled",
@@ -219,6 +228,52 @@ exports.submitAccountDeletionRequest = onRequest(
       accepted: true,
       message: "Your deletion request has been received.",
     });
+  },
+);
+
+exports.signCloudinaryUpload = onCall(
+  {secrets: [cloudinaryApiSecret], maxInstances: 20},
+  async (request) => {
+    const activeUser = await requireActiveUser(request);
+    const uploadRequest = await buildCloudinaryUploadRequest(
+      activeUser,
+      request.data || {},
+    );
+    const credentials = cloudinaryCredentials();
+    const timestamp = Math.floor(Date.now() / 1000);
+    const uploadParameters = {
+      timestamp,
+      type: "upload",
+      folder: uploadRequest.folder,
+      public_id: uploadRequest.publicId,
+      allowed_formats: cloudinaryAllowedFormats.join(","),
+      max_file_size: cloudinaryMaxImageBytes,
+      overwrite: "false",
+      tags: uploadRequest.tags.join(","),
+      context: [
+        `upload_type=${uploadRequest.uploadType}`,
+        `owner_uid=${activeUser.uid}`,
+      ].join("|"),
+    };
+    const signature = signCloudinaryParameters(
+      uploadParameters,
+      credentials.apiSecret,
+    );
+
+    return {
+      uploadUrl:
+        `https://api.cloudinary.com/v1_1/${credentials.cloudName}/image/upload`,
+      resourceType: "image",
+      maxFileSizeBytes: cloudinaryMaxImageBytes,
+      allowedFormats: cloudinaryAllowedFormats,
+      destinationFolder: uploadRequest.folder,
+      expectedPublicId: `${uploadRequest.folder}/${uploadRequest.publicId}`,
+      parameters: {
+        ...uploadParameters,
+        api_key: credentials.apiKey,
+        signature,
+      },
+    };
   },
 );
 
@@ -1303,7 +1358,7 @@ async function deleteCustomerData(customer) {
         .get() :
       Promise.resolve({docs: []}),
   ]);
-  const legacyImageUrls = collectLegacyImageUrls(
+  const cloudinaryImages = collectCloudinaryImageReferences(
     orders.docs,
     ticketMessages,
   );
@@ -1319,7 +1374,9 @@ async function deleteCustomerData(customer) {
       customerPhone: "",
       customerAddress: "",
       uploadedImageUrl: "",
+      uploadedImagePublicId: "",
       paymentReceiptImageUrl: "",
+      paymentReceiptImagePublicId: "",
       orderNotes: "",
       manualListText: "",
       deliveryRating: 0,
@@ -1361,10 +1418,14 @@ async function deleteCustomerData(customer) {
     });
   }
   writer.delete(db.collection("users").doc(customer.uid));
-  if (legacyImageUrls.length > 0) {
+  if (
+    cloudinaryImages.imageUrls.length > 0 ||
+    cloudinaryImages.publicIds.length > 0
+  ) {
     writer.set(db.collection("legacy_media_cleanup").doc(), {
       deletedCustomerHash: uidHash,
-      imageUrls: legacyImageUrls,
+      imageUrls: cloudinaryImages.imageUrls,
+      imagePublicIds: cloudinaryImages.publicIds,
       status: "pending",
       reason: "customer-account-deletion",
       createdAt: now,
@@ -1377,23 +1438,36 @@ async function deleteCustomerData(customer) {
   return {
     deleted: true,
     anonymizedOrderCount: orders.size,
-    legacyImageCleanupQueued: legacyImageUrls.length,
+    legacyImageCleanupQueued:
+      cloudinaryImages.imageUrls.length + cloudinaryImages.publicIds.length,
   };
 }
 
-function collectLegacyImageUrls(orderDocs, messageDocs) {
+function collectCloudinaryImageReferences(orderDocs, messageDocs) {
   const urls = [];
+  const publicIds = [];
   for (const orderDoc of orderDocs) {
     const order = orderDoc.data();
     urls.push(order.uploadedImageUrl, order.paymentReceiptImageUrl);
+    publicIds.push(
+      order.uploadedImagePublicId,
+      order.paymentReceiptImagePublicId,
+    );
   }
   for (const messageDoc of messageDocs) {
     urls.push(messageDoc.get("imageUrl"));
+    publicIds.push(messageDoc.get("imagePublicId"));
   }
-  return [...new Set(urls.filter((url) =>
-    typeof url === "string" &&
-    url.includes("res.cloudinary.com/"),
-  ))];
+  return {
+    imageUrls: [...new Set(urls.filter((url) =>
+      typeof url === "string" &&
+      url.includes("res.cloudinary.com/"),
+    ))],
+    publicIds: [...new Set(publicIds.filter((publicId) =>
+      typeof publicId === "string" &&
+      publicId.trim().length > 0,
+    ))],
+  };
 }
 
 async function deleteUserStorage(uid) {
@@ -1413,6 +1487,200 @@ async function deleteUserStorage(uid) {
       "Skipping user image cleanup because the configured Storage bucket " +
         "does not exist.",
       {uid},
+    );
+  }
+}
+
+async function buildCloudinaryUploadRequest(activeUser, data) {
+  const uploadType = `${data.uploadType || ""}`.trim();
+  const fileSizeBytes = Number(data.fileSizeBytes);
+  const format = normalizeCloudinaryImageFormat(data.format);
+  const contentType = `${data.contentType || ""}`.trim().toLowerCase();
+
+  if (!uploadType) {
+    throw new HttpsError("invalid-argument", "Missing upload type.");
+  }
+  if (!Number.isFinite(fileSizeBytes) || fileSizeBytes <= 0) {
+    throw new HttpsError("invalid-argument", "Missing image size.");
+  }
+  if (fileSizeBytes > cloudinaryMaxImageBytes) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Select an image smaller than 8 MB.",
+    );
+  }
+  if (!cloudinaryAllowedFormats.includes(format)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Unsupported image format.",
+    );
+  }
+  if (contentType && !contentType.startsWith("image/")) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Only image uploads are allowed.",
+    );
+  }
+
+  switch (uploadType) {
+    case "order_shopping_list":
+    case "payment_receipt":
+      requireRole(activeUser, "user");
+      return cloudinaryOrderUploadRequest(activeUser, data, uploadType);
+    case "support_message":
+      return cloudinarySupportUploadRequest(activeUser, data, uploadType);
+    case "catalog_offer":
+    case "catalog_product":
+      requireRole(activeUser, "admin");
+      return cloudinaryCatalogUploadRequest(data, uploadType);
+    default:
+      throw new HttpsError(
+        "invalid-argument",
+        "Unsupported upload type.",
+      );
+  }
+}
+
+function cloudinaryOrderUploadRequest(activeUser, data, uploadType) {
+  const orderId = assertSafeCloudinaryId(data.orderId, "Order");
+  const imageName = uploadType === "payment_receipt" ?
+    "payment-receipt" :
+    "shopping-list";
+  return {
+    uploadType,
+    folder: cloudinaryFolder([
+      "user_uploads",
+      activeUser.uid,
+      "orders",
+      orderId,
+    ]),
+    publicId: uniqueCloudinaryPublicId(imageName),
+    tags: ["puttalam_drop", "order", uploadType],
+  };
+}
+
+async function cloudinarySupportUploadRequest(activeUser, data, uploadType) {
+  const ticketId = assertSafeCloudinaryId(data.ticketId, "Support ticket");
+  const ticketDoc = await admin
+    .firestore()
+    .collection("support_tickets")
+    .doc(ticketId)
+    .get();
+  if (!ticketDoc.exists) {
+    throw new HttpsError("not-found", "Support ticket not found.");
+  }
+  if (
+    activeUser.profile.role !== "admin" &&
+    ticketDoc.get("userId") !== activeUser.uid
+  ) {
+    throw new HttpsError(
+      "permission-denied",
+      "You are not allowed to upload to this support ticket.",
+    );
+  }
+  if (ticketDoc.get("status") === "closed") {
+    throw new HttpsError(
+      "failed-precondition",
+      "This support ticket is closed.",
+    );
+  }
+
+  return {
+    uploadType,
+    folder: cloudinaryFolder([
+      "support",
+      ticketId,
+      activeUser.uid,
+    ]),
+    publicId: uniqueCloudinaryPublicId("message"),
+    tags: ["puttalam_drop", "support", uploadType],
+  };
+}
+
+function cloudinaryCatalogUploadRequest(data, uploadType) {
+  const entityId = assertSafeCloudinaryId(data.entityId, "Catalog item");
+  const collection = uploadType === "catalog_offer" ? "offers" : "products";
+  return {
+    uploadType,
+    folder: cloudinaryFolder(["catalog", collection, entityId]),
+    publicId: uniqueCloudinaryPublicId("image"),
+    tags: ["puttalam_drop", "catalog", uploadType],
+  };
+}
+
+function cloudinaryCredentials() {
+  const cloudName = `${cloudinaryCloudName.value() || ""}`.trim();
+  const apiKey = `${cloudinaryApiKey.value() || ""}`.trim();
+  const apiSecret = `${cloudinaryApiSecret.value() || ""}`.trim();
+  if (!cloudName || !apiKey || !apiSecret) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Cloudinary upload is not configured.",
+    );
+  }
+  return {cloudName, apiKey, apiSecret};
+}
+
+function signCloudinaryParameters(parameters, apiSecret) {
+  const canonical = Object.entries(parameters)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+  return crypto
+    .createHash("sha1")
+    .update(`${canonical}${apiSecret}`)
+    .digest("hex");
+}
+
+function normalizeCloudinaryImageFormat(value) {
+  const format = `${value || ""}`.trim().toLowerCase().replace(/^\./, "");
+  return format === "jpeg" ? "jpg" : format;
+}
+
+function cloudinaryFolder(parts) {
+  return [cloudinaryBaseFolder, ...parts.map(assertCloudinaryPathSegment)]
+    .join("/");
+}
+
+function uniqueCloudinaryPublicId(prefix) {
+  return `${assertCloudinaryPathSegment(prefix)}-${Date.now()}-${crypto
+    .randomBytes(8)
+    .toString("hex")}`;
+}
+
+function assertSafeCloudinaryId(value, label) {
+  const id = `${value || ""}`.trim();
+  if (!id || id.length > 120 || !/^[A-Za-z0-9._-]+$/.test(id)) {
+    throw new HttpsError(
+      "invalid-argument",
+      `${label} id is invalid.`,
+    );
+  }
+  return id;
+}
+
+function assertCloudinaryPathSegment(value) {
+  const segment = `${value || ""}`.trim();
+  if (
+    !segment ||
+    segment.length > 120 ||
+    !/^[A-Za-z0-9._-]+$/.test(segment) ||
+    /^v[0-9]+$/i.test(segment)
+  ) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Cloudinary upload destination is invalid.",
+    );
+  }
+  return segment;
+}
+
+function requireRole(activeUser, role) {
+  if (activeUser.profile.role !== role) {
+    throw new HttpsError(
+      "permission-denied",
+      "You are not allowed to upload this image.",
     );
   }
 }
@@ -1471,6 +1739,25 @@ async function initializeDeliveryRewardStarsInTransaction({
     updatedAt: admin.firestore.Timestamp.now(),
   });
   return stars;
+}
+
+async function requireActiveUser(request) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Login is required.");
+  }
+
+  const userDoc = await admin
+    .firestore()
+    .collection("users")
+    .doc(request.auth.uid)
+    .get();
+  if (!userDoc.exists || userDoc.get("isBlocked") === true) {
+    throw new HttpsError(
+      "permission-denied",
+      "Active account required.",
+    );
+  }
+  return {uid: request.auth.uid, profile: userDoc.data()};
 }
 
 async function requireAdmin(request) {

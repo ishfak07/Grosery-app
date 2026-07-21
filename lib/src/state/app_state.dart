@@ -680,20 +680,20 @@ class AppState extends ChangeNotifier {
     }
 
     final orderId = _uuid.v4();
-    String uploadedImageUrl = '';
+    CloudinaryUploadResult? uploadedImage;
     if (hasBillImage) {
-      uploadedImageUrl = await ImageUploadService.uploadUserImage(
+      uploadedImage = await ImageUploadService.uploadUserImage(
         imageFile: File(_billImagePath!),
         ownerUid: current.uid,
         folder: 'orders/$orderId',
         fileName: 'shopping-list',
       );
     }
-    String paymentReceiptImageUrl = '';
+    CloudinaryUploadResult? paymentReceiptImage;
     if (paymentMethod == AppConstants.paymentMethodBankTransfer &&
         paymentReceiptImagePath != null &&
         paymentReceiptImagePath.trim().isNotEmpty) {
-      paymentReceiptImageUrl = await ImageUploadService.uploadUserImage(
+      paymentReceiptImage = await ImageUploadService.uploadUserImage(
         imageFile: File(paymentReceiptImagePath),
         ownerUid: current.uid,
         folder: 'orders/$orderId',
@@ -712,9 +712,11 @@ class AppState extends ChangeNotifier {
       customerPhone: PhoneUtils.normalizeSriLankanPhone(customerPhone),
       customerAddress: customerAddress.trim(),
       items: _cartItems.map(OrderItem.fromCart).toList(),
-      uploadedImageUrl: uploadedImageUrl,
+      uploadedImageUrl: uploadedImage?.secureUrl ?? '',
+      uploadedImagePublicId: uploadedImage?.publicId ?? '',
       manualListText: _manualListText.trim(),
-      paymentReceiptImageUrl: paymentReceiptImageUrl,
+      paymentReceiptImageUrl: paymentReceiptImage?.secureUrl ?? '',
+      paymentReceiptImagePublicId: paymentReceiptImage?.publicId ?? '',
       orderNotes: orderNotes.trim(),
       cartItemsAmount: subtotal,
       photoListAmount: 0,

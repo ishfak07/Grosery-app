@@ -18,9 +18,9 @@ flow changes.
 - Can users request deletion? `Yes`
 - Data shared with third parties for their independent purposes: `No`
 
-Firebase acts as a service provider. Do not mark service-provider transfers as
-sharing unless the production business uses the data for another third party's
-independent purpose.
+Firebase and Cloudinary act as service providers. Do not mark service-provider
+transfers as sharing unless the production business uses the data for another
+third party's independent purpose.
 
 ### Collected Data
 
