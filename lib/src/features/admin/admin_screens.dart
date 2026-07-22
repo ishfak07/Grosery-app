@@ -483,6 +483,99 @@ class _AdminAppBarButton extends StatelessWidget {
   }
 }
 
+class _AdminDeleteAllAppBarButton extends StatelessWidget {
+  const _AdminDeleteAllAppBarButton({
+    required this.section,
+    required this.label,
+    this.detail,
+  });
+
+  final String section;
+  final String label;
+  final String? detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: TextButton.icon(
+        onPressed: () => _confirmClearAdminSectionData(
+          context,
+          section: section,
+          label: label,
+          detail: detail,
+        ),
+        icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+        label: const Text('Delete All'),
+        style: TextButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: _adminDanger,
+          side: const BorderSide(color: _adminLine),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _confirmClearAdminSectionData(
+  BuildContext context, {
+  required String section,
+  required String label,
+  String? detail,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: Text('Delete all $label?'),
+        content: Text(
+          [
+            'This permanently deletes all $label from the database.',
+            if (detail != null) detail,
+            'This action cannot be undone.',
+          ].join(' '),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: _adminDanger,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            icon: const Icon(Icons.delete_forever),
+            label: const Text('Delete all'),
+          ),
+        ],
+      );
+    },
+  );
+  if (confirmed != true || !context.mounted) {
+    return;
+  }
+
+  try {
+    await context.read<AppState>().authService.clearAdminSectionData(
+          section: section,
+        );
+    if (!context.mounted) {
+      return;
+    }
+    await context.read<AppState>().refreshVisibleData();
+    if (context.mounted) {
+      showSnack(context, 'All $label deleted.');
+    }
+  } catch (error) {
+    if (context.mounted) {
+      showSnack(context, error);
+    }
+  }
+}
+
 class _DashboardHero extends StatelessWidget {
   const _DashboardHero({required this.profile});
 
@@ -1460,6 +1553,13 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
   Widget build(BuildContext context) {
     return _AdminScaffold(
       title: 'Broadcast',
+      actions: const [
+        _AdminDeleteAllAppBarButton(
+          section: 'notifications',
+          label: 'notifications',
+          detail: 'This includes broadcast and account update notifications.',
+        ),
+      ],
       body: _AdminPage(
         maxWidth: 720,
         child: ListView(
@@ -1738,6 +1838,16 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     ];
     return _AdminScaffold(
       title: isFindMode ? 'Find order' : 'Current orders',
+      actions: isFindMode
+          ? const [
+              _AdminDeleteAllAppBarButton(
+                section: 'orders',
+                label: 'orders',
+                detail:
+                    'Related account records and order notifications are removed too.',
+              ),
+            ]
+          : null,
       body: _AdminPage(
         child: StreamBuilder<List<OrderModel>>(
           stream: appState.firestoreService.watchAllOrders(),
@@ -3294,6 +3404,12 @@ class _AdminAccountsManagementScreenState
     final appState = context.read<AppState>();
     return _AdminScaffold(
       title: 'Accounts',
+      actions: const [
+        _AdminDeleteAllAppBarButton(
+          section: 'accounts',
+          label: 'account records',
+        ),
+      ],
       body: _AdminPage(
         child: Column(
           children: [
@@ -5234,6 +5350,12 @@ class AdminProductManagementScreen extends StatelessWidget {
     final appState = context.read<AppState>();
     return _AdminScaffold(
       title: 'Manage products',
+      actions: const [
+        _AdminDeleteAllAppBarButton(
+          section: 'products',
+          label: 'products',
+        ),
+      ],
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: _adminInk,
         foregroundColor: Colors.white,
@@ -5968,6 +6090,12 @@ class AdminShopManagementScreen extends StatelessWidget {
     final appState = context.read<AppState>();
     return _AdminScaffold(
       title: 'Manage categories',
+      actions: const [
+        _AdminDeleteAllAppBarButton(
+          section: 'categories',
+          label: 'categories',
+        ),
+      ],
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: _adminInk,
         foregroundColor: Colors.white,
@@ -6205,6 +6333,11 @@ class AdminSupportScreen extends StatelessWidget {
     return _AdminScaffold(
       title: 'Support tickets',
       actions: [
+        const _AdminDeleteAllAppBarButton(
+          section: 'support',
+          label: 'support tickets',
+          detail: 'Support messages and support notifications are removed too.',
+        ),
         _AdminAppBarButton(
           tooltip: 'Find order',
           onPressed: () => Navigator.of(context).push(
@@ -6340,7 +6473,7 @@ class AdminCustomerManagementScreen extends StatelessWidget {
               );
             }
             final users = (snapshot.data ?? const <UserProfile>[])
-                .where((user) => !user.isDeliveryBoy)
+                .where((user) => user.role == 'user')
                 .toList();
             if (users.isEmpty) {
               return const RefreshableCenteredContent(
@@ -6558,16 +6691,18 @@ class _AdminDeliveryBoyManagementScreenState
     BuildContext context, {
     UserProfile? deliveryBoy,
   }) async {
-    final saved = await showDialog<bool>(
+    final result = await showDialog<String>(
       context: context,
       builder: (_) => _DeliveryBoyEditorDialog(deliveryBoy: deliveryBoy),
     );
-    if (context.mounted && saved == true) {
+    if (context.mounted && result != null) {
       showSnack(
         context,
-        deliveryBoy == null
-            ? 'Delivery boy account created.'
-            : 'Delivery boy account updated.',
+        switch (result) {
+          'created' => 'Delivery boy account created.',
+          'deleted' => 'Delivery boy account deleted.',
+          _ => 'Delivery boy account updated.',
+        },
       );
     }
   }
@@ -6961,6 +7096,7 @@ class _DeliveryBoyEditorDialogState extends State<_DeliveryBoyEditorDialog> {
   late final TextEditingController _password;
   var _isActive = true;
   var _isSaving = false;
+  var _isDeleting = false;
 
   bool get _isEditing => widget.deliveryBoy != null;
 
@@ -7037,7 +7173,35 @@ class _DeliveryBoyEditorDialogState extends State<_DeliveryBoyEditorDialog> {
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Active account'),
                     value: _isActive,
-                    onChanged: (value) => setState(() => _isActive = value),
+                    onChanged: _isSaving || _isDeleting
+                        ? null
+                        : (value) => setState(() => _isActive = value),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _adminDanger,
+                        side: BorderSide(
+                          color: _adminDanger.withValues(alpha: 0.42),
+                        ),
+                      ),
+                      onPressed:
+                          _isSaving || _isDeleting ? null : _confirmDelete,
+                      icon: _isDeleting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.delete_forever),
+                      label: Text(
+                        _isDeleting
+                            ? 'Deleting delivery boy'
+                            : 'Delete Delivery Boy',
+                      ),
+                    ),
                   ),
                 ],
               ],
@@ -7047,11 +7211,13 @@ class _DeliveryBoyEditorDialogState extends State<_DeliveryBoyEditorDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
+          onPressed: _isSaving || _isDeleting
+              ? null
+              : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         FilledButton.icon(
-          onPressed: _isSaving ? null : _save,
+          onPressed: _isSaving || _isDeleting ? null : _save,
           icon: _isSaving
               ? const SizedBox(
                   width: 16,
@@ -7088,7 +7254,7 @@ class _DeliveryBoyEditorDialogState extends State<_DeliveryBoyEditorDialog> {
         );
       }
       if (mounted) {
-        Navigator.of(context).pop(true);
+        Navigator.of(context).pop(_isEditing ? 'updated' : 'created');
       }
     } catch (error) {
       if (mounted) {
@@ -7097,6 +7263,64 @@ class _DeliveryBoyEditorDialogState extends State<_DeliveryBoyEditorDialog> {
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    final deliveryBoy = widget.deliveryBoy;
+    if (deliveryBoy == null) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete delivery boy?'),
+          content: Text(
+            '${deliveryBoy.fullName} (${deliveryBoy.phone}) will lose access '
+            'immediately. Their login credentials, profile, rewards, '
+            'notifications, and delivery assignments will be removed. '
+            'This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: _adminDanger,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.delete_forever),
+              label: const Text('Delete Delivery Boy'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() => _isDeleting = true);
+    try {
+      await context
+          .read<AppState>()
+          .authService
+          .deleteDeliveryBoyAccountAsAdmin(deliveryBoy.uid);
+      if (mounted) {
+        Navigator.of(context).pop('deleted');
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isDeleting = false);
       }
     }
   }

@@ -186,7 +186,9 @@ class FirestoreService {
   }
 
   bool _isDeliveryBoyRole(String role) {
-    return role == 'delivery_boy' || role == 'deliveryBoy' || role == 'delivery';
+    return role == 'delivery_boy' ||
+        role == 'deliveryBoy' ||
+        role == 'delivery';
   }
 
   Stream<List<Shop>> watchShops({bool activeOnly = true}) {
@@ -403,6 +405,82 @@ class FirestoreService {
 
   Future<void> deleteProduct(String productId) {
     return _products.doc(productId).delete();
+  }
+
+  Future<bool> clearAdminSectionDataFallback(String section) async {
+    final normalizedSection =
+        section.trim().toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_');
+    switch (normalizedSection) {
+      case 'orders':
+      case 'find_orders':
+        await Future.wait([
+          _deleteQueryDocuments(_orders),
+          _deleteQueryDocuments(_accountSales),
+          _deleteQueryDocuments(
+            _notifications.where('type', isEqualTo: 'order'),
+          ),
+        ]);
+        return true;
+      case 'pending_orders':
+        await _deleteQueryDocuments(
+          _orders.where('orderStatus', isEqualTo: 'Pending'),
+        );
+        return true;
+      case 'accounts':
+      case 'account_sales':
+        await _deleteQueryDocuments(_accountSales);
+        return true;
+      case 'categories':
+      case 'shops':
+        await _deleteQueryDocuments(_shops);
+        return true;
+      case 'products':
+        await _deleteQueryDocuments(_products);
+        return true;
+      case 'offers':
+        await _deleteQueryDocuments(_offers);
+        return true;
+      case 'banners':
+        await Future.wait([
+          _deleteQueryDocuments(_offers),
+          _deleteQueryDocuments(_db.collection('banners')),
+        ]);
+        return true;
+      case 'coupons':
+        await _deleteQueryDocuments(_db.collection('coupons'));
+        return true;
+      case 'notifications':
+        await _deleteQueryDocuments(_notifications);
+        return true;
+      case 'account_deletion_requests':
+        await _deleteQueryDocuments(_accountDeletionRequests);
+        return true;
+      case 'settings':
+      case 'checkout_settings':
+        await _deleteQueryDocuments(_appSettings);
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  Future<void> _deleteQueryDocuments(
+    Query<Map<String, dynamic>> query,
+  ) async {
+    const batchSize = 450;
+    while (true) {
+      final snapshot = await query.limit(batchSize).get(
+            const GetOptions(source: Source.server),
+          );
+      if (snapshot.docs.isEmpty) {
+        return;
+      }
+      final batch = _db.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    }
   }
 
   Future<void> createOrder(OrderModel order) async {
@@ -633,7 +711,8 @@ class FirestoreService {
           userId: deliveryBoyId,
           recipientRole: 'delivery_boy',
           title: 'Order assigned',
-          body: '${order.customerName} - ${order.totalAmount.toStringAsFixed(2)}',
+          body:
+              '${order.customerName} - ${order.totalAmount.toStringAsFixed(2)}',
           type: 'order',
           relatedId: order.orderId,
           isRead: false,

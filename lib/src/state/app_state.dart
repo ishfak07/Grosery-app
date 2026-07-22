@@ -427,6 +427,37 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<void> deleteDeliveryBoyAccount() async {
+    if (_isLoggingOut) {
+      return;
+    }
+    _isLoggingOut = true;
+    try {
+      await authService.deleteDeliveryBoyAccount();
+      await _profileSubscription?.cancel();
+      _profileSubscription = null;
+      await _checkoutChargeSettingsSubscription?.cancel();
+      await _shopHoursSettingsSubscription?.cancel();
+      await _paymentSettingsSubscription?.cancel();
+      await notificationService.detachUser();
+      await localStorageService.clearPrivateAccountData();
+      _profile = null;
+      _cartItems = const <CartItem>[];
+      _billImagePath = null;
+      _manualListText = '';
+      _notificationsConfiguredForProfileKey = null;
+      _checkoutChargeSettings = CheckoutChargeSettings.defaults;
+      _hasLoadedCheckoutChargeSettings = false;
+      _shopHoursSettings = ShopHoursSettings.defaults;
+      _hasLoadedShopHoursSettings = false;
+      _paymentSettings = PaymentSettings.defaults;
+      _hasLoadedPaymentSettings = false;
+    } finally {
+      _isLoggingOut = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> completeRegistration({
     required String fullName,
     required String phone,

@@ -74,6 +74,15 @@ class _DeliveryBoyDashboardScreenState
         shape: const Border(bottom: BorderSide(color: _deliveryLine)),
         actions: [
           IconButton(
+            tooltip: 'Settings',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const DeliveryBoySettingsScreen(),
+              ),
+            ),
+            icon: const Icon(Icons.settings_outlined),
+          ),
+          IconButton(
             tooltip: 'Logout',
             onPressed: () => appState.logout(),
             icon: const Icon(Icons.logout),
@@ -236,6 +245,257 @@ class _DeliveryBoyDashboardScreenState
     return order.orderStatus == 'Delivered' ||
         order.orderStatus == 'Cancelled' ||
         order.orderStatus == 'Rejected';
+  }
+}
+
+class DeliveryBoySettingsScreen extends StatefulWidget {
+  const DeliveryBoySettingsScreen({super.key});
+
+  @override
+  State<DeliveryBoySettingsScreen> createState() =>
+      _DeliveryBoySettingsScreenState();
+}
+
+class _DeliveryBoySettingsScreenState extends State<DeliveryBoySettingsScreen> {
+  var _isDeletingAccount = false;
+  var _isLoggingOut = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final profile = appState.profile;
+    if (profile == null) {
+      return const Scaffold(
+        backgroundColor: _deliveryBackground,
+        body: LoadingView(message: 'Loading account...'),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: _deliveryBackground,
+      appBar: AppBar(
+        title: Text(context.t('Profile settings')),
+        backgroundColor: _deliveryBackground.withValues(alpha: 0.96),
+        foregroundColor: _deliveryInk,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        shape: const Border(bottom: BorderSide(color: _deliveryLine)),
+      ),
+      body: AppRefreshIndicator(
+        child: SafeArea(
+          top: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final horizontal = constraints.maxWidth >= 720 ? 24.0 : 16.0;
+              return ListView(
+                physics: appRefreshScrollPhysics,
+                padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 28),
+                children: [
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 820),
+                      child: Column(
+                        children: [
+                          _DeliveryCard(
+                            child: Row(
+                              children: [
+                                const _DeliveryIconBadge(
+                                  icon: Icons.person_outline,
+                                  color: _deliveryPrimary,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        profile.fullName,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: _deliveryInk,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        profile.phone,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: _deliveryMuted,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                _DeliveryStatusPill(
+                                  label:
+                                      profile.isBlocked ? 'Inactive' : 'Active',
+                                  color: profile.isBlocked
+                                      ? const Color(0xFFC83A2B)
+                                      : _deliveryPrimary,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          _DeliveryCard(
+                            child: Column(
+                              children: [
+                                ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: const Icon(
+                                    Icons.delete_forever_outlined,
+                                    color: Color(0xFFC83A2B),
+                                  ),
+                                  title: const Text(
+                                    'Delete My Account',
+                                    style: TextStyle(
+                                      color: Color(0xFFC83A2B),
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  subtitle: const Text(
+                                    'Permanently remove your delivery login and profile.',
+                                  ),
+                                  onTap: _isDeletingAccount || _isLoggingOut
+                                      ? null
+                                      : _deleteAccount,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: _isDeletingAccount || _isLoggingOut
+                                  ? null
+                                  : _logout,
+                              icon: _isLoggingOut
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.logout),
+                              label: Text(
+                                context.t(
+                                  _isLoggingOut ? 'Logging out...' : 'Logout',
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _logout() async {
+    if (_isLoggingOut) {
+      return;
+    }
+    final navigator = Navigator.of(context);
+    setState(() => _isLoggingOut = true);
+    try {
+      await context.read<AppState>().logout();
+    } finally {
+      if (mounted) {
+        navigator.popUntil((route) => route.isFirst);
+      }
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete my account?'),
+          content: const Text(
+            'Are you sure you want to permanently delete your account? '
+            'This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFC83A2B),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.delete_forever),
+              label: const Text('Delete My Account'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    final navigator = Navigator.of(context);
+    setState(() => _isDeletingAccount = true);
+    try {
+      await context.read<AppState>().deleteDeliveryBoyAccount();
+      if (mounted) {
+        navigator.popUntil((route) => route.isFirst);
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _isDeletingAccount = false);
+        showSnack(context, error);
+      }
+    }
+  }
+}
+
+class _DeliveryStatusPill extends StatelessWidget {
+  const _DeliveryStatusPill({
+    required this.label,
+    required this.color,
+  });
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Text(
+        context.t(label),
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
+        ),
+      ),
+    );
   }
 }
 

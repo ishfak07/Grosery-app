@@ -46,6 +46,41 @@ exports.deleteCustomerAccountAsAdmin = onCall(async (request) => {
   });
 });
 
+exports.deleteDeliveryBoyAccount = onCall(async (request) => {
+  const deliveryBoy = await requireDeliveryBoy(request);
+  return deleteDeliveryBoyData({
+    uid: deliveryBoy.uid,
+    profile: deliveryBoy.profile,
+    completedBy: deliveryBoy.uid,
+  });
+});
+
+exports.deleteDeliveryBoyAccountAsAdmin = onCall(async (request) => {
+  const adminUid = await requireAdmin(request);
+  const deliveryBoyUid = assertUid(request.data?.uid);
+  const profileDoc = await admin
+    .firestore()
+    .collection("users")
+    .doc(deliveryBoyUid)
+    .get();
+  if (!profileDoc.exists || !isDeliveryBoyRole(profileDoc.get("role"))) {
+    throw new HttpsError("not-found", "Delivery boy account not found.");
+  }
+  return deleteDeliveryBoyData({
+    uid: deliveryBoyUid,
+    profile: profileDoc.data(),
+    completedBy: adminUid,
+  });
+});
+
+exports.clearAdminSectionData = onCall(async (request) => {
+  await requireAdmin(request);
+  const section = assertRequiredText(request.data?.section, "Section")
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  return clearAdminSectionData(section);
+});
+
 exports.processAccountDeletionRequest = onCall(async (request) => {
   const adminUid = await requireAdmin(request);
   const requestId = assertRequestId(request.data?.requestId);
@@ -1301,9 +1336,10 @@ function requireRecentAuthentication(request) {
   }
 }
 
-async function deleteCustomerData(customer) {
+async function deleteCustomerData(customer, options = {}) {
   const db = admin.firestore();
   const now = admin.firestore.Timestamp.now();
+  const allowActiveOrders = options.allowActiveOrders === true;
   const uidHash = crypto
     .createHash("sha256")
     .update(customer.uid)
@@ -1315,7 +1351,7 @@ async function deleteCustomerData(customer) {
   const activeOrder = orders.docs.find(
     (doc) => !terminalOrderStatuses.has(`${doc.get("orderStatus") || ""}`),
   );
-  if (activeOrder) {
+  if (activeOrder && !allowActiveOrders) {
     throw new HttpsError(
       "failed-precondition",
       "This account has an active order. Complete or cancel it before " +
@@ -1433,13 +1469,265 @@ async function deleteCustomerData(customer) {
   }
 
   await writer.close();
-  await admin.auth().deleteUser(customer.uid);
+  await deleteAuthUserIfExists(customer.uid);
   return {
     deleted: true,
     anonymizedOrderCount: orders.size,
     legacyImageCleanupQueued:
       cloudinaryImages.imageUrls.length + cloudinaryImages.publicIds.length,
   };
+}
+
+async function deleteDeliveryBoyData(deliveryBoy) {
+  const db = admin.firestore();
+  const now = admin.firestore.Timestamp.now();
+  const uidHash = crypto
+    .createHash("sha256")
+    .update(deliveryBoy.uid)
+    .digest("hex");
+  const profile = deliveryBoy.profile || {};
+  const hiddenEmail = profile.hiddenEmail || "";
+
+  const [
+    assignedOrders,
+    notifications,
+    rewardPayments,
+    rewardAdjustments,
+    passwordResetRequests,
+  ] = await Promise.all([
+    db
+      .collection("orders")
+      .where("assignedDeliveryBoyId", "==", deliveryBoy.uid)
+      .get(),
+    db.collection("notifications").where("userId", "==", deliveryBoy.uid).get(),
+    db
+      .collection("delivery_reward_payments")
+      .where("deliveryBoyId", "==", deliveryBoy.uid)
+      .get(),
+    db
+      .collection("delivery_reward_adjustments")
+      .where("deliveryBoyId", "==", deliveryBoy.uid)
+      .get(),
+    hiddenEmail ?
+      db
+        .collection("password_reset_requests")
+        .where("hiddenEmail", "==", hiddenEmail)
+        .get() :
+      Promise.resolve({docs: []}),
+  ]);
+
+  await deleteUserStorage(deliveryBoy.uid);
+
+  const writer = db.bulkWriter();
+  writer.onWriteError((error) => error.failedAttempts < 3);
+  for (const orderDoc of assignedOrders.docs) {
+    writer.update(orderDoc.ref, {
+      assignedDeliveryBoyId: "",
+      assignedDeliveryPerson: "",
+      assignedDeliveryPhone: "",
+      deliveryRating: 0,
+      deliveryReview: "",
+      deliveryReviewedAt: null,
+      deliveryRewardStarsCredited: admin.firestore.FieldValue.delete(),
+      deliveryBoyDeletedAt: now,
+      deletedDeliveryBoyHash: uidHash,
+      updatedAt: now,
+    });
+  }
+  for (const doc of [
+    ...notifications.docs,
+    ...rewardPayments.docs,
+    ...rewardAdjustments.docs,
+    ...passwordResetRequests.docs,
+  ]) {
+    writer.delete(doc.ref);
+  }
+  writer.delete(db.collection("users").doc(deliveryBoy.uid));
+  await writer.close();
+  await deleteAuthUserIfExists(deliveryBoy.uid);
+
+  return {
+    deleted: true,
+    unassignedOrderCount: assignedOrders.size,
+  };
+}
+
+async function clearAdminSectionData(section) {
+  const db = admin.firestore();
+
+  switch (section) {
+    case "orders":
+    case "find_orders":
+      return deletedSectionResult(section, await sumDeletes([
+        deleteCollectionDocuments("orders"),
+        deleteCollectionDocuments("account_sales"),
+        deleteQueryDocuments(
+          db.collection("notifications").where("type", "==", "order"),
+        ),
+      ]));
+    case "pending_orders":
+      return deletedSectionResult(section, await deleteQueryDocuments(
+        db.collection("orders").where("orderStatus", "==", "Pending"),
+      ));
+    case "accounts":
+    case "account_sales":
+      return deletedSectionResult(
+        section,
+        await deleteCollectionDocuments("account_sales"),
+      );
+    case "categories":
+    case "shops":
+      return deletedSectionResult(
+        section,
+        await deleteCollectionDocuments("shops"),
+      );
+    case "products":
+      return deletedSectionResult(
+        section,
+        await deleteCollectionDocuments("products"),
+      );
+    case "offers":
+      return deletedSectionResult(
+        section,
+        await deleteCollectionDocuments("offers"),
+      );
+    case "banners":
+      return deletedSectionResult(section, await sumDeletes([
+        deleteCollectionDocuments("offers"),
+        deleteCollectionDocuments("banners"),
+      ]));
+    case "coupons":
+      return deletedSectionResult(
+        section,
+        await deleteCollectionDocuments("coupons"),
+      );
+    case "delivery_boys":
+    case "delivery_boy_accounts":
+      return deleteAllUsersByRole(
+        section,
+        ["delivery_boy", "deliveryBoy", "delivery"],
+        (doc) => deleteDeliveryBoyData({
+          uid: doc.id,
+          profile: doc.data(),
+          completedBy: "admin-bulk-clear",
+        }),
+      );
+    case "customers":
+    case "customer_accounts":
+      return deleteAllUsersByRole(
+        section,
+        ["user"],
+        (doc) => deleteCustomerData({
+          uid: doc.id,
+          profile: doc.data(),
+          completedBy: "admin-bulk-clear",
+        }, {allowActiveOrders: true}),
+      );
+    case "notifications":
+      return deletedSectionResult(
+        section,
+        await deleteCollectionDocuments("notifications"),
+      );
+    case "support":
+    case "support_tickets":
+      return deletedSectionResult(section, await sumDeletes([
+        deleteCollectionDocuments("support_messages"),
+        deleteCollectionDocuments("support_tickets"),
+        deleteQueryDocuments(
+          db.collection("notifications").where("type", "==", "support"),
+        ),
+      ]));
+    case "password_resets":
+      return deletedSectionResult(
+        section,
+        await deleteCollectionDocuments("password_reset_requests"),
+      );
+    case "account_deletion_requests":
+      return deletedSectionResult(
+        section,
+        await deleteCollectionDocuments("account_deletion_requests"),
+      );
+    case "settings":
+    case "checkout_settings":
+      return deletedSectionResult(
+        section,
+        await deleteCollectionDocuments("app_settings"),
+      );
+    default:
+      throw new HttpsError(
+        "invalid-argument",
+        "This admin section cannot be cleared.",
+      );
+  }
+}
+
+async function deleteAllUsersByRole(section, roles, deleteUser) {
+  const userDocs = await userDocsForRoles(roles);
+  let deletedCount = 0;
+  for (const userDoc of userDocs) {
+    await deleteUser(userDoc);
+    deletedCount += 1;
+  }
+  return deletedSectionResult(section, deletedCount);
+}
+
+async function userDocsForRoles(roles) {
+  const db = admin.firestore();
+  const snapshots = await Promise.all(
+    roles.map((role) => db.collection("users").where("role", "==", role).get()),
+  );
+  return uniqueDocs(snapshots.flatMap((snapshot) => snapshot.docs));
+}
+
+function uniqueDocs(docs) {
+  const byPath = new Map();
+  docs.forEach((doc) => byPath.set(doc.ref.path, doc));
+  return [...byPath.values()];
+}
+
+async function sumDeletes(deletes) {
+  const counts = await Promise.all(deletes);
+  return counts.reduce((total, count) => total + count, 0);
+}
+
+async function deleteCollectionDocuments(collectionPath) {
+  return deleteQueryDocuments(admin.firestore().collection(collectionPath));
+}
+
+async function deleteQueryDocuments(query) {
+  let deletedCount = 0;
+  while (true) {
+    const snapshot = await query.limit(400).get();
+    if (snapshot.empty) {
+      return deletedCount;
+    }
+
+    const writer = admin.firestore().bulkWriter();
+    writer.onWriteError((error) => error.failedAttempts < 3);
+    for (const doc of snapshot.docs) {
+      writer.delete(doc.ref);
+    }
+    await writer.close();
+    deletedCount += snapshot.size;
+  }
+}
+
+function deletedSectionResult(section, deletedCount) {
+  return {
+    ok: true,
+    section,
+    deletedCount,
+  };
+}
+
+async function deleteAuthUserIfExists(uid) {
+  try {
+    await admin.auth().deleteUser(uid);
+  } catch (error) {
+    if (error.code !== "auth/user-not-found") {
+      throw error;
+    }
+  }
 }
 
 function collectCloudinaryImageReferences(orderDocs, messageDocs) {
@@ -1682,6 +1970,11 @@ function requireRole(activeUser, role) {
       "You are not allowed to upload this image.",
     );
   }
+}
+
+function isDeliveryBoyRole(role) {
+  return role === "delivery_boy" || role === "deliveryBoy" ||
+    role === "delivery";
 }
 
 async function initializeDeliveryRewardStarsInTransaction({

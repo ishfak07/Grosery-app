@@ -8460,6 +8460,11 @@ class NotificationsScreen extends StatelessWidget {
     final profile = appState.profile!;
     return _CustomerScaffold(
       title: 'Notifications',
+      actions: appState.isAdmin
+          ? const [
+              _NotificationsDeleteAllAction(),
+            ]
+          : null,
       body: StreamBuilder<List<AppNotification>>(
         stream: appState.firestoreService.watchNotifications(
           userId: profile.uid,
@@ -8550,6 +8555,78 @@ class NotificationsScreen extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+class _NotificationsDeleteAllAction extends StatelessWidget {
+  const _NotificationsDeleteAllAction();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: TextButton.icon(
+        onPressed: () => _confirmDeleteAllNotifications(context),
+        icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+        label: const Text('Delete All'),
+        style: TextButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: _customerDanger,
+          side: const BorderSide(color: _customerLine),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _confirmDeleteAllNotifications(BuildContext context) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: const Text('Delete all notifications?'),
+        content: const Text(
+          'This permanently deletes every saved notification from the database. '
+          'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: _customerDanger,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            icon: const Icon(Icons.delete_forever),
+            label: const Text('Delete all'),
+          ),
+        ],
+      );
+    },
+  );
+  if (confirmed != true || !context.mounted) {
+    return;
+  }
+
+  try {
+    await context.read<AppState>().authService.clearAdminSectionData(
+          section: 'notifications',
+        );
+    if (!context.mounted) {
+      return;
+    }
+    await context.read<AppState>().refreshVisibleData();
+    if (context.mounted) {
+      showSnack(context, 'All notifications deleted.');
+    }
+  } catch (error) {
+    if (context.mounted) {
+      showSnack(context, error);
+    }
   }
 }
 

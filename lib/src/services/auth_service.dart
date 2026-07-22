@@ -289,6 +289,56 @@ class AuthService {
     }
   }
 
+  Future<void> deleteDeliveryBoyAccountAsAdmin(String uid) async {
+    try {
+      await _functions.httpsCallable('deleteDeliveryBoyAccountAsAdmin').call({
+        'uid': uid,
+      });
+    } on FirebaseFunctionsException catch (error) {
+      if (_isCallableFunctionNotDeployed(error)) {
+        throw const AuthServiceException(
+          'Delivery boy deletion service is not deployed. Deploy Firebase Functions and try again.',
+        );
+      }
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
+  Future<void> deleteDeliveryBoyAccount() async {
+    try {
+      await _functions.httpsCallable('deleteDeliveryBoyAccount').call();
+      await _auth.signOut();
+    } on FirebaseAuthException catch (error) {
+      throw AuthServiceException(_authErrorMessage(error));
+    } on FirebaseFunctionsException catch (error) {
+      if (_isCallableFunctionNotDeployed(error)) {
+        throw const AuthServiceException(
+          'Delivery boy deletion service is not deployed. Deploy Firebase Functions and try again.',
+        );
+      }
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
+  Future<void> clearAdminSectionData({required String section}) async {
+    try {
+      await _functions.httpsCallable('clearAdminSectionData').call({
+        'section': section,
+      });
+    } on FirebaseFunctionsException catch (error) {
+      if (_isCallableFunctionNotDeployed(error) &&
+          await _firestoreService.clearAdminSectionDataFallback(section)) {
+        return;
+      }
+      if (_isCallableFunctionNotDeployed(error)) {
+        throw const AuthServiceException(
+          'Admin delete service is not deployed. Deploy Firebase Functions and try again.',
+        );
+      }
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
+  }
+
   Future<void> createDeliveryBoy({
     required String fullName,
     required String phone,
@@ -509,6 +559,9 @@ class AuthService {
       case 'invalid-argument':
         return message ?? 'Check the details and try again.';
       case 'not-found':
+        if (_isCallableFunctionNotDeployed(error)) {
+          return 'This service is not deployed. Deploy Firebase Functions and try again.';
+        }
         return message ?? 'No account was found for that phone number.';
       case 'failed-precondition':
         return message ?? 'This request is not ready yet.';
@@ -522,6 +575,14 @@ class AuthService {
       default:
         return message ?? 'Request failed. Try again.';
     }
+  }
+
+  bool _isCallableFunctionNotDeployed(FirebaseFunctionsException error) {
+    final message = error.message?.trim();
+    return error.code == 'not-found' &&
+        (message == null ||
+            message.isEmpty ||
+            message.toUpperCase() == 'NOT_FOUND');
   }
 
   String _passwordUpdateErrorMessage(FirebaseAuthException error) {
