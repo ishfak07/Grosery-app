@@ -12,8 +12,15 @@ ext {
 }
 
 rootProject.buildDir = "../build"
-subprojects {
-    project.buildDir = "${rootProject.buildDir}/${project.name}"
+subprojects { subproject ->
+    def rootPath = rootProject.projectDir.canonicalFile.toPath()
+    def projectPath = subproject.projectDir.canonicalFile.toPath()
+
+    if (rootPath.root == projectPath.root) {
+        subproject.buildDir = "${rootProject.buildDir}/${subproject.name}"
+    } else {
+        subproject.buildDir = new File(subproject.projectDir, "build")
+    }
 }
 subprojects {
     project.evaluationDependsOn(":app")
