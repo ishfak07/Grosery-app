@@ -25,10 +25,13 @@
 
 5. Upload `build/app/outputs/bundle/release/app-release.aab` to Play Console.
 6. In Play Console, enable Play App Signing, complete the store listing, Data safety, content rating, target audience, app access, and production release steps.
+7. If this is a personal developer account created after November 13, 2023,
+   run a closed test with at least 12 opted-in testers for 14 consecutive days,
+   then apply for production access from the Play Console dashboard.
 
 Notes:
 
-- The Android release build targets API 35, which satisfies the current Google Play requirement for new mobile apps and updates.
+- The Android release build targets API 36, which satisfies Google Play's Android 16 target API requirement for new mobile apps and updates starting August 31, 2026.
 - Do not add `READ_MEDIA_IMAGES` or `READ_EXTERNAL_STORAGE` for one-off uploads. The app uses the system picker through `image_picker`.
 - The release build no longer uses the debug signing key. It requires `android/key.properties`.
 - If Firebase Android auth/API integrations depend on SHA certificates, add the upload/app signing SHA-1 and SHA-256 values in Firebase Console.
