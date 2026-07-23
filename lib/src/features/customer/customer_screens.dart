@@ -3004,18 +3004,15 @@ class ProductDetailsScreen extends StatelessWidget {
         children: [
           _CustomerCard(
             padding: EdgeInsets.zero,
-            child: Stack(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _ProductAvailabilityBanner(
+                  isAvailable: product.isAvailable,
+                ),
                 AspectRatio(
                   aspectRatio: 1.05,
-                  child: ProductImage(url: product.imageUrl, radius: 8),
-                ),
-                Positioned(
-                  left: 12,
-                  top: 12,
-                  child: _ProductAvailabilityBanner(
-                    isAvailable: product.isAvailable,
-                  ),
+                  child: ProductImage(url: product.imageUrl, radius: 0),
                 ),
               ],
             ),
@@ -3159,52 +3156,47 @@ class _ProductAvailabilityBanner extends StatelessWidget {
       child: Tooltip(
         message: label,
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 172, minHeight: 36),
-          padding: const EdgeInsets.fromLTRB(8, 7, 11, 7),
+          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 46),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.96),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: color.withValues(alpha: 0.44),
-              width: 1.2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: _customerInk.withValues(alpha: 0.20),
-                blurRadius: 14,
-                offset: const Offset(0, 6),
+            color:
+                isAvailable ? _customerPrimaryLight : const Color(0xFFFFF4E0),
+            border: Border(
+              bottom: BorderSide(
+                color: color.withValues(alpha: 0.28),
+                width: 1.2,
               ),
-            ],
+            ),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 22,
-                height: 22,
+                width: 26,
+                height: 26,
                 decoration: BoxDecoration(
                   color: color,
-                  borderRadius: BorderRadius.circular(7),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   isAvailable
                       ? Icons.check_rounded
                       : Icons.inventory_2_outlined,
-                  size: 15,
+                  size: 17,
                   color: Colors.white,
                 ),
               ),
-              const SizedBox(width: 7),
-              Flexible(
+              const SizedBox(width: 9),
+              Expanded(
                 child: Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _customerInk,
-                    fontSize: 13,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 14,
                     fontWeight: FontWeight.w900,
-                    height: 1,
+                    height: 1.1,
                   ),
                 ),
               ),
