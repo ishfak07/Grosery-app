@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../services/in_app_update_service.dart';
 import 'core/constants/app_constants.dart';
 import 'core/i18n/app_localizations.dart';
 import 'core/theme/app_theme.dart';
@@ -28,8 +31,65 @@ class GroceryDeliveryApp extends StatelessWidget {
   }
 }
 
-class HomeGate extends StatelessWidget {
+class HomeGate extends StatefulWidget {
   const HomeGate({super.key});
+
+  @override
+  State<HomeGate> createState() => _HomeGateState();
+}
+
+class _HomeGateState extends State<HomeGate> with WidgetsBindingObserver {
+  AppState? _appState;
+  bool _hasScheduledUpdateCheck = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nextAppState = context.read<AppState>();
+    if (_appState != nextAppState) {
+      _appState?.removeListener(_scheduleUpdateCheckIfReady);
+      _appState = nextAppState;
+      nextAppState.addListener(_scheduleUpdateCheckIfReady);
+    }
+    _scheduleUpdateCheckIfReady();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(InAppUpdateService.completeDownloadedUpdate());
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _appState?.removeListener(_scheduleUpdateCheckIfReady);
+    super.dispose();
+  }
+
+  void _scheduleUpdateCheckIfReady() {
+    if (!mounted || _hasScheduledUpdateCheck) {
+      return;
+    }
+    final appState = _appState;
+    if (appState == null || appState.isInitializing || appState.isLoggingOut) {
+      return;
+    }
+
+    _hasScheduledUpdateCheck = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(InAppUpdateService.checkForUpdate(context));
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

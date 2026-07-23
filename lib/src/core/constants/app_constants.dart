@@ -13,8 +13,7 @@ class AppConstants {
   static const bankName = 'Bank Of Cylon (BOC)';
   static const bankBranch = 'Puttalam';
   static const bankAccountNumber = '89001476';
-  static const privacyPolicyUrl =
-      'https://whatsconnect.sbs/privacy-policy/';
+  static const privacyPolicyUrl = 'https://whatsconnect.sbs/privacy-policy/';
   static const accountDeletionUrl =
       'https://grocery-delivery-app-388bc.web.app/delete-account';
 

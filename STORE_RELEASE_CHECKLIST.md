@@ -5,7 +5,7 @@
 - App name: `Puttalam Drop`
 - Android application ID: `com.ishi.grocerydelivery`
 - iOS bundle ID: `com.ishi.grocerydelivery`
-- Version: set in `pubspec.yaml` as `version: 1.0.0+1`
+- Version: set in `pubspec.yaml` as `version: 1.0.1+2`
 
 ## Android / Google Play
 
@@ -20,7 +20,7 @@
 4. Build the Play Store bundle:
 
    ```powershell
-   flutter build appbundle --release --build-name=1.0.0 --build-number=1
+   flutter build appbundle --release --build-name=1.0.1 --build-number=2
    ```
 
 5. Upload `build/app/outputs/bundle/release/app-release.aab` to Play Console.

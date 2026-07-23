@@ -48,16 +48,16 @@ class ShopOrderPdfService {
       theme: theme,
       title: 'Order preparation ${order.orderId}',
       author: 'Puttalam Drop',
-      subject: 'Combined order preparation list',  
+      subject: 'Combined order preparation list',
     );
     final placedAt = DateFormat('dd MMM yyyy, h:mm a').format(order.createdAt);
 
     document.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32), 
-        header: (context) => pw.Container( 
-          padding: const pw.EdgeInsets.only(bottom: 10),     
+        margin: const pw.EdgeInsets.all(32),
+        header: (context) => pw.Container(
+          padding: const pw.EdgeInsets.only(bottom: 10),
           decoration: const pw.BoxDecoration(
             border: pw.Border(
               bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.7),

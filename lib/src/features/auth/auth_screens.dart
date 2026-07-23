@@ -462,7 +462,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                     color: Colors.white.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(
-                                      color: Colors.white.withValues(alpha: 0.18),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.18),
                                     ),
                                   ),
                                   child: Icon(

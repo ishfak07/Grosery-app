@@ -448,10 +448,9 @@ class UserProfile {
       ),
       fcmToken: fcmToken ?? this.fcmToken,
       fcmTokens: fcmTokens ?? this.fcmTokens,
-      deliveryRewardStars:
-          deliveryRewardStars ?? this.deliveryRewardStars,
-      deliveryRewardStarsInitialized: deliveryRewardStarsInitialized ??
-          this.deliveryRewardStarsInitialized,
+      deliveryRewardStars: deliveryRewardStars ?? this.deliveryRewardStars,
+      deliveryRewardStarsInitialized:
+          deliveryRewardStarsInitialized ?? this.deliveryRewardStarsInitialized,
       deliveryRewardCount: deliveryRewardCount ?? this.deliveryRewardCount,
       deliveryRewardsPaidLkr:
           deliveryRewardsPaidLkr ?? this.deliveryRewardsPaidLkr,
@@ -508,12 +507,10 @@ class UserProfile {
       fcmToken: map['fcmToken'] as String? ??
           (fcmTokens.isEmpty ? '' : fcmTokens.first),
       fcmTokens: fcmTokens,
-      deliveryRewardStars:
-          (map['deliveryRewardStars'] as num?)?.toInt() ?? 0,
+      deliveryRewardStars: (map['deliveryRewardStars'] as num?)?.toInt() ?? 0,
       deliveryRewardStarsInitialized:
           map['deliveryRewardStarsInitialized'] == true,
-      deliveryRewardCount:
-          (map['deliveryRewardCount'] as num?)?.toInt() ?? 0,
+      deliveryRewardCount: (map['deliveryRewardCount'] as num?)?.toInt() ?? 0,
       deliveryRewardsPaidLkr:
           (map['deliveryRewardsPaidLkr'] as num?)?.toInt() ?? 0,
       deliveryRewardLastPaidAt:

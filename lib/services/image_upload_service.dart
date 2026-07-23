@@ -119,7 +119,8 @@ class ImageUploadService {
       );
 
       final response = await request.send().timeout(_uploadTimeout);
-      final body = await response.stream.bytesToString().timeout(_uploadTimeout);
+      final body =
+          await response.stream.bytesToString().timeout(_uploadTimeout);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw ImageUploadException(_cloudinaryErrorMessage(body));
       }
@@ -193,7 +194,8 @@ class ImageUploadService {
     }
   }
 
-  static Future<_LocalImageValidation> _validateLocalImage(File imageFile) async {
+  static Future<_LocalImageValidation> _validateLocalImage(
+      File imageFile) async {
     if (!await imageFile.exists()) {
       throw const ImageUploadException(
         'Image upload failed: the selected file was not found.',
@@ -286,7 +288,8 @@ class ImageUploadService {
   }
 
   static String _safeImageExtension(String imagePath) {
-    final extension = path.extension(imagePath).toLowerCase().replaceAll('.', '');
+    final extension =
+        path.extension(imagePath).toLowerCase().replaceAll('.', '');
     if (extension == 'jpeg') {
       return 'jpg';
     }
@@ -386,9 +389,8 @@ class _SignedCloudinaryUpload {
       parameters: parameterMap.map(
         (key, value) => MapEntry(key.toString(), value.toString()),
       ),
-      maxFileSizeBytes:
-          (map['maxFileSizeBytes'] as num?)?.toInt() ??
-              ImageUploadService.maxUploadBytes,
+      maxFileSizeBytes: (map['maxFileSizeBytes'] as num?)?.toInt() ??
+          ImageUploadService.maxUploadBytes,
       allowedFormats: (map['allowedFormats'] as List<dynamic>? ??
               ImageUploadService._allowedExtensions.toList())
           .map((format) => format.toString().toLowerCase())
