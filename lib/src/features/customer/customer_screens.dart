@@ -2746,21 +2746,8 @@ class ProductCard extends StatelessWidget {
                 Positioned(
                   right: 8,
                   top: 8,
-                  child: Container(
-                    width: 26,
-                    height: 26,
-                    decoration: BoxDecoration(
-                      color: product.isAvailable
-                          ? _customerPrimary
-                          : _customerDanger,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                    child: Icon(
-                      product.isAvailable ? Icons.check : Icons.close,
-                      size: 14,
-                      color: Colors.white,
-                    ),
+                  child: _ProductAvailabilityBadge(
+                    isAvailable: product.isAvailable,
                   ),
                 ),
               ],
@@ -2840,6 +2827,83 @@ class ProductCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductAvailabilityBadge extends StatelessWidget {
+  const _ProductAvailabilityBadge({required this.isAvailable});
+
+  final bool isAvailable;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = context.t(isAvailable ? 'Available' : 'Unavailable');
+    final badge = isAvailable ? _availableBadge() : _unavailableBadge(label);
+    return Semantics(
+      label: label,
+      container: true,
+      child: Tooltip(
+        message: label,
+        child: badge,
+      ),
+    );
+  }
+
+  Widget _availableBadge() {
+    return Container(
+      width: 26,
+      height: 26,
+      decoration: BoxDecoration(
+        color: _customerPrimary,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white, width: 2),
+      ),
+      child: const Icon(
+        Icons.check,
+        size: 14,
+        color: Colors.white,
+      ),
+    );
+  }
+
+  Widget _unavailableBadge(String label) {
+    return Container(
+      height: 28,
+      constraints: const BoxConstraints(maxWidth: 116),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4E0),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white, width: 2),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.inventory_2_outlined,
+            size: 14,
+            color: _customerWarning,
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                label,
+                maxLines: 1,
+                style: const TextStyle(
+                  color: _customerWarning,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
             ),
           ),
         ],
@@ -2949,8 +3013,8 @@ class ProductDetailsScreen extends StatelessWidget {
                 Positioned(
                   left: 12,
                   top: 12,
-                  child: StatusChip(
-                    status: product.isAvailable ? 'Available' : 'Unavailable',
+                  child: _ProductAvailabilityBanner(
+                    isAvailable: product.isAvailable,
                   ),
                 ),
               ],
@@ -3074,6 +3138,78 @@ class ProductDetailsScreen extends StatelessWidget {
                   }
                 }
               : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _ProductAvailabilityBanner extends StatelessWidget {
+  const _ProductAvailabilityBanner({required this.isAvailable});
+
+  final bool isAvailable;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isAvailable ? _customerPrimary : _customerWarning;
+    final label = context.t(isAvailable ? 'Available' : 'Unavailable');
+    return Semantics(
+      label: label,
+      container: true,
+      child: Tooltip(
+        message: label,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 172, minHeight: 36),
+          padding: const EdgeInsets.fromLTRB(8, 7, 11, 7),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.96),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: color.withValues(alpha: 0.44),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _customerInk.withValues(alpha: 0.20),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Icon(
+                  isAvailable
+                      ? Icons.check_rounded
+                      : Icons.inventory_2_outlined,
+                  size: 15,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
