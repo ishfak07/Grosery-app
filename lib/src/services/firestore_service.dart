@@ -487,7 +487,11 @@ class FirestoreService {
     final orderMap = order.toMap()
       ..remove('deliveryRating')
       ..remove('deliveryReview')
-      ..remove('deliveryReviewedAt');
+      ..remove('deliveryReviewedAt')
+      ..addAll({
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     try {
       await _commitOrderCreate(order, orderMap);
     } on FirebaseException catch (error) {
@@ -615,6 +619,21 @@ class FirestoreService {
     });
   }
 
+  Future<void> refreshOrder(String orderId) async {
+    if (!_firebaseAvailable) {
+      return;
+    }
+    try {
+      await _orders
+          .doc(orderId)
+          .get(const GetOptions(source: Source.server))
+          .timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // Live streams keep rendering cached data. A failed refresh should not
+      // replace the user-facing cancellation result.
+    }
+  }
+
   Future<void> updateOrderStatus({
     required OrderModel order,
     required String status,
@@ -663,64 +682,89 @@ class FirestoreService {
           )
         : null;
 
-    final batch = _db.batch();
-    batch.update(_orders.doc(order.orderId), {
-      'orderStatus': status,
-      if (adminNotes != null) 'adminNotes': adminNotes,
-      'rejectionReason': normalizedRejectionReason,
-      if (assignedDeliveryPerson != null)
-        'assignedDeliveryPerson': assignedDeliveryPerson,
-      if (assignedDeliveryPhone != null)
-        'assignedDeliveryPhone': assignedDeliveryPhone,
-      if (assignedDeliveryBoyId != null)
-        'assignedDeliveryBoyId': assignedDeliveryBoyId,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    if (accountRecord != null) {
-      batch.set(
-        _accountSales.doc(order.orderId),
-        accountRecord.toMap(),
-        SetOptions(merge: true),
-      );
-    } else if (order.orderStatus == 'Delivered' && status != 'Delivered') {
-      batch.delete(_accountSales.doc(order.orderId));
-    }
-
+    final orderRef = _orders.doc(order.orderId);
     final notificationId = _uuid.v4();
-    batch.set(
-      _notifications.doc(notificationId),
-      AppNotification(
-        notificationId: notificationId,
-        userId: order.userId,
-        recipientRole: 'user',
-        title: 'Order ${order.orderId} updated',
-        body: 'Status changed to $status',
-        type: 'order',
-        relatedId: order.orderId,
-        isRead: false,
-        createdAt: DateTime.now(),
-      ).toMap(),
-    );
+    final notificationRef = _notifications.doc(notificationId);
     final deliveryBoyId = assignedDeliveryBoyId ?? order.assignedDeliveryBoyId;
-    if (status == 'Out for Delivery' && deliveryBoyId.isNotEmpty) {
-      final deliveryNotificationId = _uuid.v4();
-      batch.set(
-        _notifications.doc(deliveryNotificationId),
+    final deliveryNotificationId =
+        status == 'Out for Delivery' && deliveryBoyId.isNotEmpty
+            ? _uuid.v4()
+            : null;
+
+    await _db.runTransaction((transaction) async {
+      final latestOrderDoc = await transaction.get(orderRef);
+      final latestOrderData = latestOrderDoc.data();
+      if (!latestOrderDoc.exists || latestOrderData == null) {
+        throw StateError('Order not found.');
+      }
+      final latestOrder =
+          OrderModel.fromMap(latestOrderData, latestOrderDoc.id);
+      if (latestOrder.orderStatus == 'Cancelled' && status != 'Cancelled') {
+        throw StateError(
+          'This order was cancelled by the customer. Refresh and review the latest status.',
+        );
+      }
+      if (status == 'Delivered' &&
+          latestOrder.orderStatus != 'Out for Delivery' &&
+          latestOrder.orderStatus != 'Delivered') {
+        throw StateError('Order must be out for delivery before delivered.');
+      }
+
+      transaction.update(orderRef, {
+        'orderStatus': status,
+        if (adminNotes != null) 'adminNotes': adminNotes,
+        'rejectionReason': normalizedRejectionReason,
+        if (assignedDeliveryPerson != null)
+          'assignedDeliveryPerson': assignedDeliveryPerson,
+        if (assignedDeliveryPhone != null)
+          'assignedDeliveryPhone': assignedDeliveryPhone,
+        if (assignedDeliveryBoyId != null)
+          'assignedDeliveryBoyId': assignedDeliveryBoyId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (accountRecord != null) {
+        transaction.set(
+          _accountSales.doc(order.orderId),
+          accountRecord.toMap(),
+          SetOptions(merge: true),
+        );
+      } else if (latestOrder.orderStatus == 'Delivered' &&
+          status != 'Delivered') {
+        transaction.delete(_accountSales.doc(order.orderId));
+      }
+
+      transaction.set(
+        notificationRef,
         AppNotification(
-          notificationId: deliveryNotificationId,
-          userId: deliveryBoyId,
-          recipientRole: 'delivery_boy',
-          title: 'Order assigned',
-          body:
-              '${order.customerName} - ${order.totalAmount.toStringAsFixed(2)}',
+          notificationId: notificationId,
+          userId: order.userId,
+          recipientRole: 'user',
+          title: 'Order ${order.orderId} updated',
+          body: 'Status changed to $status',
           type: 'order',
           relatedId: order.orderId,
           isRead: false,
           createdAt: DateTime.now(),
         ).toMap(),
       );
-    }
-    await batch.commit();
+      if (deliveryNotificationId != null) {
+        transaction.set(
+          _notifications.doc(deliveryNotificationId),
+          AppNotification(
+            notificationId: deliveryNotificationId,
+            userId: deliveryBoyId,
+            recipientRole: 'delivery_boy',
+            title: 'Order assigned',
+            body:
+                '${order.customerName} - ${order.totalAmount.toStringAsFixed(2)}',
+            type: 'order',
+            relatedId: order.orderId,
+            isRead: false,
+            createdAt: DateTime.now(),
+          ).toMap(),
+        );
+      }
+    });
   }
 
   Future<void> updateOrderFinancials({
@@ -760,29 +804,43 @@ class FirestoreService {
           )
         : null;
 
-    final batch = _db.batch();
-    batch.update(_orders.doc(order.orderId), {
-      'cartItemsAmount': normalizedCartItemsAmount,
-      'photoListAmount': normalizedPhotoListAmount,
-      'manualListAmount': normalizedManualListAmount,
-      'listAmountsReviewed': true,
-      'subtotal': normalizedSubtotal,
-      'deliveryCharge': normalizedDeliveryCharge,
-      'serviceCharge': normalizedServiceCharge,
-      'totalAmount': total,
-      'paymentStatus': paymentStatus,
-      'orderStatus':
-          order.orderStatus == 'Pending' ? 'Bill Updated' : order.orderStatus,
-      'updatedAt': FieldValue.serverTimestamp(),
+    final orderRef = _orders.doc(order.orderId);
+    await _db.runTransaction((transaction) async {
+      final latestOrderDoc = await transaction.get(orderRef);
+      final latestOrderData = latestOrderDoc.data();
+      if (!latestOrderDoc.exists || latestOrderData == null) {
+        throw StateError('Order not found.');
+      }
+      final latestOrder =
+          OrderModel.fromMap(latestOrderData, latestOrderDoc.id);
+      if (latestOrder.orderStatus == 'Cancelled') {
+        throw StateError(
+          'This order was cancelled by the customer. Refresh and review the latest status.',
+        );
+      }
+      transaction.update(orderRef, {
+        'cartItemsAmount': normalizedCartItemsAmount,
+        'photoListAmount': normalizedPhotoListAmount,
+        'manualListAmount': normalizedManualListAmount,
+        'listAmountsReviewed': true,
+        'subtotal': normalizedSubtotal,
+        'deliveryCharge': normalizedDeliveryCharge,
+        'serviceCharge': normalizedServiceCharge,
+        'totalAmount': total,
+        'paymentStatus': paymentStatus,
+        'orderStatus': latestOrder.orderStatus == 'Pending'
+            ? 'Bill Updated'
+            : latestOrder.orderStatus,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (accountRecord != null) {
+        transaction.set(
+          _accountSales.doc(order.orderId),
+          accountRecord.toMap(),
+          SetOptions(merge: true),
+        );
+      }
     });
-    if (accountRecord != null) {
-      batch.set(
-        _accountSales.doc(order.orderId),
-        accountRecord.toMap(),
-        SetOptions(merge: true),
-      );
-    }
-    await batch.commit();
     await notifyUser(
       userId: order.userId,
       title: 'Final bill updated',

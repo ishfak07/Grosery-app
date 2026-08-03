@@ -998,6 +998,10 @@ class OrderModel {
     required this.deliveryReviewedAt,
     required this.createdAt,
     required this.updatedAt,
+    this.cancelledAt,
+    this.cancelledBy = '',
+    this.cancellationReason = '',
+    this.hasReliableCreatedAt = true,
   });
 
   final String orderId;
@@ -1033,6 +1037,10 @@ class OrderModel {
   final DateTime? deliveryReviewedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? cancelledAt;
+  final String cancelledBy;
+  final String cancellationReason;
+  final bool hasReliableCreatedAt;
 
   bool get hasUpload => uploadedImageUrl.isNotEmpty;
   String get customerNotes => _orderNotesWithoutManualList(orderNotes);
@@ -1082,6 +1090,9 @@ class OrderModel {
     double? serviceCharge,
     double? totalAmount,
     String? paymentStatus,
+    DateTime? cancelledAt,
+    String? cancelledBy,
+    String? cancellationReason,
   }) {
     return OrderModel(
       orderId: orderId,
@@ -1122,6 +1133,10 @@ class OrderModel {
       deliveryReviewedAt: deliveryReviewedAt ?? this.deliveryReviewedAt,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
+      cancelledAt: cancelledAt ?? this.cancelledAt,
+      cancelledBy: cancelledBy ?? this.cancelledBy,
+      cancellationReason: cancellationReason ?? this.cancellationReason,
+      hasReliableCreatedAt: hasReliableCreatedAt,
     );
   }
 
@@ -1163,6 +1178,10 @@ class OrderModel {
           deliveryReviewedAt == null ? null : _writeDate(deliveryReviewedAt!),
       'createdAt': _writeDate(createdAt),
       'updatedAt': _writeDate(updatedAt),
+      if (cancelledAt != null) 'cancelledAt': _writeDate(cancelledAt!),
+      if (cancelledBy.isNotEmpty) 'cancelledBy': cancelledBy,
+      if (cancellationReason.isNotEmpty)
+        'cancellationReason': cancellationReason,
     };
   }
 
@@ -1207,6 +1226,7 @@ class OrderModel {
             : 0.0;
     final splitSubtotal = cartItemsAmount + photoListAmount + manualListAmount;
     final subtotal = hasSplitAmounts ? splitSubtotal : storedSubtotal;
+    final createdAt = _readOptionalDate(map['createdAt']);
     return OrderModel(
       orderId: map['orderId'] as String? ?? id,
       userId: map['userId'] as String? ?? '',
@@ -1242,8 +1262,12 @@ class OrderModel {
       deliveryRating: (map['deliveryRating'] as num?)?.toInt() ?? 0,
       deliveryReview: map['deliveryReview'] as String? ?? '',
       deliveryReviewedAt: _readOptionalDate(map['deliveryReviewedAt']),
-      createdAt: _readDate(map['createdAt']),
+      createdAt: createdAt ?? DateTime.now(),
       updatedAt: _readDate(map['updatedAt']),
+      cancelledAt: _readOptionalDate(map['cancelledAt']),
+      cancelledBy: map['cancelledBy'] as String? ?? '',
+      cancellationReason: map['cancellationReason'] as String? ?? '',
+      hasReliableCreatedAt: createdAt != null,
     );
   }
 

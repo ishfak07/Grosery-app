@@ -139,6 +139,16 @@ service cloud.firestore {
       ];
     }
 
+    function customerCancellationUpdateKeys() {
+      return [
+        'orderStatus',
+        'cancelledAt',
+        'cancelledBy',
+        'cancellationReason',
+        'updatedAt'
+      ];
+    }
+
     function isValidOrderCreate() {
       return request.resource.data.userId == request.auth.uid &&
         request.resource.data.orderStatus == 'Pending' &&
@@ -154,6 +164,8 @@ service cloud.firestore {
         request.resource.data.deliveryCharge >= 0 &&
         request.resource.data.serviceCharge >= 0 &&
         request.resource.data.totalAmount >= 0 &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time &&
         (
           (
             request.resource.data.keys().hasOnly(orderCreateKeys()) &&
@@ -168,6 +180,22 @@ service cloud.firestore {
             request.resource.data.keys().hasAll(legacyOrderCreateKeys())
           )
         );
+    }
+
+    function isValidCustomerCancellation() {
+      return notBlocked() &&
+        resource.data.userId == request.auth.uid &&
+        resource.data.orderStatus == 'Pending' &&
+        resource.data.createdAt is timestamp &&
+        request.time < resource.data.createdAt + duration.value(5, 'm') &&
+        request.resource.data.orderStatus == 'Cancelled' &&
+        request.resource.data.cancelledAt == request.time &&
+        request.resource.data.cancelledBy == 'customer' &&
+        request.resource.data.cancellationReason ==
+          'customer_cancelled_within_window' &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(customerCancellationUpdateKeys());
     }
 
     function validUserAdminNotification() {
@@ -224,7 +252,7 @@ service cloud.firestore {
           isAdmin() ||
           isAssignedDeliveryBoy(resource.data)
         );
-      allow update: if isAdmin();
+      allow update: if isAdmin() || isValidCustomerCancellation();
       allow delete: if isAdmin();
     }
 

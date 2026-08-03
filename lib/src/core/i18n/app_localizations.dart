@@ -310,6 +310,46 @@ const _tamil = <String, String>{
       'உங்கள் வங்கி பரிமாற்ற ஆர்டர் அட்மின் ரசீது சரிபார்ப்பில் நிலுவையில் உள்ளது.',
   'Your COD order is pending admin review.':
       'உங்கள் COD ஆர்டர் அட்மின் சரிபார்ப்பில் நிலுவையில் உள்ளது.',
+  'Customer cancellation available for:':
+      'வாடிக்கையாளர் ஆர்டரை ரத்து செய்ய மீதமுள்ள நேரம்:',
+  'Cancel order': 'ஆர்டரை ரத்து செய்யவும்',
+  'Cancel order?': 'ஆர்டரை ரத்து செய்யவா?',
+  'Are you sure you want to cancel this order? This action cannot be undone.':
+      'இந்த ஆர்டரை ரத்து செய்ய விரும்புகிறீர்களா? இந்த செயலை மீண்டும் மாற்ற முடியாது.',
+  'Keep order': 'ஆர்டரை வைத்திருக்கவும்',
+  'The cancellation period has expired. Please contact support if you need help cancelling this order.':
+      'ஆர்டரை ரத்து செய்யும் நேரம் முடிந்துவிட்டது. இந்த ஆர்டரை ரத்து செய்ய உதவி தேவைப்பட்டால் ஆதரவு குழுவை தொடர்புகொள்ளவும்.',
+  'This order has already been accepted and can no longer be cancelled through the app. Please contact support if you need assistance.':
+      'இந்த ஆர்டர் ஏற்கனவே ஏற்றுக்கொள்ளப்பட்டதால், இனி செயலியின் மூலம் ரத்து செய்ய முடியாது. உதவி தேவைப்பட்டால் ஆதரவு குழுவை தொடர்புகொள்ளவும்.',
+  'Your order has been cancelled successfully.':
+      'உங்கள் ஆர்டர் வெற்றிகரமாக ரத்து செய்யப்பட்டது.',
+  'Order cancelled': 'ஆர்டர் ரத்து செய்யப்பட்டது',
+  'Your order has been cancelled': 'உங்கள் ஆர்டர் ரத்து செய்யப்பட்டது',
+  'This order is no longer active.': 'இந்த ஆர்டர் இனி செயல்பாட்டில் இல்லை.',
+  'Cancelled by customer within the order window.':
+      'ஆர்டர் நேர எல்லைக்குள் வாடிக்கையாளர் ரத்து செய்தார்.',
+  'Online cancellation is unavailable for this order. Please contact support.':
+      'இந்த ஆர்டருக்கு ஆன்லைன் ரத்து செய்யும் வசதி இல்லை. ஆதரவு குழுவை தொடர்புகொள்ளவும்.',
+  'Customer cancellation window:': 'வாடிக்கையாளர் ரத்து செய்யும் நேரம்:',
+  '{time} remaining': '{time} மீதமுள்ளது',
+  'Customer cancellation window expired':
+      'வாடிக்கையாளர் ரத்து செய்யும் நேரம் முடிந்துவிட்டது',
+  'Customer cancellation disabled because the order was accepted.':
+      'ஆர்டர் ஏற்கப்பட்டதால் வாடிக்கையாளர் ரத்து செய்யும் வசதி முடக்கப்பட்டது.',
+  'Only pending orders can be cancelled through the app.':
+      'நிலுவையில் உள்ள ஆர்டர்களை மட்டுமே செயலி மூலம் ரத்து செய்ய முடியும்.',
+  'This order has already been cancelled.':
+      'இந்த ஆர்டர் ஏற்கனவே ரத்து செய்யப்பட்டுள்ளது.',
+  'You can only cancel your own orders.':
+      'உங்கள் சொந்த ஆர்டர்களை மட்டுமே ரத்து செய்ய முடியும்.',
+  'Service is unavailable. Try again shortly.':
+      'சேவை தற்போது கிடைக்கவில்லை. சிறிது நேரத்தில் மீண்டும் முயற்சிக்கவும்.',
+  'Unable to cancel this order. Please try again.':
+      'இந்த ஆர்டரை ரத்து செய்ய முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
+  'Cancellation service is not available yet. Please contact support.':
+      'ரத்து செய்யும் சேவை இன்னும் கிடைக்கவில்லை. ஆதரவு குழுவை தொடர்புகொள்ளவும்.',
+  'Cancellation is not available yet. Please update the app backend or contact support.':
+      'ரத்து செய்யும் வசதி இன்னும் கிடைக்கவில்லை. செயலியின் backend-ஐ புதுப்பிக்கவும் அல்லது ஆதரவு குழுவை தொடர்புகொள்ளவும்.',
   'Order': 'ஆர்டர்',
   'Total': 'மொத்தம்',
   'Payment': 'கட்டணம்',

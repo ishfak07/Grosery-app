@@ -16,6 +16,7 @@ import '../services/firebase_bootstrap.dart';
 import '../services/firestore_service.dart';
 import '../services/local_storage_service.dart';
 import '../services/notification_service.dart';
+import '../services/order_cancellation_service.dart';
 
 class AppState extends ChangeNotifier {
   AppState(FirebaseBootstrap bootstrap)
@@ -23,6 +24,8 @@ class AppState extends ChangeNotifier {
         firebaseError = bootstrap.errorMessage,
         firestoreService =
             FirestoreService(firebaseAvailable: bootstrap.isReady),
+        orderCancellationService =
+            OrderCancellationService(firebaseAvailable: bootstrap.isReady),
         notificationService =
             NotificationService(firebaseAvailable: bootstrap.isReady) {
     authService = AuthService(
@@ -34,6 +37,7 @@ class AppState extends ChangeNotifier {
   final bool firebaseAvailable;
   final String? firebaseError;
   final FirestoreService firestoreService;
+  final OrderCancellationService orderCancellationService;
   final NotificationService notificationService;
   final ConnectivityService connectivityService = ConnectivityService();
   final LocalStorageService localStorageService = LocalStorageService();

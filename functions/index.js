@@ -21,6 +21,13 @@ const terminalOrderStatuses = new Set([
   "Cancelled",
   "Rejected",
 ]);
+const customerCancellationWindowMs = 5 * 60 * 1000;
+const cancellationExpiredMessage =
+  "The cancellation period has expired. Please contact support if you need help cancelling this order.";
+const cancellationAcceptedMessage =
+  "This order has already been accepted and can no longer be cancelled through the app. Please contact support if you need assistance.";
+const cancellationUnavailableMessage =
+  "Online cancellation is unavailable for this order. Please contact support.";
 
 exports.deleteCustomerAccount = onCall(async (request) => {
   const customer = await requireCustomer(request);
@@ -79,6 +86,80 @@ exports.clearAdminSectionData = onCall(async (request) => {
     .toLowerCase()
     .replace(/[\s-]+/g, "_");
   return clearAdminSectionData(section);
+});
+
+exports.cancelOrderWithinWindow = onCall(async (request) => {
+  const customer = await requireCustomer(request);
+  const orderId = assertRequiredText(request.data?.orderId, "Order");
+  const db = admin.firestore();
+  const orderRef = db.collection("orders").doc(orderId);
+  const notificationRef = db.collection("notifications").doc();
+
+  await db.runTransaction(async (transaction) => {
+    const orderDoc = await transaction.get(orderRef);
+    if (!orderDoc.exists) {
+      throw new HttpsError("not-found", "Order not found.");
+    }
+
+    const order = orderDoc.data();
+    if (order.userId !== customer.uid) {
+      throw new HttpsError(
+        "permission-denied",
+        "You can only cancel your own orders.",
+      );
+    }
+
+    if (order.orderStatus === "Cancelled") {
+      throw new HttpsError(
+        "failed-precondition",
+        "This order has already been cancelled.",
+      );
+    }
+    if (order.orderStatus === "Accepted") {
+      throw new HttpsError("failed-precondition", cancellationAcceptedMessage);
+    }
+    if (order.orderStatus !== "Pending") {
+      throw new HttpsError(
+        "failed-precondition",
+        "Only pending orders can be cancelled through the app.",
+      );
+    }
+
+    const createdAtMillis = timestampMillis(order.createdAt);
+    if (createdAtMillis <= 0) {
+      throw new HttpsError(
+        "failed-precondition",
+        cancellationUnavailableMessage,
+      );
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const deadlineMillis = createdAtMillis + customerCancellationWindowMs;
+    if (now.toMillis() >= deadlineMillis) {
+      throw new HttpsError("failed-precondition", cancellationExpiredMessage);
+    }
+
+    transaction.update(orderRef, {
+      orderStatus: "Cancelled",
+      cancelledAt: now,
+      cancelledBy: "customer",
+      cancellationReason: "customer_cancelled_within_window",
+      updatedAt: now,
+    });
+    transaction.set(notificationRef, {
+      notificationId: notificationRef.id,
+      userId: "",
+      recipientRole: "admin",
+      title: "Order cancelled by customer",
+      body: `${order.customerName || "Customer"} cancelled order ${orderId}`,
+      type: "order",
+      relatedId: orderId,
+      isRead: false,
+      createdAt: now,
+    });
+  });
+
+  return {cancelled: true};
 });
 
 exports.processAccountDeletionRequest = onCall(async (request) => {

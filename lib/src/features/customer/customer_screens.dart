@@ -18,7 +18,9 @@ import '../../core/utils/phone_utils.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/common_widgets.dart';
 import '../../models/models.dart';
+import '../../services/order_cancellation_service.dart';
 import '../../state/app_state.dart';
+import '../order_cancellation/order_cancellation_countdown.dart';
 
 const _customerBackground = Color(0xFFF7FAF5);
 const _customerSurface = Color(0xFFFFFFFF);
@@ -6481,6 +6483,12 @@ class OrderTrackingScreen extends StatelessWidget {
             body: _RejectedOrderCompletionView(order: order),
           );
         }
+        if (order.orderStatus == 'Cancelled') {
+          return _CustomerScaffold(
+            title: 'Order cancelled',
+            body: _CancelledOrderCompletionView(order: order),
+          );
+        }
         return _CustomerScaffold(
           title: 'Order tracking',
           body: _ActiveOrderTrackingView(order: order),
@@ -6507,6 +6515,7 @@ class _ActiveOrderTrackingView extends StatelessWidget {
           payment:
               '${context.t(order.paymentMethod)} (${context.t(order.paymentStatus)})',
         ),
+        _CustomerOrderCancellationSection(order: order),
         if (_shouldShowFinalBillBreakdown(order)) ...[
           const SizedBox(height: 16),
           const _CustomerSectionHeader(title: 'Bill details'),
@@ -6532,6 +6541,235 @@ class _ActiveOrderTrackingView extends StatelessWidget {
         const SizedBox(height: 18),
         _OrderSupportButton(order: order),
       ],
+    );
+  }
+}
+
+class _CustomerOrderCancellationSection extends StatefulWidget {
+  const _CustomerOrderCancellationSection({required this.order});
+
+  final OrderModel order;
+
+  @override
+  State<_CustomerOrderCancellationSection> createState() =>
+      _CustomerOrderCancellationSectionState();
+}
+
+class _CustomerOrderCancellationSectionState
+    extends State<_CustomerOrderCancellationSection> {
+  var _isCancelling = false;
+  String? _blockingMessage;
+
+  @override
+  void didUpdateWidget(covariant _CustomerOrderCancellationSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.order.orderId != widget.order.orderId ||
+        oldWidget.order.orderStatus != widget.order.orderStatus) {
+      _blockingMessage = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OrderCancellationCountdown(
+      order: widget.order,
+      builder: (context, snapshot) {
+        final blockingMessage = _blockingMessage;
+        if (blockingMessage != null) {
+          return _CustomerCancellationMessageCard(message: blockingMessage);
+        }
+
+        if (snapshot.isActive) {
+          return _CustomerCancellationActionCard(
+            remaining: snapshot.remaining,
+            isCancelling: _isCancelling,
+            onCancel: _confirmCancellation,
+          );
+        }
+
+        final message = OrderCancellationPolicy.customerMessageFor(snapshot);
+        if (message == null) {
+          return const SizedBox.shrink();
+        }
+        return _CustomerCancellationMessageCard(message: message);
+      },
+    );
+  }
+
+  Future<void> _confirmCancellation() async {
+    if (_isCancelling) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(dialogContext.t('Cancel order?')),
+          content: Text(
+            dialogContext.t(
+              'Are you sure you want to cancel this order? This action cannot be undone.',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(dialogContext.t('Keep order')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(dialogContext.t('Cancel order')),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    final appState = context.read<AppState>();
+    setState(() => _isCancelling = true);
+    try {
+      await appState.orderCancellationService.cancelOrder(widget.order.orderId);
+      await appState.firestoreService.refreshOrder(widget.order.orderId);
+      if (mounted) {
+        showSnack(context, 'Your order has been cancelled successfully.');
+      }
+    } on OrderCancellationException catch (error) {
+      await appState.firestoreService.refreshOrder(widget.order.orderId);
+      if (mounted) {
+        setState(() => _blockingMessage = error.message);
+        showSnack(context, error.message);
+      }
+    } catch (error) {
+      await appState.firestoreService.refreshOrder(widget.order.orderId);
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCancelling = false);
+      }
+    }
+  }
+}
+
+class _CustomerCancellationActionCard extends StatelessWidget {
+  const _CustomerCancellationActionCard({
+    required this.remaining,
+    required this.isCancelling,
+    required this.onCancel,
+  });
+
+  final Duration remaining;
+  final bool isCancelling;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final formatted = OrderCancellationPolicy.formatRemaining(remaining);
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: _CustomerCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: _customerWarning.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.timer_outlined,
+                    color: _customerWarning,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.t('Customer cancellation available for:'),
+                        style: const TextStyle(
+                          color: _customerInk,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        formatted,
+                        style:
+                            Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  color: _customerWarning,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0,
+                                ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            PrimaryActionButton(
+              label: 'Cancel order',
+              icon: Icons.cancel_outlined,
+              isLoading: isCancelling,
+              onPressed: isCancelling ? null : onCancel,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomerCancellationMessageCard extends StatelessWidget {
+  const _CustomerCancellationMessageCard({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: _CustomerCard(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: _customerPrimaryLight,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.info_outline,
+                color: _customerPrimary,
+                size: 21,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                context.t(message),
+                style: const TextStyle(
+                  color: _customerInk,
+                  fontWeight: FontWeight.w700,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -7553,6 +7791,70 @@ class _RejectedOrderCompletionView extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _OrderSummaryCard(order: order),
+        if (order.adminNotes.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _CustomerCard(child: _AdminNoteSummary(order: order)),
+        ],
+        const SizedBox(height: 16),
+        _OrderContentSections(order: order),
+        const SizedBox(height: 18),
+        ElevatedButton.icon(
+          onPressed: () =>
+              Navigator.of(context).popUntil((route) => route.isFirst),
+          icon: const Icon(Icons.home_outlined),
+          label: Text(context.t('Back home')),
+        ),
+        const SizedBox(height: 8),
+        _OrderSupportButton(order: order),
+      ],
+    );
+  }
+}
+
+class _CancelledOrderCompletionView extends StatelessWidget {
+  const _CancelledOrderCompletionView({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerScrollView(
+      children: [
+        _OrderTerminalHero(
+          icon: Icons.cancel_outlined,
+          color: _customerDanger,
+          status: order.orderStatus,
+          title: 'Your order has been cancelled',
+          message: 'This order is no longer active.',
+        ),
+        const SizedBox(height: 12),
+        _OrderSummaryCard(order: order),
+        if (order.cancellationReason.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _CustomerCard(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.info_outline,
+                  color: _customerDanger,
+                  size: 22,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    context.t('Cancelled by customer within the order window.'),
+                    style: const TextStyle(
+                      color: _customerInk,
+                      fontWeight: FontWeight.w800,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         if (order.adminNotes.isNotEmpty) ...[
           const SizedBox(height: 12),
           _CustomerCard(child: _AdminNoteSummary(order: order)),

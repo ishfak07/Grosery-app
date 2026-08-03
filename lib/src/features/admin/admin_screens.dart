@@ -11,13 +11,16 @@ import 'package:uuid/uuid.dart';
 import '../../../services/image_upload_service.dart';
 import '../../../services/image_picker_helper.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/i18n/app_localizations.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/phone_utils.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/common_widgets.dart';
 import '../../models/models.dart';
+import '../../services/order_cancellation_service.dart';
 import '../../state/app_state.dart';
 import '../customer/customer_screens.dart';
+import '../order_cancellation/order_cancellation_countdown.dart';
 import 'admin_order_sheet_screen.dart';
 
 const _adminBackground = Color(0xFFF4F7F4);
@@ -2501,54 +2504,156 @@ class AdminOrderTile extends StatelessWidget {
           builder: (_) => AdminOrderDetailsScreen(orderId: order.orderId),
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _AdminIconBadge(icon: Icons.receipt_long, color: statusColor),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${order.customerName} - ${_shortId(order.orderId)}',
+          Row(
+            children: [
+              _AdminIconBadge(icon: Icons.receipt_long, color: statusColor),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${order.customerName} - ${_shortId(order.orderId)}',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _adminInk,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      DateFormat.yMMMd().add_jm().format(order.createdAt),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _adminMuted,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  StatusChip(status: order.orderStatus),
+                  const SizedBox(height: 7),
+                  Text(
+                    order.totalAmount.money,
+                    style: const TextStyle(
+                      color: _adminInk,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right, color: _adminMuted),
+            ],
+          ),
+          _AdminOrderTileCancellationWindow(order: order),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminOrderTileCancellationWindow extends StatelessWidget {
+  const _AdminOrderTileCancellationWindow({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    return OrderCancellationCountdown(
+      order: order,
+      builder: (context, snapshot) {
+        Widget? child;
+        if (snapshot.isActive) {
+          child = Row(
+            children: [
+              const Icon(
+                Icons.timer_outlined,
+                color: _adminWarning,
+                size: 17,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  context.t('Customer cancellation window:'),
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _adminInk,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  DateFormat.yMMMd().add_jm().format(order.createdAt),
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _adminMuted,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w800,
                     fontSize: 12,
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              StatusChip(status: order.orderStatus),
-              const SizedBox(height: 7),
+              ),
               Text(
-                order.totalAmount.money,
+                context.t(
+                  '{time} remaining',
+                  values: {
+                    'time': OrderCancellationPolicy.formatRemaining(
+                      snapshot.remaining,
+                    ),
+                  },
+                ),
                 style: const TextStyle(
-                  color: _adminInk,
+                  color: _adminWarning,
                   fontWeight: FontWeight.w900,
+                  fontSize: 12,
                 ),
               ),
             ],
+          );
+        } else {
+          final message = OrderCancellationPolicy.adminMessageFor(snapshot);
+          if (message != null) {
+            child = Row(
+              children: [
+                const Icon(
+                  Icons.info_outline,
+                  color: _adminMuted,
+                  size: 17,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    context.t(message),
+                    style: const TextStyle(
+                      color: _adminMuted,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+        }
+
+        if (child == null) {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: _adminBackground,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: _adminLine),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: child,
+            ),
           ),
-          const SizedBox(width: 4),
-          const Icon(Icons.chevron_right, color: _adminMuted),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -2769,6 +2874,7 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                     ),
                   ),
                 ),
+                _AdminCustomerCancellationWindowCard(order: order),
                 const SizedBox(height: 12),
                 const _AdminSectionHeader(
                   title: 'Payment',
@@ -3342,6 +3448,96 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
               ),
             ),
           ),
+        );
+      },
+    );
+  }
+}
+
+class _AdminCustomerCancellationWindowCard extends StatelessWidget {
+  const _AdminCustomerCancellationWindowCard({required this.order});
+
+  final OrderModel order;
+
+  @override
+  Widget build(BuildContext context) {
+    return OrderCancellationCountdown(
+      order: order,
+      builder: (context, snapshot) {
+        Widget? content;
+        if (snapshot.isActive) {
+          content = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const _AdminIconBadge(
+                    icon: Icons.timer_outlined,
+                    color: _adminWarning,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      context.t('Customer cancellation window:'),
+                      style: const TextStyle(
+                        color: _adminInk,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                context.t(
+                  '{time} remaining',
+                  values: {
+                    'time': OrderCancellationPolicy.formatRemaining(
+                      snapshot.remaining,
+                    ),
+                  },
+                ),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: _adminWarning,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0,
+                    ),
+              ),
+            ],
+          );
+        } else {
+          final message = OrderCancellationPolicy.adminMessageFor(snapshot);
+          if (message != null) {
+            content = Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _AdminIconBadge(
+                  icon: Icons.info_outline,
+                  color: _adminMuted,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    context.t(message),
+                    style: const TextStyle(
+                      color: _adminInk,
+                      fontWeight: FontWeight.w800,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+        }
+
+        if (content == null) {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: _AdminCard(child: content),
         );
       },
     );
