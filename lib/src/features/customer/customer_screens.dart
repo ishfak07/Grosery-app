@@ -35,6 +35,33 @@ const _customerBlue = Color(0xFF2E6F9E);
 const _customerDanger = Color(0xFFC83A2B);
 const _customerWarning = Color(0xFFB66D00);
 
+class _CustomerPageRoute<T> extends PageRouteBuilder<T> {
+  _CustomerPageRoute({required WidgetBuilder builder})
+      : super(
+          transitionDuration: const Duration(milliseconds: 260),
+          reverseTransitionDuration: const Duration(milliseconds: 220),
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              builder(context),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            final transition = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
+            return FadeTransition(
+              opacity: Tween<double>(begin: 0.94, end: 1).animate(transition),
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0.035, 0),
+                  end: Offset.zero,
+                ).animate(transition),
+                child: child,
+              ),
+            );
+          },
+        );
+}
+
 class _CustomerBackdrop extends StatelessWidget {
   const _CustomerBackdrop({required this.child});
 
@@ -564,7 +591,7 @@ class CustomerHomeScreen extends StatelessWidget {
                     const SizedBox(height: 14),
                     _HomeSearchCallout(
                       onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
+                        _CustomerPageRoute(
                           builder: (_) => const ProductListScreen(),
                         ),
                       ),
@@ -580,7 +607,7 @@ class CustomerHomeScreen extends StatelessWidget {
                           subtitle: 'Pick the items you need.',
                           accent: _customerPrimary,
                           onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
+                            _CustomerPageRoute(
                               builder: (_) => const ShopListScreen(),
                             ),
                           ),
@@ -592,7 +619,7 @@ class CustomerHomeScreen extends StatelessWidget {
                           accent: _customerBlue,
                           featured: true,
                           onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
+                            _CustomerPageRoute(
                               builder: (_) => const UploadBillScreen(),
                             ),
                           ),
@@ -603,7 +630,7 @@ class CustomerHomeScreen extends StatelessWidget {
                           subtitle: 'Type your grocery list',
                           accent: _customerAccent,
                           onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
+                            _CustomerPageRoute(
                               builder: (_) => const ManualListScreen(),
                             ),
                           ),
@@ -613,7 +640,7 @@ class CustomerHomeScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                     _HomeFreshPicksHeader(
                       onAction: () => Navigator.of(context).push(
-                        MaterialPageRoute(
+                        _CustomerPageRoute(
                           builder: (_) => const ProductListScreen(),
                         ),
                       ),
@@ -784,7 +811,7 @@ class _HomeHeader extends StatelessWidget {
                           tooltip: 'Notifications',
                           icon: Icons.notifications_outlined,
                           onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(
+                            _CustomerPageRoute(
                               builder: (_) => const NotificationsScreen(),
                             ),
                           ),
@@ -795,7 +822,7 @@ class _HomeHeader extends StatelessWidget {
                           icon: Icons.shopping_bag_outlined,
                           badgeCount: cartCount,
                           onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(
+                            _CustomerPageRoute(
                               builder: (_) => const CartScreen(),
                             ),
                           ),
@@ -1222,7 +1249,7 @@ class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
                               key: ValueKey(activeOffer.offerId),
                               offer: activeOffer,
                               onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(
+                                _CustomerPageRoute(
                                   builder: (_) =>
                                       OfferDetailsScreen(offer: activeOffer),
                                 ),
@@ -1776,7 +1803,7 @@ class _CustomerBottomNavigation extends StatelessWidget {
     ];
     final route = routes[index];
     if (route != null) {
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => route));
+      Navigator.of(context).push(_CustomerPageRoute(builder: (_) => route));
     }
   }
 }
@@ -2441,7 +2468,7 @@ class ShopListScreen extends StatelessWidget {
                 message: 'Products can still be browsed from the full catalog.',
                 action: ElevatedButton.icon(
                   onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
+                    _CustomerPageRoute(
                         builder: (_) => const ProductListScreen()),
                   ),
                   icon: const Icon(Icons.search),
@@ -2462,7 +2489,7 @@ class ShopListScreen extends StatelessWidget {
                   child: _ShopCard(
                     shop: shops[index],
                     onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
+                      _CustomerPageRoute(
                         builder: (_) => ProductListScreen(shop: shops[index]),
                       ),
                     ),
@@ -2595,7 +2622,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
           icon: Icons.shopping_bag_outlined,
           badgeCount: appState.cartCount,
           onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const CartScreen()),
+            _CustomerPageRoute(builder: (_) => const CartScreen()),
           ),
         ),
       ],
@@ -2732,7 +2759,7 @@ class ProductCard extends StatelessWidget {
     return _CustomerCard(
       padding: EdgeInsets.zero,
       onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(
+        _CustomerPageRoute(
           builder: (_) => ProductDetailsScreen(product: product),
         ),
       ),
@@ -3230,7 +3257,7 @@ class CartScreen extends StatelessWidget {
                     'Add catalog products, upload a list photo, or type a manual list.',
                 action: ElevatedButton.icon(
                   onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
+                    _CustomerPageRoute(
                         builder: (_) => const ProductListScreen()),
                   ),
                   icon: const Icon(Icons.search),
@@ -3304,7 +3331,7 @@ class CartScreen extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
+                      _CustomerPageRoute(
                         builder: (_) => const UploadBillScreen(),
                       ),
                     ),
@@ -3318,7 +3345,7 @@ class CartScreen extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
+                      _CustomerPageRoute(
                         builder: (_) => const ManualListScreen(),
                       ),
                     ),
@@ -3336,7 +3363,7 @@ class CartScreen extends StatelessWidget {
               icon: Icons.payments,
               onPressed: hasCheckoutDraft
                   ? () => Navigator.of(context).push(
-                        MaterialPageRoute(
+                        _CustomerPageRoute(
                             builder: (_) => const CheckoutScreen()),
                       )
                   : null,
@@ -4387,7 +4414,7 @@ class UploadBillScreen extends StatelessWidget {
         onCamera: takePhoto,
         onRemove: () => appState.setBillImagePath(null),
         onCheckout: () => Navigator.of(context).push(
-          MaterialPageRoute(
+          _CustomerPageRoute(
             builder: (_) => const CheckoutScreen(),
           ),
         ),
@@ -4569,7 +4596,7 @@ class _ManualListScreenState extends State<ManualListScreen> {
       return;
     }
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const CheckoutScreen()),
+      _CustomerPageRoute(builder: (_) => const CheckoutScreen()),
     );
   }
 }
@@ -4778,13 +4805,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               billImagePath: appState.billImagePath,
               manualListText: appState.manualListText,
               onEditItems: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const CartScreen()),
+                _CustomerPageRoute(builder: (_) => const CartScreen()),
               ),
               onEditPhotoList: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const UploadBillScreen()),
+                _CustomerPageRoute(builder: (_) => const UploadBillScreen()),
               ),
               onEditManualList: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ManualListScreen()),
+                _CustomerPageRoute(builder: (_) => const ManualListScreen()),
               ),
             ),
             const SizedBox(height: 14),
@@ -4954,7 +4981,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         return;
       }
       await Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => OrderSuccessScreen(order: order)),
+        _CustomerPageRoute(builder: (_) => OrderSuccessScreen(order: order)),
         (route) => route.isFirst,
       );
     } catch (error) {
@@ -5952,7 +5979,7 @@ class OrderSuccessScreen extends StatelessWidget {
           const SizedBox(height: 18),
           ElevatedButton.icon(
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
+              _CustomerPageRoute(
                 builder: (_) => OrderTrackingScreen(orderId: order.orderId),
               ),
             ),
@@ -6305,7 +6332,7 @@ class OrderTile extends StatelessWidget {
     final color = _statusAccent(order.orderStatus);
     return _CustomerCard(
       onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(
+        _CustomerPageRoute(
           builder: (_) => OrderTrackingScreen(orderId: order.orderId),
         ),
       ),
@@ -8077,7 +8104,7 @@ class _OrderSupportButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return OutlinedButton.icon(
       onPressed: () => Navigator.of(context).push(
-        MaterialPageRoute(
+        _CustomerPageRoute(
           builder: (_) => SupportScreen(
             initialSubject: 'Order ${order.orderId.substring(0, 8)}',
           ),
@@ -9152,7 +9179,7 @@ class _SupportScreenState extends State<SupportScreen> {
                       index: index,
                       child: _CustomerCard(
                         onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
+                          _CustomerPageRoute(
                             builder: (_) =>
                                 SupportThreadScreen(ticket: tickets[index]),
                           ),
