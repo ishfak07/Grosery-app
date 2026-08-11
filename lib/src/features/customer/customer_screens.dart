@@ -3313,62 +3313,19 @@ class CartScreen extends StatelessWidget {
                 const SizedBox(height: 88),
               ],
             ),
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            OutlinedButton.icon(
-              onPressed: hasCheckoutDraft
-                  ? () => _confirmClearCheckoutDraft(context)
-                  : null,
-              icon: const Icon(Icons.delete_sweep_outlined),
-              label: Text(context.t('Clear cart')),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      _CustomerPageRoute(
-                        builder: (_) => const UploadBillScreen(),
-                      ),
-                    ),
-                    icon: const Icon(Icons.upload_file),
-                    label: Text(appState.hasBillImage
-                        ? context.t('Change photo')
-                        : context.t('Upload photo')),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      _CustomerPageRoute(
-                        builder: (_) => const ManualListScreen(),
-                      ),
-                    ),
-                    icon: const Icon(Icons.edit_note),
-                    label: Text(appState.hasManualList
-                        ? context.t('Edit list')
-                        : context.t('Type list')),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            PrimaryActionButton(
-              label: 'Checkout',
-              icon: Icons.payments,
-              onPressed: hasCheckoutDraft
-                  ? () => Navigator.of(context).push(
-                        _CustomerPageRoute(
-                            builder: (_) => const CheckoutScreen()),
-                      )
-                  : null,
-            ),
-          ],
+      bottomNavigationBar: _CartActionBar(
+        hasCheckoutDraft: hasCheckoutDraft,
+        hasBillImage: appState.hasBillImage,
+        hasManualList: appState.hasManualList,
+        onClearCart: () => _confirmClearCheckoutDraft(context),
+        onUploadPhoto: () => Navigator.of(context).push(
+          _CustomerPageRoute(builder: (_) => const UploadBillScreen()),
+        ),
+        onTypeList: () => Navigator.of(context).push(
+          _CustomerPageRoute(builder: (_) => const ManualListScreen()),
+        ),
+        onCheckout: () => Navigator.of(context).push(
+          _CustomerPageRoute(builder: (_) => const CheckoutScreen()),
         ),
       ),
     );
@@ -3410,6 +3367,129 @@ class CartScreen extends StatelessWidget {
     if (context.mounted) {
       showSnack(context, 'Cart cleared.');
     }
+  }
+}
+
+class _CartActionBar extends StatelessWidget {
+  const _CartActionBar({
+    required this.hasCheckoutDraft,
+    required this.hasBillImage,
+    required this.hasManualList,
+    required this.onClearCart,
+    required this.onUploadPhoto,
+    required this.onTypeList,
+    required this.onCheckout,
+  });
+
+  final bool hasCheckoutDraft;
+  final bool hasBillImage;
+  final bool hasManualList;
+  final VoidCallback onClearCart;
+  final VoidCallback onUploadPhoto;
+  final VoidCallback onTypeList;
+  final VoidCallback onCheckout;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _customerSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        border: const Border(top: BorderSide(color: _customerLine)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF163526).withValues(alpha: 0.12),
+            blurRadius: 24,
+            offset: const Offset(0, -6),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _CartSecondaryButton(
+                    icon: Icons.upload_file_outlined,
+                    label: hasBillImage ? 'Change photo' : 'Upload photo',
+                    onPressed: onUploadPhoto,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _CartSecondaryButton(
+                    icon: Icons.edit_note,
+                    label: hasManualList ? 'Edit list' : 'Type list',
+                    onPressed: onTypeList,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            PrimaryActionButton(
+              label: 'Checkout',
+              icon: Icons.payments,
+              onPressed: hasCheckoutDraft ? onCheckout : null,
+            ),
+            if (hasCheckoutDraft) ...[
+              const SizedBox(height: 4),
+              TextButton.icon(
+                onPressed: onClearCart,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFFC0392B),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  minimumSize: const Size(0, 36),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                label: Text(context.t('Clear cart')),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CartSecondaryButton extends StatelessWidget {
+  const _CartSecondaryButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.tonalIcon(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        backgroundColor: const Color(0xFFEFF4EE),
+        foregroundColor: _customerInk,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: const BorderSide(color: _customerLine),
+        ),
+      ),
+      icon: Icon(icon, size: 18),
+      label: Text(
+        context.t(label),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
   }
 }
 
