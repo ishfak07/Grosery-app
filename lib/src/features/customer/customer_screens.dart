@@ -106,7 +106,6 @@ class _CustomerScaffold extends StatelessWidget {
     );
 
     return Scaffold(
-      extendBody: true,
       backgroundColor: _customerBackground,
       appBar: AppBar(
         title: Text(context.t(title)),
@@ -117,15 +116,10 @@ class _CustomerScaffold extends StatelessWidget {
       ),
       body: bottomNavigationBar == null
           ? pageBody
-          : Stack(
+          : Column(
               children: [
-                Positioned.fill(child: pageBody),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: bottomNavigationBar!,
-                ),
+                Expanded(child: pageBody),
+                bottomNavigationBar!,
               ],
             ),
     );
