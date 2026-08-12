@@ -2766,13 +2766,14 @@ class ProductCard extends StatelessWidget {
                 Positioned.fill(
                   child: ProductImage(url: product.imageUrl, radius: 0),
                 ),
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: _ProductAvailabilityBadge(
-                    isAvailable: product.isAvailable,
+                if (!product.isAvailable)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: _ProductAvailabilityBadge(
+                      isAvailable: product.isAvailable,
+                    ),
                   ),
-                ),
               ],
             ),
           ),
