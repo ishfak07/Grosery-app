@@ -2835,7 +2835,7 @@ class ProductCard extends StatelessWidget {
                         ? () async {
                             await appState.addToCart(product);
                             if (context.mounted) {
-                              showSnack(context, 'Added to cart.');
+                              showCartConfirmation(context);
                             }
                           }
                         : null,
@@ -3155,7 +3155,7 @@ class ProductDetailsScreen extends StatelessWidget {
               ? () async {
                   await context.read<AppState>().addToCart(product);
                   if (context.mounted) {
-                    showSnack(context, 'Added to cart.');
+                    showCartConfirmation(context);
                   }
                 }
               : null,

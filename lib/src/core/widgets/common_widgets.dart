@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../constants/app_constants.dart';
 import '../i18n/app_localizations.dart';
+import '../theme/app_theme.dart';
 import '../utils/phone_utils.dart';
 import '../utils/validators.dart';
 import '../../state/app_state.dart';
@@ -1001,4 +1002,203 @@ void showSnack(BuildContext context, Object? message) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(context.tNow(friendlyMessage))));
+}
+
+OverlayEntry? _activeCartConfirmationEntry;
+
+/// Shows a polished, self-dismissing confirmation banner for cart actions
+/// (e.g. "Added to cart."). It is inserted into the root [Overlay] rather
+/// than shown as a [SnackBar], so it always renders above any per-screen
+/// bottom action bar/navigation instead of getting hidden behind it.
+void showCartConfirmation(
+  BuildContext context, {
+  String message = 'Added to cart.',
+  IconData icon = Icons.check_circle_rounded,
+}) {
+  final overlayState = Overlay.of(context, rootOverlay: true);
+
+  _activeCartConfirmationEntry?.remove();
+  _activeCartConfirmationEntry = null;
+
+  late final OverlayEntry entry;
+  void removeEntry() {
+    if (identical(_activeCartConfirmationEntry, entry)) {
+      _activeCartConfirmationEntry = null;
+    }
+    entry.remove();
+  }
+
+  entry = OverlayEntry(
+    builder: (overlayContext) => _CartConfirmationToast(
+      message: message,
+      icon: icon,
+      onDismissed: removeEntry,
+    ),
+  );
+
+  _activeCartConfirmationEntry = entry;
+  overlayState.insert(entry);
+}
+
+class _CartConfirmationToast extends StatefulWidget {
+  const _CartConfirmationToast({
+    required this.message,
+    required this.icon,
+    required this.onDismissed,
+  });
+
+  final String message;
+  final IconData icon;
+  final VoidCallback onDismissed;
+
+  @override
+  State<_CartConfirmationToast> createState() => _CartConfirmationToastState();
+}
+
+class _CartConfirmationToastState extends State<_CartConfirmationToast>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<Offset> _slide;
+  late final Animation<double> _fade;
+  Timer? _autoDismissTimer;
+  var _isDismissing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+      reverseDuration: const Duration(milliseconds: 220),
+    );
+    final curved = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    _slide = Tween<Offset>(
+      begin: const Offset(0, -1),
+      end: Offset.zero,
+    ).animate(curved);
+    _fade = curved;
+    _controller.forward();
+    _autoDismissTimer = Timer(const Duration(milliseconds: 2400), _dismiss);
+  }
+
+  Future<void> _dismiss() async {
+    if (_isDismissing) {
+      return;
+    }
+    _isDismissing = true;
+    _autoDismissTimer?.cancel();
+    await _controller.reverse();
+    widget.onDismissed();
+  }
+
+  @override
+  void dispose() {
+    _autoDismissTimer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final success =
+        theme.extension<AppExtraColors>()?.success ?? const Color(0xFF1E8E5A);
+    final textScaler = MediaQuery.textScalerOf(context).clamp(
+      minScaleFactor: 1,
+      maxScaleFactor: 1.2,
+    );
+
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: SafeArea(
+        bottom: false,
+        child: MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: SlideTransition(
+                  position: _slide,
+                  child: FadeTransition(
+                    opacity: _fade,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _dismiss,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: success.withValues(alpha: 0.18),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.14),
+                                blurRadius: 24,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: success.withValues(alpha: 0.12),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  widget.icon,
+                                  color: success,
+                                  size: 19,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  context.t(widget.message),
+                                  style: const TextStyle(
+                                    color: Color(0xFF10231A),
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14.5,
+                                    height: 1.25,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(
+                                Icons.close_rounded,
+                                size: 16,
+                                color: Colors.black.withValues(alpha: 0.32),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
