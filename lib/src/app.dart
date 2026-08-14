@@ -8,6 +8,7 @@ import 'core/constants/app_constants.dart';
 import 'core/i18n/app_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/common_widgets.dart';
+import 'core/widgets/in_app_update_overlay.dart';
 import 'features/admin/admin_screens.dart';
 import 'features/auth/auth_screens.dart';
 import 'features/customer/customer_screens.dart';
@@ -24,7 +25,9 @@ class GroceryDeliveryApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       builder: (context, child) => OfflineConnectionOverlay(
-        child: child ?? const SizedBox.shrink(),
+        child: InAppUpdateOverlay(
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
       home: const HomeGate(),
     );
@@ -63,7 +66,7 @@ class _HomeGateState extends State<HomeGate> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      unawaited(InAppUpdateService.completeDownloadedUpdate());
+      unawaited(InAppUpdateService.refreshStateOnResume());
     }
   }
 
