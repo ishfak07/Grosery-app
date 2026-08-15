@@ -3241,6 +3241,7 @@ class CartScreen extends StatelessWidget {
     final items = appState.cartItems;
     final hasCheckoutDraft =
         items.isNotEmpty || appState.hasBillImage || appState.hasManualList;
+    final canCheckout = hasCheckoutDraft && appState.meetsMinimumOrderValue;
     return _CustomerScaffold(
       title: 'Cart',
       body: !hasCheckoutDraft
@@ -3268,6 +3269,13 @@ class CartScreen extends StatelessWidget {
                   hasBillImage: appState.hasBillImage,
                   hasManualList: appState.hasManualList,
                 ),
+                if (!appState.meetsMinimumOrderValue) ...[
+                  const SizedBox(height: 12),
+                  _MinimumOrderWarningCard(
+                    subtotal: appState.cartSubtotal,
+                    remainingAmount: appState.minimumOrderRemainingAmount,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 if (items.isNotEmpty)
                   const _CustomerSectionHeader(
@@ -3310,6 +3318,7 @@ class CartScreen extends StatelessWidget {
             ),
       bottomNavigationBar: _CartActionBar(
         hasCheckoutDraft: hasCheckoutDraft,
+        canCheckout: canCheckout,
         hasBillImage: appState.hasBillImage,
         hasManualList: appState.hasManualList,
         onClearCart: () => _confirmClearCheckoutDraft(context),
@@ -3368,6 +3377,7 @@ class CartScreen extends StatelessWidget {
 class _CartActionBar extends StatelessWidget {
   const _CartActionBar({
     required this.hasCheckoutDraft,
+    required this.canCheckout,
     required this.hasBillImage,
     required this.hasManualList,
     required this.onClearCart,
@@ -3377,6 +3387,7 @@ class _CartActionBar extends StatelessWidget {
   });
 
   final bool hasCheckoutDraft;
+  final bool canCheckout;
   final bool hasBillImage;
   final bool hasManualList;
   final VoidCallback onClearCart;
@@ -3428,7 +3439,7 @@ class _CartActionBar extends StatelessWidget {
             PrimaryActionButton(
               label: 'Checkout',
               icon: Icons.payments,
-              onPressed: hasCheckoutDraft ? onCheckout : null,
+              onPressed: canCheckout ? onCheckout : null,
             ),
             if (hasCheckoutDraft) ...[
               const SizedBox(height: 4),
@@ -3579,6 +3590,96 @@ class _CartSummaryPanel extends StatelessWidget {
               Icons.shopping_bag_outlined,
               color: Colors.white,
               size: 34,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MinimumOrderWarningCard extends StatelessWidget {
+  const _MinimumOrderWarningCard({
+    required this.subtotal,
+    required this.remainingAmount,
+  });
+
+  final double subtotal;
+  final double remainingAmount;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress =
+        (subtotal / AppConstants.minimumOrderValue).clamp(0.0, 1.0);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF5E5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFFD89A)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: _customerWarning,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  context.t('Minimum Order Value'),
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            context.t(
+              'Your order must be at least Rs. {amount} to continue.',
+              values: {
+                'amount': AppConstants.formatRupees(
+                  AppConstants.minimumOrderValue,
+                ),
+              },
+            ),
+            style: const TextStyle(
+              color: _customerInk,
+              fontWeight: FontWeight.w600,
+              fontSize: 12.5,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            context.t(
+              'Add Rs. {amount} more to reach the minimum order value.',
+              values: {'amount': AppConstants.formatRupees(remainingAmount)},
+            ),
+            style: const TextStyle(
+              color: _customerWarning,
+              fontWeight: FontWeight.w800,
+              fontSize: 12.5,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+              backgroundColor: Colors.white.withValues(alpha: 0.6),
+              valueColor: const AlwaysStoppedAnimation(_customerWarning),
             ),
           ),
         ],
@@ -4271,6 +4372,56 @@ class _UploadInfoPanel extends StatelessWidget {
   }
 }
 
+class _ImportantOrderNoticeCard extends StatelessWidget {
+  const _ImportantOrderNoticeCard({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF5E5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFFD89A)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, color: _customerWarning, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.t('Important Order Notice'),
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  context.t(message),
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w600,
+                    height: 1.32,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _UploadActionBar extends StatelessWidget {
   const _UploadActionBar({
     required this.hasImage,
@@ -4465,6 +4616,11 @@ class UploadBillScreen extends StatelessWidget {
             hasImage: appState.hasBillImage,
           ),
           const SizedBox(height: 16),
+          const _ImportantOrderNoticeCard(
+            message:
+                'Please include multiple grocery items in your photo list. Orders containing only one or very few items may be rejected by the admin.',
+          ),
+          const SizedBox(height: 16),
           _UploadPhotoStage(
             hasImage: appState.hasBillImage,
             path: appState.billImagePath,
@@ -4571,6 +4727,11 @@ class _ManualListScreenState extends State<ManualListScreen> {
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 12),
+          const _ImportantOrderNoticeCard(
+            message:
+                'Please include multiple grocery items in your manual list. Orders containing only one or very few items may be rejected by the admin.',
           ),
           const SizedBox(height: 16),
           _CustomerCard(
@@ -4874,6 +5035,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         child: _CustomerScrollView(
           children: [
             _CheckoutSummary(total: total),
+            if (!appState.meetsMinimumOrderValue) ...[
+              const SizedBox(height: 12),
+              _MinimumOrderWarningCard(
+                subtotal: appState.cartSubtotal,
+                remainingAmount: appState.minimumOrderRemainingAmount,
+              ),
+            ],
             const SizedBox(height: 14),
             _CheckoutOrderReview(
               items: appState.cartItems,
@@ -5007,7 +5175,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ? Icons.account_balance
                       : Icons.check_circle,
               isLoading: _isSubmitting,
-              onPressed: _isSubmitting || !hasPaymentMethods ? null : _submit,
+              onPressed: _isSubmitting ||
+                      !hasPaymentMethods ||
+                      !appState.meetsMinimumOrderValue
+                  ? null
+                  : _submit,
             ),
           ],
         ),
@@ -5064,6 +5236,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         if (_isShopClosedError(error)) {
           await _showShopClosedDialog(
               context.read<AppState>().shopHoursSettings);
+        } else if (error is MinimumOrderNotMetException) {
+          showSnack(
+            context,
+            context.tNow(
+              'Add Rs. {amount} more to reach the minimum order value.',
+              values: {
+                'amount': AppConstants.formatRupees(error.remainingAmount),
+              },
+            ),
+          );
         } else {
           showSnack(context, error.toString());
         }

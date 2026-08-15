@@ -18,6 +18,24 @@ import '../services/local_storage_service.dart';
 import '../services/notification_service.dart';
 import '../services/order_cancellation_service.dart';
 
+/// Thrown by [AppState.createOrder] when a normal product-cart order's
+/// eligible subtotal is below [AppConstants.minimumOrderValue]. Does not
+/// apply to Photo List or Manual List orders (see
+/// [AppState.isMinimumOrderCheckApplicable]).
+class MinimumOrderNotMetException implements Exception {
+  const MinimumOrderNotMetException({
+    required this.minimumOrderValue,
+    required this.remainingAmount,
+  });
+
+  final double minimumOrderValue;
+  final double remainingAmount;
+
+  @override
+  String toString() =>
+      'Your order must be at least Rs. ${AppConstants.formatRupees(minimumOrderValue)} to continue.';
+}
+
 class AppState extends ChangeNotifier {
   AppState(FirebaseBootstrap bootstrap)
       : firebaseAvailable = bootstrap.isReady,
@@ -96,6 +114,27 @@ class AppState extends ChangeNotifier {
       _cartItems.fold<int>(0, (sum, item) => sum + item.quantity);
   double get cartSubtotal =>
       _cartItems.fold<double>(0, (sum, item) => sum + item.lineTotal);
+
+  /// The minimum-order-value rule only applies to normal catalog cart
+  /// orders. Photo List and Manual List orders are priced by the admin
+  /// after review, so they are exempt (a list may be attached alongside
+  /// cart items in a mixed order, in which case the rule is skipped too).
+  bool get isMinimumOrderCheckApplicable => !hasBillImage && !hasManualList;
+
+  /// Rs. remaining to reach [AppConstants.minimumOrderValue], never
+  /// negative. Always based on [cartSubtotal] (catalog items only, before
+  /// delivery/service charges).
+  double get minimumOrderRemainingAmount {
+    if (!isMinimumOrderCheckApplicable) {
+      return 0;
+    }
+    final remaining = AppConstants.minimumOrderValue - cartSubtotal;
+    return remaining > 0 ? remaining : 0;
+  }
+
+  bool get meetsMinimumOrderValue =>
+      !isMinimumOrderCheckApplicable ||
+      cartSubtotal >= AppConstants.minimumOrderValue;
 
   Future<void> initialize() async {
     unawaited(
@@ -699,6 +738,12 @@ class AppState extends ChangeNotifier {
         'Add products, upload a shopping list, or type a manual list before checkout.',
       );
     }
+    if (!meetsMinimumOrderValue) {
+      throw MinimumOrderNotMetException(
+        minimumOrderValue: AppConstants.minimumOrderValue,
+        remainingAmount: minimumOrderRemainingAmount,
+      );
+    }
     if (!_shopHoursSettings.isOpenAt(DateTime.now())) {
       throw StateError(_shopHoursSettings.closedMessage);
     }
@@ -781,6 +826,13 @@ class AppState extends ChangeNotifier {
     await firestoreService.createOrder(order);
     await clearCheckoutDraft();
     return order;
+  }
+
+  /// Test-only seam: lets tests exercise [createOrder]'s validation (e.g.
+  /// the minimum-order-value guard) without a real Firebase Auth session.
+  @visibleForTesting
+  void debugSetProfileForTesting(UserProfile? profile) {
+    _profile = profile;
   }
 
   @override

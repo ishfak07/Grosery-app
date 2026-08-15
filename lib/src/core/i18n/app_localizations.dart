@@ -562,4 +562,14 @@ const _tamil = <String, String>{
       'தடுக்கப்பட்ட பயனர்கள் ஆர்டர் இட முடியாது.',
   'Add products or upload a shopping list before checkout.':
       'Checkoutக்கு முன் பொருட்களை சேர்க்கவும் அல்லது ஷாப்பிங் பட்டியலை பதிவேற்றவும்.',
+  'Important Order Notice': 'முக்கியமான ஆர்டர் அறிவிப்பு',
+  'Please include multiple grocery items in your photo list. Orders containing only one or very few items may be rejected by the admin.':
+      'தயவுசெய்து உங்கள் புகைப்பட பட்டியலில் பல மளிகை பொருட்களை சேர்க்கவும். ஒரே ஒரு பொருள் அல்லது மிகக் குறைந்த பொருட்கள் மட்டும் கொண்ட ஆர்டர்கள் அட்மினால் நிராகரிக்கப்படலாம்.',
+  'Please include multiple grocery items in your manual list. Orders containing only one or very few items may be rejected by the admin.':
+      'தயவுசெய்து உங்கள் கைமுறை பட்டியலில் பல மளிகை பொருட்களை சேர்க்கவும். ஒரே ஒரு பொருள் அல்லது மிகக் குறைந்த பொருட்கள் மட்டும் கொண்ட ஆர்டர்கள் அட்மினால் நிராகரிக்கப்படலாம்.',
+  'Minimum Order Value': 'குறைந்தபட்ச ஆர்டர் தொகை',
+  'Your order must be at least Rs. {amount} to continue.':
+      'தொடர உங்கள் ஆர்டர் குறைந்தது Rs. {amount} ஆக இருக்க வேண்டும்.',
+  'Add Rs. {amount} more to reach the minimum order value.':
+      'குறைந்தபட்ச ஆர்டர் தொகையை எட்ட இன்னும் Rs. {amount} சேர்க்கவும்.',
 };
