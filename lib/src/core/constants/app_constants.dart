@@ -12,7 +12,7 @@ class AppConstants {
   /// required for a normal catalog cart order to be checked out. Does not
   /// apply to Photo List or Manual List orders. Change this single value to
   /// adjust the minimum order value app-wide.
-  static const double minimumOrderValue = 500;
+  static const double minimumOrderValue = 1000;
 
   /// Formats a rupee amount for customer-facing minimum-order messaging,
   /// e.g. `500` or `180.50`.
