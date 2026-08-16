@@ -572,4 +572,15 @@ const _tamil = <String, String>{
       'தொடர உங்கள் ஆர்டர் குறைந்தது Rs. {amount} ஆக இருக்க வேண்டும்.',
   'Add Rs. {amount} more to reach the minimum order value.':
       'குறைந்தபட்ச ஆர்டர் தொகையை எட்ட இன்னும் Rs. {amount} சேர்க்கவும்.',
+  'Temporarily Close Shop': 'கடையை தற்காலிகமாக மூடு',
+  'Reason for closure': 'மூடுவதற்கான காரணம்',
+  'Please enter a reason before closing the shop.':
+      'கடையை மூடும் முன் ஒரு காரணத்தை உள்ளிடவும்.',
+  'Shop Temporarily Closed': 'கடை தற்காலிகமாக மூடப்பட்டுள்ளது',
+  'We are currently unable to accept new orders.':
+      'தற்போது புதிய ஆர்டர்களை ஏற்க முடியவில்லை.',
+  'Reason': 'காரணம்',
+  'Please try again later.': 'பிறகு மீண்டும் முயற்சிக்கவும்.',
+  'Shop is temporarily closed.': 'கடை தற்காலிகமாக மூடப்பட்டுள்ளது.',
+  'OK': 'சரி',
 };

@@ -120,6 +120,8 @@ class ShopHoursSettings {
     required this.openingMinutes,
     required this.closingMinutes,
     required this.updatedAt,
+    this.isTemporarilyClosed = false,
+    this.temporaryClosureReason = '',
   });
 
   static const int minutesPerDay = 24 * 60;
@@ -134,15 +136,31 @@ class ShopHoursSettings {
   final int closingMinutes;
   final DateTime updatedAt;
 
+  /// Simple manual ON/OFF switch that lets the admin force the shop closed
+  /// right now, regardless of [openingMinutes]/[closingMinutes]. Does not
+  /// support scheduling — it is only ever "on" or "off".
+  final bool isTemporarilyClosed;
+
+  /// Reason the admin gave for the manual closure. Required (non-empty)
+  /// whenever [isTemporarilyClosed] is true; may be stale/empty when false.
+  final String temporaryClosureReason;
+
   bool get isOpenAllDay => openingMinutes == closingMinutes;
   String get openingTimeLabel => formatMinutes(openingMinutes);
   String get closingTimeLabel => formatMinutes(closingMinutes);
   String get rangeLabel =>
       isOpenAllDay ? 'Open all day' : '$openingTimeLabel - $closingTimeLabel';
-  String get closedMessage =>
-      'Shop is closed. Please come back at $openingTimeLabel.';
+  String get closedMessage => isTemporarilyClosed
+      ? 'Shop is temporarily closed.'
+      : 'Shop is closed. Please come back at $openingTimeLabel.';
 
+  /// True when customers should be able to place new orders right now.
+  /// The manual [isTemporarilyClosed] switch overrides the normal daily
+  /// opening/closing time window whenever it is on.
   bool isOpenAt(DateTime value) {
+    if (isTemporarilyClosed) {
+      return false;
+    }
     if (isOpenAllDay) {
       return true;
     }
@@ -158,11 +176,16 @@ class ShopHoursSettings {
     int? openingMinutes,
     int? closingMinutes,
     DateTime? updatedAt,
+    bool? isTemporarilyClosed,
+    String? temporaryClosureReason,
   }) {
     return ShopHoursSettings(
       openingMinutes: openingMinutes ?? this.openingMinutes,
       closingMinutes: closingMinutes ?? this.closingMinutes,
       updatedAt: updatedAt ?? DateTime.now(),
+      isTemporarilyClosed: isTemporarilyClosed ?? this.isTemporarilyClosed,
+      temporaryClosureReason:
+          temporaryClosureReason ?? this.temporaryClosureReason,
     );
   }
 
@@ -171,6 +194,8 @@ class ShopHoursSettings {
       'openingMinutes': openingMinutes,
       'closingMinutes': closingMinutes,
       'updatedAt': _writeDate(updatedAt),
+      'isTemporarilyClosed': isTemporarilyClosed,
+      'temporaryClosureReason': temporaryClosureReason,
     };
   }
 
@@ -189,6 +214,9 @@ class ShopHoursSettings {
         fallback.closingMinutes,
       ),
       updatedAt: _readDate(map['updatedAt']),
+      isTemporarilyClosed: map['isTemporarilyClosed'] == true,
+      temporaryClosureReason:
+          (map['temporaryClosureReason'] as String?)?.trim() ?? '',
     );
   }
 

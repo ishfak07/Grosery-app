@@ -3328,9 +3328,19 @@ class CartScreen extends StatelessWidget {
         onTypeList: () => Navigator.of(context).push(
           _CustomerPageRoute(builder: (_) => const ManualListScreen()),
         ),
-        onCheckout: () => Navigator.of(context).push(
-          _CustomerPageRoute(builder: (_) => const CheckoutScreen()),
-        ),
+        onCheckout: () async {
+          final shopHours = context.read<AppState>().shopHoursSettings;
+          if (!shopHours.isOpenAt(DateTime.now())) {
+            await showShopClosedDialog(context, shopHours);
+            return;
+          }
+          if (!context.mounted) {
+            return;
+          }
+          await Navigator.of(context).push(
+            _CustomerPageRoute(builder: (_) => const CheckoutScreen()),
+          );
+        },
       ),
     );
   }
@@ -5274,41 +5284,54 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   bool _isShopClosedError(Object error) {
-    return error.toString().contains('Shop is closed.');
+    final message = error.toString();
+    return message.contains('Shop is closed.') ||
+        message.contains('Shop is temporarily closed.');
   }
 
   Future<void> _showShopClosedDialog(ShopHoursSettings settings) {
-    return showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Ordering closed',
-      barrierColor: Colors.black.withValues(alpha: 0.46),
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return _ShopClosedDialog(settings: settings);
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.92, end: 1).animate(curved),
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.05),
-                end: Offset.zero,
-              ).animate(curved),
-              child: child,
-            ),
-          ),
-        );
-      },
-    );
+    return showShopClosedDialog(context, settings);
   }
+}
+
+/// Shows the shop-closed dialog (used for both normal daily-hours closure
+/// and the admin's manual temporary-closure switch). Reused by the cart
+/// screen (blocking the checkout tap) and the checkout screen (blocking
+/// order placement).
+Future<void> showShopClosedDialog(
+  BuildContext context,
+  ShopHoursSettings settings,
+) {
+  return showGeneralDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'Ordering closed',
+    barrierColor: Colors.black.withValues(alpha: 0.46),
+    transitionDuration: const Duration(milliseconds: 300),
+    pageBuilder: (context, animation, secondaryAnimation) {
+      return _ShopClosedDialog(settings: settings);
+    },
+    transitionBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.92, end: 1).animate(curved),
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.05),
+              end: Offset.zero,
+            ).animate(curved),
+            child: child,
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _ShopClosedDialog extends StatelessWidget {
@@ -5390,10 +5413,12 @@ class _ShopClosedDialog extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 18),
-                        const Text(
-                          'Ordering closed',
+                        Text(
+                          settings.isTemporarilyClosed
+                              ? context.tNow('Shop Temporarily Closed')
+                              : context.tNow('Ordering closed'),
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: _customerInk,
                             fontSize: 24,
                             fontWeight: FontWeight.w900,
@@ -5402,10 +5427,14 @@ class _ShopClosedDialog extends StatelessWidget {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          settings.closedMessage.replaceFirst(
-                            'Shop is closed.',
-                            'Ordering is closed.',
-                          ),
+                          settings.isTemporarilyClosed
+                              ? context.tNow(
+                                  'We are currently unable to accept new orders.',
+                                )
+                              : settings.closedMessage.replaceFirst(
+                                  'Shop is closed.',
+                                  'Ordering is closed.',
+                                ),
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: _customerMuted,
@@ -5426,28 +5455,72 @@ class _ShopClosedDialog extends StatelessWidget {
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: _customerLine),
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.schedule_outlined,
-                                color: _customerPrimary,
-                                size: 18,
-                              ),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: Text(
-                                  settings.rangeLabel,
-                                  textAlign: TextAlign.center,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: _customerPrimary,
-                                    fontWeight: FontWeight.w900,
-                                  ),
+                          child: settings.isTemporarilyClosed
+                              ? Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(
+                                          Icons.info_outline,
+                                          color: _customerPrimary,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          context.tNow('Reason'),
+                                          style: const TextStyle(
+                                            color: _customerPrimary,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      settings.temporaryClosureReason,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: _customerPrimary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      context.tNow('Please try again later.'),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: _customerMuted,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.schedule_outlined,
+                                      color: _customerPrimary,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        settings.rangeLabel,
+                                        textAlign: TextAlign.center,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: _customerPrimary,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ],
-                          ),
                         ),
                         const SizedBox(height: 18),
                         SizedBox(
@@ -5463,9 +5536,12 @@ class _ShopClosedDialog extends StatelessWidget {
                               ),
                             ),
                             icon: const Icon(Icons.check),
-                            label: const Text(
-                              'Got it',
-                              style: TextStyle(fontWeight: FontWeight.w900),
+                            label: Text(
+                              settings.isTemporarilyClosed
+                                  ? context.tNow('OK')
+                                  : context.tNow('Got it'),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w900),
                             ),
                           ),
                         ),

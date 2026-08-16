@@ -1068,8 +1068,10 @@ class _AdminCheckoutChargeSettingsScreenState
   final _bankName = TextEditingController();
   final _bankBranch = TextEditingController();
   final _bankAccountNumber = TextEditingController();
+  final _closureReason = TextEditingController();
   var _openingMinutes = 0;
   var _closingMinutes = 0;
+  var _isTemporarilyClosed = false;
   var _codEnabled = true;
   var _bankTransferEnabled = true;
   var _isSaving = false;
@@ -1085,6 +1087,7 @@ class _AdminCheckoutChargeSettingsScreenState
     _bankName.addListener(_markUserEdited);
     _bankBranch.addListener(_markUserEdited);
     _bankAccountNumber.addListener(_markUserEdited);
+    _closureReason.addListener(_markUserEdited);
   }
 
   @override
@@ -1112,6 +1115,7 @@ class _AdminCheckoutChargeSettingsScreenState
     _bankName.dispose();
     _bankBranch.dispose();
     _bankAccountNumber.dispose();
+    _closureReason.dispose();
     super.dispose();
   }
 
@@ -1132,6 +1136,8 @@ class _AdminCheckoutChargeSettingsScreenState
         _service.text == serviceText &&
         _openingMinutes == shopHoursSettings.openingMinutes &&
         _closingMinutes == shopHoursSettings.closingMinutes &&
+        _isTemporarilyClosed == shopHoursSettings.isTemporarilyClosed &&
+        _closureReason.text == shopHoursSettings.temporaryClosureReason &&
         _bankAccountName.text == paymentSettings.bankAccountName &&
         _bankName.text == paymentSettings.bankName &&
         _bankBranch.text == paymentSettings.bankBranch &&
@@ -1145,6 +1151,8 @@ class _AdminCheckoutChargeSettingsScreenState
     _service.text = serviceText;
     _openingMinutes = shopHoursSettings.openingMinutes;
     _closingMinutes = shopHoursSettings.closingMinutes;
+    _isTemporarilyClosed = shopHoursSettings.isTemporarilyClosed;
+    _closureReason.text = shopHoursSettings.temporaryClosureReason;
     _bankAccountName.text = paymentSettings.bankAccountName;
     _bankName.text = paymentSettings.bankName;
     _bankBranch.text = paymentSettings.bankBranch;
@@ -1255,6 +1263,56 @@ class _AdminCheckoutChargeSettingsScreenState
                                 );
                               },
                             ),
+                            const SizedBox(height: 18),
+                            const Divider(height: 1),
+                            const SizedBox(height: 18),
+                            const _AdminSectionHeader(
+                              title: 'Temporarily Close Shop',
+                              icon: Icons.storefront_outlined,
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              value: _isTemporarilyClosed,
+                              onChanged: (value) {
+                                setState(() {
+                                  _isTemporarilyClosed = value;
+                                  _hasUserEdited = true;
+                                });
+                              },
+                              secondary: const Icon(Icons.storefront_outlined),
+                              title: const Text('Temporarily Close Shop'),
+                              subtitle: const Text(
+                                'Immediately blocks new orders, overriding the normal ordering hours above.',
+                              ),
+                            ),
+                            if (_isTemporarilyClosed) ...[
+                              const SizedBox(height: 10),
+                              TextFormField(
+                                controller: _closureReason,
+                                maxLines: 2,
+                                validator: (value) => _isTemporarilyClosed &&
+                                        (value == null || value.trim().isEmpty)
+                                    ? 'Please enter a reason before closing the shop.'
+                                    : null,
+                                decoration: const InputDecoration(
+                                  labelText: 'Reason for closure',
+                                  hintText:
+                                      'e.g. Maintenance, Stock unavailable, Holiday',
+                                  prefixIcon: Icon(Icons.info_outline),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              AnimatedBuilder(
+                                animation: _closureReason,
+                                builder: (context, _) => _AdminNotice(
+                                  icon: Icons.storefront_outlined,
+                                  color: _adminWarning,
+                                  message: _closureReason.text.trim().isEmpty
+                                      ? 'Shop is temporarily closed.'
+                                      : 'Shop is temporarily closed. Reason: ${_closureReason.text.trim()}',
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 18),
                             const Divider(height: 1),
                             const SizedBox(height: 18),
@@ -1441,6 +1499,10 @@ class _AdminCheckoutChargeSettingsScreenState
       await appState.updateShopHoursSettings(
         openingMinutes: _openingMinutes,
         closingMinutes: _closingMinutes,
+      );
+      await appState.updateShopManualClosure(
+        isTemporarilyClosed: _isTemporarilyClosed,
+        reason: _closureReason.text,
       );
       await appState.updatePaymentSettings(
         codEnabled: _codEnabled,

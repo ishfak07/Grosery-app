@@ -108,6 +108,9 @@ class AppState extends ChangeNotifier {
   ShopHoursSettings get shopHoursSettings => _shopHoursSettings;
   bool get hasLoadedShopHoursSettings => _hasLoadedShopHoursSettings;
   bool get isShopOpenNow => _shopHoursSettings.isOpenAt(DateTime.now());
+  bool get isShopManuallyClosed => _shopHoursSettings.isTemporarilyClosed;
+  String get shopManualClosureReason =>
+      _shopHoursSettings.temporaryClosureReason;
   PaymentSettings get paymentSettings => _paymentSettings;
   bool get hasLoadedPaymentSettings => _hasLoadedPaymentSettings;
   int get cartCount =>
@@ -558,10 +561,32 @@ class AppState extends ChangeNotifier {
         closingMinutes >= ShopHoursSettings.minutesPerDay) {
       throw StateError('Enter valid shop opening and closing times.');
     }
-    final settings = ShopHoursSettings(
+    final settings = _shopHoursSettings.copyWith(
       openingMinutes: openingMinutes,
       closingMinutes: closingMinutes,
       updatedAt: DateTime.now(),
+    );
+    await firestoreService.saveShopHoursSettings(settings);
+    _shopHoursSettings = settings;
+    _hasLoadedShopHoursSettings = true;
+    notifyListeners();
+  }
+
+  /// Simple manual ON/OFF switch for temporarily closing the shop. When
+  /// [isTemporarilyClosed] is true, [reason] must be non-empty — this
+  /// overrides the normal daily opening/closing hours while active.
+  Future<void> updateShopManualClosure({
+    required bool isTemporarilyClosed,
+    required String reason,
+  }) async {
+    final trimmedReason = reason.trim();
+    if (isTemporarilyClosed && trimmedReason.isEmpty) {
+      throw StateError('Please enter a reason before closing the shop.');
+    }
+    final settings = _shopHoursSettings.copyWith(
+      updatedAt: DateTime.now(),
+      isTemporarilyClosed: isTemporarilyClosed,
+      temporaryClosureReason: trimmedReason,
     );
     await firestoreService.saveShopHoursSettings(settings);
     _shopHoursSettings = settings;
@@ -833,6 +858,15 @@ class AppState extends ChangeNotifier {
   @visibleForTesting
   void debugSetProfileForTesting(UserProfile? profile) {
     _profile = profile;
+  }
+
+  /// Test-only seam: lets tests exercise shop-hours/manual-closure
+  /// validation in [createOrder] without a real Firestore stream.
+  @visibleForTesting
+  void debugSetShopHoursSettingsForTesting(ShopHoursSettings settings) {
+    _shopHoursSettings = settings;
+    _hasLoadedShopHoursSettings = true;
+    notifyListeners();
   }
 
   @override
