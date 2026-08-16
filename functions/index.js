@@ -1,9 +1,17 @@
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 const {defineSecret, defineString} = require("firebase-functions/params");
-const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+const {
+  onDocumentCreated,
+  onDocumentUpdated,
+} = require("firebase-functions/v2/firestore");
 const {HttpsError, onCall, onRequest} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
+const {
+  AUTO_SYNC_ORDER_STATUSES,
+  TERMINAL_ORDER_STATUSES,
+  applyCatalogPriceToOrder,
+} = require("./lib/orderPriceSync");
 
 admin.initializeApp();
 
@@ -16,11 +24,10 @@ const cloudinaryApiSecret = defineSecret("CLOUDINARY_API_SECRET");
 const cloudinaryAllowedFormats = ["jpg", "jpeg", "png", "webp", "heic", "heif"];
 const cloudinaryMaxImageBytes = 8 * 1024 * 1024;
 const cloudinaryBaseFolder = "puttalam-drop";
-const terminalOrderStatuses = new Set([
-  "Delivered",
-  "Cancelled",
-  "Rejected",
-]);
+// Shared with lib/orderPriceSync.js so both the price-sync trigger below and
+// the older order-status checks further down use exactly one definition of
+// "finalized/historical".
+const terminalOrderStatuses = TERMINAL_ORDER_STATUSES;
 const customerCancellationWindowMs = 5 * 60 * 1000;
 const cancellationExpiredMessage =
   "The cancellation period has expired. Please contact support if you need help cancelling this order.";
@@ -161,6 +168,103 @@ exports.cancelOrderWithinWindow = onCall(async (request) => {
 
   return {cancelled: true};
 });
+
+// Fires after an admin's product price edit is committed to Firestore, and
+// propagates the new price to already-placed orders that still contain
+// that product — server-side, using the Admin SDK, so a customer can never
+// trigger or influence this write and it still completes even if the
+// admin's device goes offline right after saving. Only orders within
+// AUTO_SYNC_ORDER_STATUSES (see lib/orderPriceSync.js) are touched
+// automatically; orders that have moved past bill finalization ("Bill
+// Updated"/"Out for Delivery") and any finalized/historical order are
+// never written here — the client's existing manual "Apply latest prices"
+// admin action remains available for those (and as a recovery path if this
+// function is ever unavailable).
+exports.syncOrderPricesOnProductPriceChange = onDocumentUpdated(
+  "products/{productId}",
+  async (event) => {
+    const before = event.data && event.data.before && event.data.before.data();
+    const after = event.data && event.data.after && event.data.after.data();
+    if (!before || !after) {
+      return;
+    }
+    const productId = event.params.productId;
+    const oldPrice = Number(before.price);
+    const newPrice = Number(after.price);
+    if (
+      !Number.isFinite(newPrice) ||
+      (Number.isFinite(oldPrice) && oldPrice === newPrice)
+    ) {
+      return;
+    }
+
+    const db = admin.firestore();
+    const snapshot = await db
+      .collection("orders")
+      .where("orderStatus", "in", Array.from(AUTO_SYNC_ORDER_STATUSES))
+      .get();
+
+    const candidateDocs = snapshot.docs.filter((doc) => {
+      const items = doc.data().items || [];
+      return items.some(
+        (item) =>
+          item && item.productId === productId && Number(item.price) !== newPrice,
+      );
+    });
+    if (candidateDocs.length === 0) {
+      return;
+    }
+
+    // One transaction per order (not a single shared batch): each order is
+    // re-read and re-validated at write time, so a concurrent customer
+    // cancellation or admin bill update can never be silently overwritten,
+    // and one order's failure can never block or partially corrupt another.
+    for (const docsChunk of chunk(candidateDocs, 25)) {
+      await Promise.all(
+        docsChunk.map((doc) => syncOneOrderPrice(db, doc.ref, productId, newPrice)),
+      );
+    }
+  },
+);
+
+async function syncOneOrderPrice(db, orderRef, productId, newPrice) {
+  let syncedOrder = null;
+  await db.runTransaction(async (transaction) => {
+    const orderDoc = await transaction.get(orderRef);
+    const order = orderDoc.data();
+    if (!orderDoc.exists || !order) {
+      return;
+    }
+    const updatedFields = applyCatalogPriceToOrder(order, productId, newPrice);
+    if (!updatedFields) {
+      return;
+    }
+    const now = admin.firestore.Timestamp.now();
+    transaction.update(orderRef, {
+      items: updatedFields.items,
+      cartItemsAmount: updatedFields.cartItemsAmount,
+      subtotal: updatedFields.subtotal,
+      totalAmount: updatedFields.totalAmount,
+      updatedAt: now,
+    });
+    const notificationRef = db.collection("notifications").doc();
+    transaction.set(notificationRef, {
+      notificationId: notificationRef.id,
+      userId: order.userId || "",
+      recipientRole: "user",
+      title: "Item prices updated",
+      body:
+        "One or more item prices in your order were updated to the latest " +
+        `price. New total: ${updatedFields.totalAmount.toFixed(2)}.`,
+      type: "order",
+      relatedId: orderRef.id,
+      isRead: false,
+      createdAt: now,
+    });
+    syncedOrder = order;
+  });
+  return syncedOrder;
+}
 
 exports.processAccountDeletionRequest = onCall(async (request) => {
   const adminUid = await requireAdmin(request);

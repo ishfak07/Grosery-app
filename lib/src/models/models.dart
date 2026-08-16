@@ -917,7 +917,8 @@ class OrderItem {
     required this.quantity,
     this.imageUrl = '',
     this.isAvailable = true,
-  });
+    double? originalPrice,
+  }) : originalPrice = originalPrice ?? price;
 
   final String productId;
   final String name;
@@ -925,12 +926,44 @@ class OrderItem {
   final String shopId;
   final String shopName;
   final String unit;
+
+  /// Current/effective unit price used for all bill calculations
+  /// ([lineTotal] and every order/bill total derived from it). Starts equal
+  /// to [originalPrice] at order creation, but may later be updated (only
+  /// for orders where [OrderModel.canApplyCurrentProductPrice] is true) when
+  /// an admin applies a changed catalog price to this still-active order.
   final double price;
   final int quantity;
   final String imageUrl;
   final bool isAvailable;
 
+  /// The unit price the customer actually saw/agreed to when the order was
+  /// placed. Frozen forever after order creation — never rewritten by a
+  /// later catalog price change, even when [price] is updated. Lets the app
+  /// show a "price updated" notice by comparing this against [price].
+  final double originalPrice;
+
   double get lineTotal => price * quantity;
+
+  /// True once an admin has synced this line to a catalog price that
+  /// differs from what the customer originally saw.
+  bool get hasPriceChanged => price != originalPrice;
+
+  OrderItem copyWithPrice(double newPrice) {
+    return OrderItem(
+      productId: productId,
+      name: name,
+      nameTamil: nameTamil,
+      shopId: shopId,
+      shopName: shopName,
+      unit: unit,
+      price: newPrice,
+      quantity: quantity,
+      imageUrl: imageUrl,
+      isAvailable: isAvailable,
+      originalPrice: originalPrice,
+    );
+  }
 
   String localizedName(String languageCode) {
     if (AppLanguageCodes.normalize(languageCode) == AppLanguageCodes.tamil &&
@@ -952,6 +985,7 @@ class OrderItem {
       'quantity': quantity,
       'imageUrl': imageUrl,
       'isAvailable': isAvailable,
+      'originalPrice': originalPrice,
     };
   }
 
@@ -970,6 +1004,7 @@ class OrderItem {
   }
 
   factory OrderItem.fromMap(Map<String, dynamic> map) {
+    final price = (map['price'] as num?)?.toDouble() ?? 0;
     return OrderItem(
       productId: map['productId'] as String? ?? '',
       name: map['name'] as String? ?? '',
@@ -977,10 +1012,13 @@ class OrderItem {
       shopId: map['shopId'] as String? ?? '',
       shopName: map['shopName'] as String? ?? '',
       unit: map['unit'] as String? ?? 'piece',
-      price: (map['price'] as num?)?.toDouble() ?? 0,
+      price: price,
       quantity: (map['quantity'] as num?)?.toInt() ?? 1,
       imageUrl: map['imageUrl'] as String? ?? '',
       isAvailable: map['isAvailable'] as bool? ?? true,
+      // Older stored orders have no originalPrice: treat their (frozen,
+      // historical) price as both, so hasPriceChanged stays false for them.
+      originalPrice: (map['originalPrice'] as num?)?.toDouble() ?? price,
     );
   }
 }
@@ -1069,6 +1107,59 @@ class OrderModel {
   final String cancelledBy;
   final String cancellationReason;
   final bool hasReliableCreatedAt;
+
+  /// True while this order still represents a live/current shopping or
+  /// billing process — i.e. it has not reached a finalized status
+  /// ([AppConstants.finalizedOrderStatuses]: Delivered, Cancelled,
+  /// Rejected). Only orders where this is true may ever have their item
+  /// prices synced to a changed catalog price (see [applyCatalogPrices]).
+  /// Centralizing this here keeps every screen/service using the same
+  /// rule instead of scattering status checks.
+  bool get canApplyCurrentProductPrice =>
+      !AppConstants.finalizedOrderStatuses.contains(orderStatus);
+
+  /// Returns a copy of this order with any structured item whose
+  /// [OrderItem.productId] is a key in [currentPricesByProductId] repriced
+  /// to that latest catalog price, and [cartItemsAmount]/[subtotal]/
+  /// [totalAmount] recalculated to match. [OrderItem.originalPrice] is
+  /// never touched, so the price the customer originally saw stays on the
+  /// record.
+  ///
+  /// A pure, side-effect-free calculation so it can be unit tested and
+  /// reused by both the admin sync action and its Firestore transaction.
+  /// Returns this order unchanged when [canApplyCurrentProductPrice] is
+  /// false (finalized/historical orders are never repriced) or when no
+  /// item's productId has a differing price in the map.
+  OrderModel applyCatalogPrices(Map<String, double> currentPricesByProductId) {
+    if (!canApplyCurrentProductPrice || currentPricesByProductId.isEmpty) {
+      return this;
+    }
+    var changed = false;
+    final updatedItems = items.map((item) {
+      final latestPrice = currentPricesByProductId[item.productId];
+      if (latestPrice == null || latestPrice == item.price) {
+        return item;
+      }
+      changed = true;
+      return item.copyWithPrice(latestPrice);
+    }).toList();
+    if (!changed) {
+      return this;
+    }
+    final updatedCartItemsAmount = updatedItems.fold<double>(
+      0.0,
+      (total, item) => total + item.lineTotal,
+    );
+    final updatedSubtotal =
+        updatedCartItemsAmount + photoListAmount + manualListAmount;
+    final updatedTotal = updatedSubtotal + deliveryCharge + serviceCharge;
+    return copyWith(
+      items: updatedItems,
+      cartItemsAmount: updatedCartItemsAmount,
+      subtotal: updatedSubtotal,
+      totalAmount: updatedTotal,
+    );
+  }
 
   bool get hasUpload => uploadedImageUrl.isNotEmpty;
   String get customerNotes => _orderNotesWithoutManualList(orderNotes);

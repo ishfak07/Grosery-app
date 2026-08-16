@@ -68,6 +68,7 @@ class AppState extends ChangeNotifier {
       _checkoutChargeSettingsSubscription;
   StreamSubscription<ShopHoursSettings>? _shopHoursSettingsSubscription;
   StreamSubscription<PaymentSettings>? _paymentSettingsSubscription;
+  StreamSubscription<List<Product>>? _productCatalogSubscription;
 
   bool _isInitializing = true;
   bool _isLoggingOut = false;
@@ -75,6 +76,7 @@ class AppState extends ChangeNotifier {
   bool _hasInternetConnection = true;
   UserProfile? _profile;
   List<CartItem> _cartItems = const <CartItem>[];
+  Map<String, Product> _catalogById = const <String, Product>{};
   String? _billImagePath;
   String _manualListText = '';
   CheckoutChargeSettings _checkoutChargeSettings =
@@ -115,8 +117,31 @@ class AppState extends ChangeNotifier {
   bool get hasLoadedPaymentSettings => _hasLoadedPaymentSettings;
   int get cartCount =>
       _cartItems.fold<int>(0, (sum, item) => sum + item.quantity);
+
+  /// The product's live catalog price for [item], or its locally cached
+  /// [CartItem.price] when the product is no longer in the catalog (e.g.
+  /// deleted) or the catalog hasn't loaded yet. This is the single place
+  /// cart/checkout pricing reads through, so an admin's price edit reaches
+  /// every cart holding that product without the customer re-adding it.
+  double livePriceFor(CartItem item) =>
+      _catalogById[item.productId]?.price ?? item.price;
+
+  /// The live catalog price for a product id, or null when that product
+  /// isn't in the current catalog snapshot (not yet loaded, or deleted).
+  /// Used by the admin order-details screen to detect and preview a
+  /// changed price on an already-placed order's items.
+  double? catalogPriceForProductId(String productId) =>
+      _catalogById[productId]?.price;
+
+  double lineTotalFor(CartItem item) => livePriceFor(item) * item.quantity;
+
+  /// True when the catalog price has moved away from what was cached in
+  /// the cart when the item was added.
+  bool isCartItemPriceStale(CartItem item) =>
+      livePriceFor(item) != item.price;
+
   double get cartSubtotal =>
-      _cartItems.fold<double>(0, (sum, item) => sum + item.lineTotal);
+      _cartItems.fold<double>(0, (sum, item) => sum + lineTotalFor(item));
 
   /// The minimum-order-value rule only applies to normal catalog cart
   /// orders. Photo List and Manual List orders are priced by the admin
@@ -182,6 +207,7 @@ class AppState extends ChangeNotifier {
       await _checkoutChargeSettingsSubscription?.cancel();
       await _shopHoursSettingsSubscription?.cancel();
       await _paymentSettingsSubscription?.cancel();
+      await _productCatalogSubscription?.cancel();
       if (!_isCurrentAuthUser(user)) {
         return;
       }
@@ -192,6 +218,7 @@ class AppState extends ChangeNotifier {
       _hasLoadedShopHoursSettings = false;
       _paymentSettings = PaymentSettings.defaults;
       _hasLoadedPaymentSettings = false;
+      _catalogById = const <String, Product>{};
       _notificationsConfiguredForProfileKey = null;
       unawaited(notificationService.detachUser());
       _isInitializing = false;
@@ -202,6 +229,7 @@ class AppState extends ChangeNotifier {
     _watchCheckoutChargeSettings();
     _watchShopHoursSettings();
     _watchPaymentSettings();
+    _watchProductCatalog();
 
     _profileSubscription = firestoreService.watchUserProfile(user.uid).listen(
       (profile) async {
@@ -290,6 +318,30 @@ class AppState extends ChangeNotifier {
       onError: (_) {
         _hasLoadedPaymentSettings = true;
         notifyListeners();
+      },
+    );
+  }
+
+  /// Keeps [_catalogById] in sync with the live `products` collection so
+  /// cart/checkout pricing (see [livePriceFor]) always reflects the
+  /// current admin-set price, not a stale copy.
+  void _watchProductCatalog() {
+    if (!firebaseAvailable) {
+      return;
+    }
+    unawaited(_productCatalogSubscription?.cancel());
+    _productCatalogSubscription = firestoreService
+        .watchProducts(activeOnly: false)
+        .listen(
+      (products) {
+        _catalogById = {
+          for (final product in products) product.productId: product,
+        };
+        notifyListeners();
+      },
+      onError: (_) {
+        // Keep the last-known catalog snapshot; cart/checkout fall back to
+        // each item's cached price when a product id is missing from it.
       },
     );
   }
@@ -400,6 +452,7 @@ class AppState extends ChangeNotifier {
     _watchCheckoutChargeSettings();
     _watchShopHoursSettings();
     _watchPaymentSettings();
+    _watchProductCatalog();
     notifyListeners();
     await _configureNotificationsForProfile(user);
     return user;
@@ -421,6 +474,7 @@ class AppState extends ChangeNotifier {
     _hasLoadedShopHoursSettings = false;
     _paymentSettings = PaymentSettings.defaults;
     _hasLoadedPaymentSettings = false;
+    _catalogById = const <String, Product>{};
     notifyListeners();
 
     try {
@@ -435,6 +489,7 @@ class AppState extends ChangeNotifier {
       await _checkoutChargeSettingsSubscription?.cancel();
       await _shopHoursSettingsSubscription?.cancel();
       await _paymentSettingsSubscription?.cancel();
+      await _productCatalogSubscription?.cancel();
       await authService.logout();
     } finally {
       _isLoggingOut = false;
@@ -454,6 +509,7 @@ class AppState extends ChangeNotifier {
       await _checkoutChargeSettingsSubscription?.cancel();
       await _shopHoursSettingsSubscription?.cancel();
       await _paymentSettingsSubscription?.cancel();
+      await _productCatalogSubscription?.cancel();
       await notificationService.detachUser();
       await localStorageService.clearPrivateAccountData();
       _profile = null;
@@ -467,6 +523,7 @@ class AppState extends ChangeNotifier {
       _hasLoadedShopHoursSettings = false;
       _paymentSettings = PaymentSettings.defaults;
       _hasLoadedPaymentSettings = false;
+      _catalogById = const <String, Product>{};
     } finally {
       _isLoggingOut = false;
       notifyListeners();
@@ -485,6 +542,7 @@ class AppState extends ChangeNotifier {
       await _checkoutChargeSettingsSubscription?.cancel();
       await _shopHoursSettingsSubscription?.cancel();
       await _paymentSettingsSubscription?.cancel();
+      await _productCatalogSubscription?.cancel();
       await notificationService.detachUser();
       await localStorageService.clearPrivateAccountData();
       _profile = null;
@@ -498,6 +556,7 @@ class AppState extends ChangeNotifier {
       _hasLoadedShopHoursSettings = false;
       _paymentSettings = PaymentSettings.defaults;
       _hasLoadedPaymentSettings = false;
+      _catalogById = const <String, Product>{};
     } finally {
       _isLoggingOut = false;
       notifyListeners();
@@ -524,6 +583,7 @@ class AppState extends ChangeNotifier {
     _watchCheckoutChargeSettings();
     _watchShopHoursSettings();
     _watchPaymentSettings();
+    _watchProductCatalog();
     notifyListeners();
     await _configureNotificationsForProfile(_profile);
   }
@@ -806,8 +866,13 @@ class AppState extends ChangeNotifier {
       );
     }
 
+    final resolvedItems = await _resolveCheckoutItems();
+
     final charges = _checkoutChargeSettings;
-    final subtotal = cartSubtotal;
+    final subtotal = resolvedItems.fold<double>(
+      0,
+      (sum, item) => sum + item.lineTotal,
+    );
     final total = charges.totalFor(subtotal);
     final now = DateTime.now();
     final order = OrderModel(
@@ -816,7 +881,7 @@ class AppState extends ChangeNotifier {
       customerName: customerName.trim(),
       customerPhone: PhoneUtils.normalizeSriLankanPhone(customerPhone),
       customerAddress: customerAddress.trim(),
-      items: _cartItems.map(OrderItem.fromCart).toList(),
+      items: resolvedItems,
       uploadedImageUrl: uploadedImage?.secureUrl ?? '',
       uploadedImagePublicId: uploadedImage?.publicId ?? '',
       manualListText: _manualListText.trim(),
@@ -869,6 +934,51 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Test-only seam: lets tests exercise live cart/checkout pricing
+  /// ([livePriceFor], [cartSubtotal]) without a real Firestore stream.
+  @visibleForTesting
+  void debugSetProductCatalogForTesting(List<Product> products) {
+    _catalogById = {
+      for (final product in products) product.productId: product,
+    };
+    notifyListeners();
+  }
+
+  /// Builds the [OrderItem]s [createOrder] would write for the current
+  /// cart: re-verifies each item's price against the Firestore server
+  /// (falling back to the live-catalog/cached price only if that read is
+  /// unavailable), so a stale cart price is never silently used.
+  ///
+  /// Exposed directly (rather than only inline inside [createOrder]) so
+  /// this price-resolution/race-condition-guard behavior is unit
+  /// testable without requiring a real Firestore write.
+  Future<List<OrderItem>> _resolveCheckoutItems() async {
+    final latestServerPrices = await firestoreService.fetchLatestProductPrices(
+      _cartItems.map((item) => item.productId).toSet().toList(),
+    );
+    return _cartItems.map((item) {
+      final resolvedPrice =
+          latestServerPrices[item.productId] ?? livePriceFor(item);
+      return OrderItem(
+        productId: item.productId,
+        name: item.name,
+        nameTamil: item.nameTamil,
+        shopId: item.shopId,
+        shopName: item.shopName,
+        unit: item.unit,
+        price: resolvedPrice,
+        quantity: item.quantity,
+        imageUrl: item.imageUrl,
+      );
+    }).toList();
+  }
+
+  /// Test-only seam: lets tests assert on the race-condition-guarded
+  /// checkout item resolution ([_resolveCheckoutItems]) directly.
+  @visibleForTesting
+  Future<List<OrderItem>> debugResolveCheckoutItemsForTesting() =>
+      _resolveCheckoutItems();
+
   @override
   void dispose() {
     _authSubscription?.cancel();
@@ -876,6 +986,7 @@ class AppState extends ChangeNotifier {
     _checkoutChargeSettingsSubscription?.cancel();
     _shopHoursSettingsSubscription?.cancel();
     _paymentSettingsSubscription?.cancel();
+    _productCatalogSubscription?.cancel();
     unawaited(connectivityService.dispose());
     notificationService.dispose();
     super.dispose();

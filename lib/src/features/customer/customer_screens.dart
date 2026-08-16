@@ -3019,6 +3019,30 @@ class ProductDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Falls back to the [product] passed in via navigation immediately, but
+    // switches to the live catalog doc as soon as it arrives — so a price
+    // the admin changes while this screen is open still updates on screen.
+    return StreamBuilder<Product?>(
+      stream: context
+          .read<AppState>()
+          .firestoreService
+          .watchProduct(product.productId),
+      initialData: product,
+      builder: (context, snapshot) {
+        final liveProduct = snapshot.data ?? product;
+        return _ProductDetailsView(product: liveProduct);
+      },
+    );
+  }
+}
+
+class _ProductDetailsView extends StatelessWidget {
+  const _ProductDetailsView({required this.product});
+
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) {
     final languageCode = context.watch<AppState>().effectiveLanguageCode;
     final productName = product.localizedName(languageCode);
     final productDescription = product.localizedDescription(languageCode);
@@ -3707,6 +3731,8 @@ class _CartItemTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final itemName = item.localizedName(appState.effectiveLanguageCode);
+    final unitPrice = appState.livePriceFor(item);
+    final lineTotal = appState.lineTotalFor(item);
     return _CustomerCard(
       padding: const EdgeInsets.all(10),
       child: Row(
@@ -3732,7 +3758,7 @@ class _CartItemTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${item.price.money} / ${context.t(item.unit)}',
+                  '${unitPrice.money} / ${context.t(item.unit)}',
                   style: const TextStyle(
                     color: _customerMuted,
                     fontWeight: FontWeight.w600,
@@ -3741,7 +3767,7 @@ class _CartItemTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 7),
                 Text(
-                  item.lineTotal.money,
+                  lineTotal.money,
                   style: const TextStyle(
                     color: _customerPrimary,
                     fontWeight: FontWeight.w900,
@@ -5719,6 +5745,9 @@ class _CheckoutItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final unitPrice = appState.livePriceFor(item);
+    final lineTotal = appState.lineTotalFor(item);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -5743,7 +5772,7 @@ class _CheckoutItemRow extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                '${item.quantity} x ${item.price.money} / ${context.t(item.unit)}',
+                '${item.quantity} x ${unitPrice.money} / ${context.t(item.unit)}',
                 style: const TextStyle(
                   color: _customerMuted,
                   fontWeight: FontWeight.w700,
@@ -5755,7 +5784,7 @@ class _CheckoutItemRow extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Text(
-          item.lineTotal.money,
+          lineTotal.money,
           textAlign: TextAlign.right,
           style: const TextStyle(
             color: _customerPrimary,
@@ -8630,6 +8659,23 @@ class _OrderItemRow extends StatelessWidget {
                     fontSize: 12,
                   ),
                 ),
+                if (item.hasPriceChanged) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    context.t(
+                      '{original} → {current} · Price updated',
+                      values: {
+                        'original': item.originalPrice.money,
+                        'current': item.price.money,
+                      },
+                    ),
+                    style: const TextStyle(
+                      color: _customerWarning,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

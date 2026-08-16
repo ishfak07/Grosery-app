@@ -390,6 +390,55 @@ class FirestoreService {
     });
   }
 
+  /// Live single-product stream, used by screens (e.g. product details)
+  /// that are handed one [Product] via navigation but should still reflect
+  /// a later admin price edit while they stay open.
+  Stream<Product?> watchProduct(String productId) {
+    if (!_firebaseAvailable) {
+      return Stream<Product?>.value(null);
+    }
+    return _products.doc(productId).snapshots().map((doc) {
+      final data = doc.data();
+      if (data == null) {
+        return null;
+      }
+      return Product.fromMap(data, doc.id);
+    });
+  }
+
+  /// Authoritative (server-source, not cached) current price for each of
+  /// [productIds]. Used right before order creation to close the race
+  /// where an admin changes a price between the customer opening checkout
+  /// and pressing "place order" — see [FirestoreService.syncOrderItemPricesToCatalog]
+  /// for the equivalent used on already-placed active orders.
+  Future<Map<String, double>> fetchLatestProductPrices(
+    List<String> productIds,
+  ) async {
+    final uniqueIds =
+        productIds.where((id) => id.isNotEmpty).toSet().toList();
+    if (!_firebaseAvailable || uniqueIds.isEmpty) {
+      return const <String, double>{};
+    }
+    final docs = await Future.wait(
+      uniqueIds.map(
+        (id) => _products
+            .doc(id)
+            .get(const GetOptions(source: Source.server))
+            .catchError(
+              (_) => _products.doc(id).get(),
+            ),
+      ),
+    );
+    final prices = <String, double>{};
+    for (final doc in docs) {
+      final data = doc.data();
+      if (doc.exists && data != null) {
+        prices[doc.id] = Product.fromMap(data, doc.id).price;
+      }
+    }
+    return prices;
+  }
+
   Future<void> saveProduct(Product product) {
     return _products
         .doc(product.productId)
@@ -848,6 +897,74 @@ class FirestoreService {
       relatedId: order.orderId,
       type: 'order',
     );
+  }
+
+  /// Applies the current `products` catalog price to every structured item
+  /// on [order] whose price has drifted, and recalculates
+  /// `cartItemsAmount`/`subtotal`/`totalAmount` to match.
+  ///
+  /// Explicit and per-order only: an admin opens one active order and taps
+  /// "Apply latest prices" — this never scans/rewrites other orders, so a
+  /// single product price edit cannot silently cascade into unexpected
+  /// bill changes across every order containing that product. Re-reads
+  /// both the order and the live product prices inside the transaction so
+  /// it is safe against a concurrent customer cancellation or a concurrent
+  /// second catalog edit.
+  ///
+  /// No-ops (throws [StateError]) when [OrderModel.canApplyCurrentProductPrice]
+  /// is false for the latest order state — finalized/historical orders
+  /// (Delivered, Cancelled, Rejected) are never repriced.
+  Future<void> syncOrderItemPricesToCatalog({required OrderModel order}) async {
+    final orderRef = _orders.doc(order.orderId);
+    var didChange = false;
+    late OrderModel updatedOrder;
+    await _db.runTransaction((transaction) async {
+      final latestOrderDoc = await transaction.get(orderRef);
+      final latestOrderData = latestOrderDoc.data();
+      if (!latestOrderDoc.exists || latestOrderData == null) {
+        throw StateError('Order not found.');
+      }
+      final latestOrder = OrderModel.fromMap(latestOrderData, latestOrderDoc.id);
+      if (!latestOrder.canApplyCurrentProductPrice) {
+        throw StateError('This order is finalized and can no longer be repriced.');
+      }
+      final productIds = latestOrder.items
+          .map((item) => item.productId)
+          .where((id) => id.isNotEmpty)
+          .toSet();
+      final priceById = <String, double>{};
+      for (final productId in productIds) {
+        final productDoc = await transaction.get(_products.doc(productId));
+        final productData = productDoc.data();
+        if (productDoc.exists && productData != null) {
+          priceById[productId] =
+              Product.fromMap(productData, productDoc.id).price;
+        }
+      }
+      updatedOrder = latestOrder.applyCatalogPrices(priceById);
+      didChange = !identical(updatedOrder, latestOrder);
+      if (!didChange) {
+        // Nothing actually changed (already up to date) — no-op write.
+        return;
+      }
+      transaction.update(orderRef, {
+        'items': updatedOrder.items.map((item) => item.toMap()).toList(),
+        'cartItemsAmount': updatedOrder.cartItemsAmount,
+        'subtotal': updatedOrder.subtotal,
+        'totalAmount': updatedOrder.totalAmount,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+    if (didChange) {
+      await notifyUser(
+        userId: order.userId,
+        title: 'Item prices updated',
+        body:
+            'One or more item prices in your order were updated to the latest price. New total: ${updatedOrder.totalAmount.toStringAsFixed(2)}.',
+        relatedId: order.orderId,
+        type: 'order',
+      );
+    }
   }
 
   Future<void> updateAccountSaleManuals({

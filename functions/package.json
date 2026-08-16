@@ -3,6 +3,7 @@
   "private": true,
   "main": "index.js",
   "scripts": {
+    "test": "node --test test/*.test.js",
     "cleanup:release:dry-run": "node scripts/cleanup_release_data.js --project grocery-delivery-app-388bc",
     "cleanup:release": "node scripts/cleanup_release_data.js --project grocery-delivery-app-388bc --confirm-project grocery-delivery-app-388bc --yes"
   },

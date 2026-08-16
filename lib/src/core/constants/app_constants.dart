@@ -67,6 +67,34 @@ class AppConstants {
     'Rejected',
   ];
 
+  /// Terminal/historical order statuses. Once an order reaches one of these
+  /// it is a finalized receipt: a later product-catalog price change must
+  /// never rewrite it. See [OrderModel.canApplyCurrentProductPrice].
+  static const finalizedOrderStatuses = <String>{
+    'Delivered',
+    'Cancelled',
+    'Rejected',
+  };
+
+  /// Narrower subset of the non-finalized statuses that get a changed
+  /// product price applied AUTOMATICALLY (via the
+  /// `syncOrderPricesOnProductPriceChange` Cloud Function) as soon as an
+  /// admin saves a new catalog price — no admin action needed. Orders past
+  /// this point (Bill Updated/Out for Delivery) keep their price frozen
+  /// automatically, since the admin has already finalized the bill or
+  /// dispatched the order; they remain reachable only through the manual
+  /// "Apply latest prices" admin action. Must be kept in sync with
+  /// `functions/lib/orderPriceSync.js`'s `AUTO_SYNC_ORDER_STATUSES` (Dart
+  /// and Cloud Functions are separate runtimes and can't share this list
+  /// directly). Used for admin UI messaging only — the client never
+  /// performs the automatic sync itself.
+  static const autoPriceSyncOrderStatuses = <String>{
+    'Pending',
+    'Accepted',
+    'Need Clarification',
+    'Shopping Started',
+  };
+
   static const productUnitOther = 'Other';
   static const productUnits = <String>[
     'kg',

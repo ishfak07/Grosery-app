@@ -3014,12 +3014,30 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          subtitle: Text(
-                            '${order.items[index].quantity} x ${order.items[index].price.money} / ${order.items[index].unit}',
-                            style: const TextStyle(
-                              color: Color(0xFF4B5A51),
-                              fontWeight: FontWeight.w500,
-                            ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${order.items[index].quantity} x ${order.items[index].price.money} / ${order.items[index].unit}',
+                                style: const TextStyle(
+                                  color: Color(0xFF4B5A51),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              if (order.items[index].hasPriceChanged)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    '${order.items[index].originalPrice.money} → ${order.items[index].price.money} · Price updated',
+                                    style: const TextStyle(
+                                      color: _adminWarning,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                           secondary: Text(
                             order.items[index].lineTotal.money,
@@ -3031,6 +3049,7 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                         ),
                       ),
                     ),
+                  _AdminOrderPriceSyncAction(order: order),
                 ],
                 if (manualListLines.isNotEmpty) ...[
                   const SizedBox(height: 12),
@@ -3513,6 +3532,120 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
         );
       },
     );
+  }
+}
+
+/// Shown under an order's item list when at least one item's stored price
+/// no longer matches the live catalog price. Lets the admin explicitly
+/// apply the latest catalog prices to this one order — deliberately not
+/// automatic, and never touches any other order (see
+/// [FirestoreService.syncOrderItemPricesToCatalog]).
+class _AdminOrderPriceSyncAction extends StatefulWidget {
+  const _AdminOrderPriceSyncAction({required this.order});
+
+  final OrderModel order;
+
+  @override
+  State<_AdminOrderPriceSyncAction> createState() =>
+      _AdminOrderPriceSyncActionState();
+}
+
+class _AdminOrderPriceSyncActionState
+    extends State<_AdminOrderPriceSyncAction> {
+  var _isSyncing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final order = widget.order;
+    if (!order.canApplyCurrentProductPrice) {
+      return const SizedBox.shrink();
+    }
+    final appState = context.watch<AppState>();
+    final staleItemCount = order.items.where((item) {
+      final catalogPrice = appState.catalogPriceForProductId(item.productId);
+      return catalogPrice != null && catalogPrice != item.price;
+    }).length;
+    if (staleItemCount == 0) {
+      return const SizedBox.shrink();
+    }
+    final isAutoSyncWindow =
+        AppConstants.autoPriceSyncOrderStatuses.contains(order.orderStatus);
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: _AdminCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.sync_problem_outlined, color: _adminWarning),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    staleItemCount == 1
+                        ? '1 item has a newer catalog price'
+                        : '$staleItemCount items have a newer catalog price',
+                    style: const TextStyle(
+                      color: _adminWarning,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed:
+                      _isSyncing ? null : () => _applyLatestPrices(order),
+                  child: _isSyncing
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Apply latest prices'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              isAutoSyncWindow
+                  ? 'This order normally updates automatically within a few '
+                      'seconds of the catalog change — use this button to '
+                      'apply it immediately instead of waiting.'
+                  : 'This order\'s bill has already been finalized '
+                      '(${order.orderStatus}), so it no longer updates '
+                      'automatically. Use this button only if you want to '
+                      'manually re-price it to the latest catalog value.',
+              style: const TextStyle(
+                color: Color(0xFF6B7A70),
+                fontWeight: FontWeight.w500,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _applyLatestPrices(OrderModel order) async {
+    setState(() => _isSyncing = true);
+    try {
+      await context
+          .read<AppState>()
+          .firestoreService
+          .syncOrderItemPricesToCatalog(order: order);
+      if (mounted) {
+        showSnack(context, 'Item prices updated to the latest catalog price.');
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncing = false);
+      }
+    }
   }
 }
 
