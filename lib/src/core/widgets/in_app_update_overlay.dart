@@ -85,9 +85,18 @@ class InAppUpdateOverlay extends StatelessWidget {
               'Update could not be downloaded. Please check your internet '
                   'connection and try again.',
         );
+      case InAppUpdateStage.immediateFailed:
+        return _ImmediateUpdateRequiredCard(
+          key: const ValueKey('update-immediate-failed'),
+          message: updateState.errorMessage ??
+              'This update is required to continue using the app.',
+        );
       case InAppUpdateStage.idle:
       case InAppUpdateStage.checking:
       case InAppUpdateStage.available:
+      case InAppUpdateStage.immediateInProgress:
+        // Google Play owns the full-screen Immediate Update UI while
+        // `immediateInProgress` is active, so this overlay stays hidden.
         return const SizedBox.shrink(key: ValueKey('update-hidden'));
     }
   }
@@ -223,6 +232,54 @@ class _UpdateReadyCard extends StatelessWidget {
                 unawaited(InAppUpdateService.installDownloadedUpdate());
               },
               child: const Text('Install & restart'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown after a CRITICAL update's Immediate Update flow fails or the user
+/// cancels out of Google Play's blocking screen. Deliberately has no
+/// "Later" button — the app keeps asking until the update completes.
+class _ImmediateUpdateRequiredCard extends StatelessWidget {
+  const _ImmediateUpdateRequiredCard({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final danger = theme.extension<AppExtraColors>()?.danger;
+    return _UpdateCardShell(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.error_outline, color: danger ?? Colors.red),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Update required',
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(message),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () {
+                unawaited(InAppUpdateService.retryImmediateUpdate());
+              },
+              child: const Text('Try again'),
             ),
           ),
         ],

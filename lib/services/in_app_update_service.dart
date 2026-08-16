@@ -16,6 +16,16 @@ enum InAppUpdateStage {
   downloaded,
   installing,
   failed,
+
+  /// Google Play's blocking Immediate Update UI is (or is about to be)
+  /// shown for a CRITICAL update. Play owns the screen for this stage — the
+  /// app doesn't render its own progress UI while it's active.
+  immediateInProgress,
+
+  /// A CRITICAL update's Immediate Update flow failed or was cancelled by
+  /// the user. Unlike [failed], there is no "Later" option here — the app
+  /// must keep prompting until the update completes.
+  immediateFailed,
 }
 
 const _genericDownloadFailedMessage =
@@ -43,7 +53,8 @@ class InAppUpdateState {
       stage == InAppUpdateStage.pending ||
       stage == InAppUpdateStage.downloading ||
       stage == InAppUpdateStage.downloaded ||
-      stage == InAppUpdateStage.installing;
+      stage == InAppUpdateStage.installing ||
+      stage == InAppUpdateStage.immediateInProgress;
 
   InAppUpdateState copyWith({
     InAppUpdateStage? stage,
@@ -90,7 +101,31 @@ class InAppUpdateService {
   static bool _isPromptVisible = false;
   static bool _isUpdateRequestStarting = false;
   static bool _isCompletingUpdate = false;
+  static bool _isImmediateUpdateStarting = false;
   static StreamSubscription<InstallStatus>? _installStatusSubscription;
+
+  /// Google Play in-app-update priority (0-5, set per release via the Play
+  /// Developer API / Play Console) at or above which an update is treated
+  /// as CRITICAL and forced through the blocking Immediate Update flow
+  /// instead of the dismissible Flexible flow. Google's own guidance is to
+  /// reserve the top of the range (4-5) for must-install releases.
+  ///
+  /// This is the single place the "is this update critical?" decision is
+  /// made. If the project later gains a backend-driven signal (Remote
+  /// Config, a Firestore flag, a minimum-supported-version doc, etc.),
+  /// change only [_isCriticalUpdate] — every call site already routes
+  /// through it.
+  static const int _criticalUpdatePriorityThreshold = 4;
+
+  static bool _isCriticalUpdate(AppUpdateInfo updateInfo) {
+    return updateInfo.updatePriority >= _criticalUpdatePriorityThreshold;
+  }
+
+  /// Exposes the critical-update decision for tests without weakening its
+  /// visibility for the rest of the app.
+  @visibleForTesting
+  static bool isCriticalUpdateForTesting(AppUpdateInfo updateInfo) =>
+      _isCriticalUpdate(updateInfo);
 
   static bool get _canUseInAppUpdates =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
@@ -108,9 +143,18 @@ class InAppUpdateService {
       }
       if (updateInfo.updateAvailability ==
           UpdateAvailability.developerTriggeredUpdateInProgress) {
-        _listenForInstallStatus();
+        await _resumeInProgressUpdate(updateInfo);
         return;
       }
+      if (updateInfo.updateAvailability != UpdateAvailability.updateAvailable) {
+        return;
+      }
+
+      if (_isCriticalUpdate(updateInfo) && updateInfo.immediateUpdateAllowed) {
+        await _startImmediateUpdate();
+        return;
+      }
+
       if (!_isFlexibleUpdateAvailable(updateInfo)) {
         return;
       }
@@ -122,6 +166,100 @@ class InAppUpdateService {
       await _showUpdatePrompt(context);
     } catch (error) {
       _logError(error);
+    }
+  }
+
+  /// Called when Play reports `developerTriggeredUpdateInProgress` — this
+  /// covers both a still-running flexible download and an immediate update
+  /// flow the user backed out of before it finished. Resumes the correct
+  /// flow instead of starting a duplicate one.
+  static Future<void> _resumeInProgressUpdate(
+    AppUpdateInfo updateInfo,
+  ) async {
+    if (_isCriticalUpdate(updateInfo) && updateInfo.immediateUpdateAllowed) {
+      await _startImmediateUpdate();
+      return;
+    }
+    _listenForInstallStatus();
+  }
+
+  /// Starts (or resumes) Google Play's blocking Immediate Update flow for a
+  /// CRITICAL update. Play renders its own full-screen UI for this — there
+  /// is no "Later" option, and the app does not become usable again until
+  /// the update completes, fails, or the user cancels out of Play's screen.
+  static Future<void> _startImmediateUpdate() async {
+    if (!_canUseInAppUpdates || _isImmediateUpdateStarting) {
+      return;
+    }
+    _isImmediateUpdateStarting = true;
+    _setState(
+      const InAppUpdateState(stage: InAppUpdateStage.immediateInProgress),
+    );
+
+    try {
+      final result = await InAppUpdate.performImmediateUpdate();
+      switch (result) {
+        case AppUpdateResult.success:
+          // Play installs and restarts the app itself once an immediate
+          // update succeeds; this line is mostly reached in tests/edge
+          // cases where the process isn't actually killed.
+          _setState(const InAppUpdateState());
+        case AppUpdateResult.userDeniedUpdate:
+          // A CRITICAL update was declined — leaving the app on an
+          // outdated version isn't acceptable, so this surfaces a
+          // mandatory-retry state rather than quietly falling back to the
+          // normal app experience.
+          _setState(
+            const InAppUpdateState(
+              stage: InAppUpdateStage.immediateFailed,
+              errorMessage:
+                  'This update is required to continue using the app.',
+            ),
+          );
+        case AppUpdateResult.inAppUpdateFailed:
+          _setState(
+            const InAppUpdateState(
+              stage: InAppUpdateStage.immediateFailed,
+              errorMessage: _genericDownloadFailedMessage,
+            ),
+          );
+      }
+    } catch (error) {
+      _logError(error);
+      _setState(
+        const InAppUpdateState(
+          stage: InAppUpdateStage.immediateFailed,
+          errorMessage: _genericDownloadFailedMessage,
+        ),
+      );
+    } finally {
+      _isImmediateUpdateStarting = false;
+    }
+  }
+
+  /// Retries a CRITICAL update after [InAppUpdateStage.immediateFailed].
+  /// There is deliberately no "Later"/dismiss path paired with this.
+  static Future<void> retryImmediateUpdate() async {
+    if (!_canUseInAppUpdates ||
+        state.value.stage != InAppUpdateStage.immediateFailed) {
+      return;
+    }
+    _setState(const InAppUpdateState());
+    try {
+      final updateInfo = await InAppUpdate.checkForUpdate();
+      if (updateInfo.updateAvailability == UpdateAvailability.updateAvailable ||
+          updateInfo.updateAvailability ==
+              UpdateAvailability.developerTriggeredUpdateInProgress) {
+        await _startImmediateUpdate();
+      }
+    } catch (error) {
+      _logError(error);
+      _setState(
+        const InAppUpdateState(
+          stage: InAppUpdateStage.immediateFailed,
+          errorMessage: _genericDownloadFailedMessage,
+        ),
+      );
     }
   }
 
@@ -246,7 +384,7 @@ class InAppUpdateService {
       if (!handled &&
           updateInfo.updateAvailability ==
               UpdateAvailability.developerTriggeredUpdateInProgress) {
-        _listenForInstallStatus();
+        await _resumeInProgressUpdate(updateInfo);
       }
     } catch (error) {
       _logError(error);
@@ -418,6 +556,7 @@ class InAppUpdateService {
     _isPromptVisible = false;
     _isUpdateRequestStarting = false;
     _isCompletingUpdate = false;
+    _isImmediateUpdateStarting = false;
     await _cancelInstallStatusListener();
     state.value = const InAppUpdateState();
   }

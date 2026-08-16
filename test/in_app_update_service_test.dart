@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:in_app_update/in_app_update.dart';
 import 'package:grocerydelivery/services/in_app_update_service.dart';
 import 'package:grocerydelivery/src/core/theme/app_theme.dart';
 import 'package:grocerydelivery/src/core/widgets/in_app_update_overlay.dart';
@@ -17,10 +18,12 @@ Map<String, dynamic> _updateInfo({
   required int updateAvailability,
   required int installStatus,
   bool flexibleAllowed = true,
+  bool immediateAllowed = false,
+  int updatePriority = 0,
 }) {
   return <String, dynamic>{
     'updateAvailability': updateAvailability,
-    'immediateAllowed': false,
+    'immediateAllowed': immediateAllowed,
     'immediateAllowedPreconditions': <int>[],
     'flexibleAllowed': flexibleAllowed,
     'flexibleAllowedPreconditions': <int>[],
@@ -28,8 +31,23 @@ Map<String, dynamic> _updateInfo({
     'installStatus': installStatus,
     'packageName': 'com.puttalam.drop',
     'clientVersionStalenessDays': null,
-    'updatePriority': 0,
+    'updatePriority': updatePriority,
   };
+}
+
+AppUpdateInfo _appUpdateInfo({required int updatePriority}) {
+  return AppUpdateInfo(
+    updateAvailability: UpdateAvailability.updateAvailable,
+    immediateUpdateAllowed: true,
+    immediateAllowedPreconditions: const [],
+    flexibleUpdateAllowed: true,
+    flexibleAllowedPreconditions: const [],
+    availableVersionCode: 42,
+    installStatus: InstallStatus.unknown,
+    packageName: 'com.puttalam.drop',
+    clientVersionStalenessDays: null,
+    updatePriority: updatePriority,
+  );
 }
 
 Widget _wrap(Widget child) {
@@ -58,8 +76,10 @@ void main() {
   var checkForUpdateCalls = 0;
   var startFlexibleUpdateCalls = 0;
   var completeFlexibleUpdateCalls = 0;
+  var performImmediateUpdateCalls = 0;
   Object Function()? checkForUpdateResponse;
   Object? Function()? startFlexibleUpdateResponse;
+  Object? Function()? performImmediateUpdateResponse;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -68,11 +88,13 @@ void main() {
     checkForUpdateCalls = 0;
     startFlexibleUpdateCalls = 0;
     completeFlexibleUpdateCalls = 0;
+    performImmediateUpdateCalls = 0;
     checkForUpdateResponse = () => _updateInfo(
           updateAvailability: 2,
           installStatus: 0,
         );
     startFlexibleUpdateResponse = () => null;
+    performImmediateUpdateResponse = () => null;
 
     messenger.setMockMethodCallHandler(_methodChannel, (call) async {
       switch (call.method) {
@@ -82,6 +104,13 @@ void main() {
         case 'startFlexibleUpdate':
           startFlexibleUpdateCalls++;
           final response = startFlexibleUpdateResponse!();
+          if (response is PlatformException) {
+            throw response;
+          }
+          return response;
+        case 'performImmediateUpdate':
+          performImmediateUpdateCalls++;
+          final response = performImmediateUpdateResponse!();
           if (response is PlatformException) {
             throw response;
           }
@@ -433,6 +462,192 @@ void main() {
         InAppUpdateService.state.value.stage,
         InAppUpdateStage.downloaded,
       );
+    });
+  });
+
+  group('critical-update decision (updatePriority threshold)', () {
+    test('priority below the threshold is not critical', () {
+      expect(
+        InAppUpdateService.isCriticalUpdateForTesting(
+          _appUpdateInfo(updatePriority: 3),
+        ),
+        isFalse,
+      );
+    });
+
+    test('priority at/above the threshold is critical', () {
+      expect(
+        InAppUpdateService.isCriticalUpdateForTesting(
+          _appUpdateInfo(updatePriority: 4),
+        ),
+        isTrue,
+      );
+      expect(
+        InAppUpdateService.isCriticalUpdateForTesting(
+          _appUpdateInfo(updatePriority: 5),
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  group('Immediate update flow (critical updates)', () {
+    testWidgets(
+        'a critical update goes straight to performImmediateUpdate, '
+        'never shows the Later dialog, and never calls startFlexibleUpdate',
+        (tester) async {
+      checkForUpdateResponse = () => _updateInfo(
+            updateAvailability: 2,
+            installStatus: 0,
+            immediateAllowed: true,
+            updatePriority: 5,
+          );
+
+      late BuildContext capturedContext;
+      await tester.pumpWidget(
+        _wrap(
+          Builder(
+            builder: (context) {
+              capturedContext = context;
+              return ElevatedButton(
+                onPressed: () =>
+                    InAppUpdateService.checkForUpdate(capturedContext),
+                child: const Text('check'),
+              );
+            },
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('check'));
+      await tester.pumpAndSettle();
+
+      expect(performImmediateUpdateCalls, 1);
+      expect(startFlexibleUpdateCalls, 0);
+      expect(find.text('Update available'), findsNothing);
+      expect(find.text('Later'), findsNothing);
+    });
+
+    testWidgets(
+        'a non-critical update (priority below threshold) still uses the '
+        'flexible Later/Download dialog even when immediate is allowed',
+        (tester) async {
+      checkForUpdateResponse = () => _updateInfo(
+            updateAvailability: 2,
+            installStatus: 0,
+            immediateAllowed: true,
+            updatePriority: 2,
+          );
+
+      late BuildContext capturedContext;
+      await tester.pumpWidget(
+        _wrap(
+          Builder(
+            builder: (context) {
+              capturedContext = context;
+              return ElevatedButton(
+                onPressed: () =>
+                    InAppUpdateService.checkForUpdate(capturedContext),
+                child: const Text('check'),
+              );
+            },
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('check'));
+      await tester.pumpAndSettle();
+
+      expect(performImmediateUpdateCalls, 0);
+      expect(find.text('Update available'), findsOneWidget);
+      expect(find.text('Later'), findsOneWidget);
+    });
+
+    testWidgets(
+        'user cancelling the immediate update surfaces a mandatory retry',
+        (tester) async {
+      performImmediateUpdateResponse =
+          () => PlatformException(code: 'USER_DENIED_UPDATE');
+      checkForUpdateResponse = () => _updateInfo(
+            updateAvailability: 2,
+            installStatus: 0,
+            immediateAllowed: true,
+            updatePriority: 5,
+          );
+
+      late BuildContext capturedContext;
+      await tester.pumpWidget(
+        _wrap(
+          Builder(
+            builder: (context) {
+              capturedContext = context;
+              return ElevatedButton(
+                onPressed: () =>
+                    InAppUpdateService.checkForUpdate(capturedContext),
+                child: const Text('check'),
+              );
+            },
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('check'));
+      await tester.pumpAndSettle();
+
+      expect(
+        InAppUpdateService.state.value.stage,
+        InAppUpdateStage.immediateFailed,
+      );
+      expect(
+        InAppUpdateService.state.value.errorMessage,
+        contains('required'),
+      );
+    });
+
+    testWidgets('immediateFailed has a Try again action and no Later button',
+        (tester) async {
+      InAppUpdateService.state.value = const InAppUpdateState(
+        stage: InAppUpdateStage.immediateFailed,
+        errorMessage: 'This update is required to continue using the app.',
+      );
+
+      await tester.pumpWidget(
+        _wrap(const InAppUpdateOverlay(child: SizedBox.shrink())),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Update required'), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
+      expect(find.text('Later'), findsNothing);
+    });
+
+    test('retryImmediateUpdate re-invokes performImmediateUpdate', () async {
+      checkForUpdateResponse = () => _updateInfo(
+            updateAvailability: 2,
+            installStatus: 0,
+            immediateAllowed: true,
+            updatePriority: 5,
+          );
+      InAppUpdateService.state.value = const InAppUpdateState(
+        stage: InAppUpdateStage.immediateFailed,
+        errorMessage: 'boom',
+      );
+
+      await InAppUpdateService.retryImmediateUpdate();
+
+      expect(performImmediateUpdateCalls, 1);
+      expect(
+        InAppUpdateService.state.value.stage,
+        InAppUpdateStage.idle,
+      );
+    });
+
+    test('immediateInProgress counts as active so flexible cannot start '
+        'concurrently', () {
+      InAppUpdateService.state.value = const InAppUpdateState(
+        stage: InAppUpdateStage.immediateInProgress,
+      );
+      expect(InAppUpdateService.state.value.isActive, isTrue);
     });
   });
 }
