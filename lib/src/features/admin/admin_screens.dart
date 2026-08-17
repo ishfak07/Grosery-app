@@ -6846,8 +6846,33 @@ class _AdminSupportTile extends StatelessWidget {
   }
 }
 
-class AdminCustomerManagementScreen extends StatelessWidget {
+class AdminCustomerManagementScreen extends StatefulWidget {
   const AdminCustomerManagementScreen({super.key});
+
+  @override
+  State<AdminCustomerManagementScreen> createState() =>
+      _AdminCustomerManagementScreenState();
+}
+
+class _AdminCustomerManagementScreenState
+    extends State<AdminCustomerManagementScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  bool _matchesSearch(UserProfile user) {
+    if (_query.isEmpty) {
+      return true;
+    }
+    return user.fullName.toLowerCase().contains(_query) ||
+        user.phone.toLowerCase().contains(_query) ||
+        user.address.toLowerCase().contains(_query);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -6863,38 +6888,74 @@ class AdminCustomerManagementScreen extends StatelessWidget {
                 child: LoadingView(),
               );
             }
-            final users = (snapshot.data ?? const <UserProfile>[])
+            final allCustomers = (snapshot.data ?? const <UserProfile>[])
                 .where((user) => user.role == 'user')
                 .toList();
-            if (users.isEmpty) {
-              return const RefreshableCenteredContent(
-                child: EmptyState(
-                  icon: Icons.people_outline,
-                  title: 'No customers',
-                  message: 'Registered users will appear here.',
-                ),
-              );
-            }
-            return ListView.separated(
+            final users = allCustomers.where(_matchesSearch).toList();
+            return ListView(
               physics: appRefreshScrollPhysics,
               padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
-              itemCount: users.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final user = users[index];
-                return _AdminReveal(
-                  index: index,
-                  child: _AdminCustomerTile(
-                    user: user,
-                    canToggle: user.uid != appState.profile?.uid,
-                    onActiveChanged: (value) =>
-                        appState.firestoreService.blockUser(
-                      user.uid,
-                      !value,
-                    ),
+              children: [
+                _AdminSectionHeader(
+                  title: 'Total customers (${allCustomers.length})',
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _searchController,
+                  onChanged: (value) {
+                    setState(() => _query = value.trim().toLowerCase());
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Search by name, phone, or address',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _query = '');
+                            },
+                            icon: const Icon(Icons.close),
+                          ),
                   ),
-                );
-              },
+                ),
+                const SizedBox(height: 12),
+                if (allCustomers.isEmpty)
+                  const _AdminCard(
+                    child: EmptyState(
+                      icon: Icons.people_outline,
+                      title: 'No customers',
+                      message: 'Registered users will appear here.',
+                    ),
+                  )
+                else if (users.isEmpty)
+                  const _AdminCard(
+                    child: EmptyState(
+                      icon: Icons.person_search_outlined,
+                      title: 'No matching customers',
+                      message: 'Try a different search.',
+                    ),
+                  )
+                else
+                  ...users.asMap().entries.map((entry) {
+                    final user = entry.value;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _AdminReveal(
+                        index: entry.key,
+                        child: _AdminCustomerTile(
+                          user: user,
+                          canToggle: user.uid != appState.profile?.uid,
+                          onActiveChanged: (value) =>
+                              appState.firestoreService.blockUser(
+                            user.uid,
+                            !value,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+              ],
             );
           },
         ),
