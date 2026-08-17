@@ -1163,6 +1163,13 @@ class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
   var _offerCount = 0;
   var _dragDistance = 0.0;
   var _isForward = true;
+  late final Stream<List<Offer>> _offersStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _offersStream = context.read<AppState>().firestoreService.watchOffers();
+  }
 
   @override
   void dispose() {
@@ -1172,9 +1179,8 @@ class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    final appState = context.read<AppState>();
     return StreamBuilder<List<Offer>>(
-      stream: appState.firestoreService.watchOffers(),
+      stream: _offersStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const _OfferCarouselSkeleton();
@@ -1455,7 +1461,9 @@ class _HomeOfferBanner extends StatelessWidget {
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            context.t('New offer'),
+                            offer.badgeTag.isNotEmpty
+                                ? offer.badgeTag
+                                : context.t('New offer'),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(

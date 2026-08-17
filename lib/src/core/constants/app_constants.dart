@@ -105,6 +105,18 @@ class AppConstants {
     productUnitOther,
   ];
 
+  static const offerTagOther = 'Custom';
+  static const offerTagMaxLength = 24;
+  static const offerTags = <String>[
+    'New Offer',
+    'Offer',
+    'Ad',
+    'Special',
+    'Limited Time',
+    'Promotion',
+    offerTagOther,
+  ];
+
   static const productCategories = <String>[
     'Vegetables',
     'Fruits',

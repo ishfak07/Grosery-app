@@ -1,3 +1,4 @@
+import '../constants/app_constants.dart';
 import 'phone_utils.dart';
 
 class Validators {
@@ -8,6 +9,18 @@ class Validators {
       return '$label is required';
     }
     return null;
+  }
+
+  static String? maxLength(String? value, String label, int max) {
+    if (value != null && value.trim().length > max) {
+      return '$label must be $max characters or fewer';
+    }
+    return null;
+  }
+
+  static String? offerTag(String? value) {
+    return requiredText(value, 'Offer tag') ??
+        maxLength(value, 'Offer tag', AppConstants.offerTagMaxLength);
   }
 
   static String? phone(String? value) {

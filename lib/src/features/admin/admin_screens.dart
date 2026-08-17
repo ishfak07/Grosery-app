@@ -5256,9 +5256,11 @@ class _AdminOfferFormScreenState extends State<AdminOfferFormScreen> {
   final _tamilTitle = TextEditingController();
   final _caption = TextEditingController();
   final _tamilCaption = TextEditingController();
+  final _customTag = TextEditingController();
   String? _imagePath;
   DateTime? _startDate;
   DateTime? _endDate;
+  String _tag = AppConstants.offerTags.first;
   var _isActive = true;
   var _isSaving = false;
 
@@ -5274,6 +5276,16 @@ class _AdminOfferFormScreenState extends State<AdminOfferFormScreen> {
       _startDate = offer.startDate;
       _endDate = offer.endDate;
       _isActive = offer.isActive;
+      final existingTag = offer.badgeTag;
+      if (existingTag.isEmpty) {
+        _tag = AppConstants.offerTags.first;
+      } else if (existingTag != AppConstants.offerTagOther &&
+          AppConstants.offerTags.contains(existingTag)) {
+        _tag = existingTag;
+      } else {
+        _tag = AppConstants.offerTagOther;
+        _customTag.text = existingTag;
+      }
     }
   }
 
@@ -5283,8 +5295,11 @@ class _AdminOfferFormScreenState extends State<AdminOfferFormScreen> {
     _tamilTitle.dispose();
     _caption.dispose();
     _tamilCaption.dispose();
+    _customTag.dispose();
     super.dispose();
   }
+
+  bool get _isCustomTag => _tag == AppConstants.offerTagOther;
 
   @override
   Widget build(BuildContext context) {
@@ -5348,6 +5363,36 @@ class _AdminOfferFormScreenState extends State<AdminOfferFormScreen> {
                         maxLines: 3,
                         prefixIcon: Icons.translate,
                       ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        initialValue: _tag,
+                        decoration: const InputDecoration(
+                          labelText: 'Offer tag',
+                          prefixIcon: Icon(Icons.sell_outlined),
+                        ),
+                        items: AppConstants.offerTags
+                            .map(
+                              (tag) => DropdownMenuItem(
+                                value: tag,
+                                child: Text(tag),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _tag = value);
+                          }
+                        },
+                      ),
+                      if (_isCustomTag) ...[
+                        const SizedBox(height: 10),
+                        AppTextField(
+                          controller: _customTag,
+                          label: 'Custom tag',
+                          validator: Validators.offerTag,
+                          prefixIcon: Icons.edit_outlined,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -5573,6 +5618,7 @@ class _AdminOfferFormScreenState extends State<AdminOfferFormScreen> {
         isActive: _isActive,
         startDate: _startDate,
         endDate: _endDate,
+        tag: _isCustomTag ? _customTag.text.trim() : _tag,
       );
       await appState.firestoreService.saveOffer(offer);
       if (mounted) {

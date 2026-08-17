@@ -600,6 +600,7 @@ class Offer {
     required this.isActive,
     this.startDate,
     this.endDate,
+    this.tag,
   });
 
   final String offerId;
@@ -613,6 +614,15 @@ class Offer {
   final bool isActive;
   final DateTime? startDate;
   final DateTime? endDate;
+
+  /// Admin-customizable badge text shown on the customer home-screen banner
+  /// (e.g. "Ad", "Special", "Weekend Offer"). Null/blank on offers created
+  /// before this field existed, or if the admin left it unset.
+  final String? tag;
+
+  /// The tag text to display, or empty if none was set — callers fall back
+  /// to a localized default (e.g. "New offer") when this is empty.
+  String get badgeTag => tag?.trim() ?? '';
 
   String localizedTitle(String languageCode) {
     if (AppLanguageCodes.normalize(languageCode) == AppLanguageCodes.tamil &&
@@ -656,6 +666,7 @@ class Offer {
       'isActive': isActive,
       'startDate': startDate == null ? null : _writeDate(startDate!),
       'endDate': endDate == null ? null : _writeDate(endDate!),
+      'tag': tag,
     };
   }
 
@@ -672,6 +683,7 @@ class Offer {
       isActive: map['isActive'] as bool? ?? true,
       startDate: _readOptionalDate(map['startDate']),
       endDate: _readOptionalDate(map['endDate']),
+      tag: map['tag'] as String?,
     );
   }
 }
