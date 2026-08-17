@@ -97,6 +97,50 @@ void main() {
     });
   });
 
+  group('Photo-only offers (image required, everything else optional)', () {
+    test('an offer with only an image and a tag round-trips cleanly', () {
+      final photoOnly = Offer(
+        offerId: 'offer-photo',
+        title: '',
+        tamilTitle: '',
+        caption: '',
+        tamilCaption: '',
+        imageUrl: 'https://example.com/photo-only.jpg',
+        imagePublicId: 'offer-photo',
+        createdAt: DateTime(2026, 2, 1),
+        isActive: true,
+        tag: 'Ad',
+      );
+
+      expect(photoOnly.imageUrl, isNotEmpty);
+      expect(photoOnly.title, isEmpty);
+      expect(photoOnly.caption, isEmpty);
+      expect(photoOnly.badgeTag, 'Ad');
+
+      final restored = Offer.fromMap(photoOnly.toMap(), photoOnly.offerId);
+      expect(restored.title, isEmpty);
+      expect(restored.caption, isEmpty);
+      expect(restored.badgeTag, 'Ad');
+    });
+
+    test('a photo-only offer without a tag still falls back to "New offer"',
+        () {
+      final photoOnly = Offer(
+        offerId: 'offer-photo-2',
+        title: '',
+        tamilTitle: '',
+        caption: '',
+        tamilCaption: '',
+        imageUrl: 'https://example.com/photo-only-2.jpg',
+        imagePublicId: 'offer-photo-2',
+        createdAt: DateTime(2026, 2, 1),
+        isActive: true,
+      );
+
+      expect(photoOnly.badgeTag, isEmpty);
+    });
+  });
+
   group('AppConstants.offerTags', () {
     test('includes the required preset options', () {
       expect(

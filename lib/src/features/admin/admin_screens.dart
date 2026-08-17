@@ -5079,7 +5079,7 @@ class AdminOfferManagementScreen extends StatelessWidget {
         return AlertDialog(
           title: const Text('Remove offer?'),
           content: Text(
-            'This will permanently remove "${offer.title}" from the home page offers.',
+            'This will permanently remove "${_offerLabel(offer)}" from the home page offers.',
           ),
           actions: [
             TextButton(
@@ -5155,7 +5155,7 @@ class _AdminOfferTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  offer.title,
+                  _offerLabel(offer),
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: _adminInk,
@@ -5174,17 +5174,19 @@ class _AdminOfferTile extends StatelessWidget {
                     ),
                   ),
                 ],
-                const SizedBox(height: 4),
-                Text(
-                  offer.caption,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _adminMuted,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
+                if (offer.caption.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    offer.caption,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _adminMuted,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
                   ),
-                ),
+                ],
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -5332,27 +5334,19 @@ class _AdminOfferFormScreenState extends State<AdminOfferFormScreen> {
                       ),
                       AppTextField(
                         controller: _title,
-                        label: 'Offer title',
-                        validator: (value) => Validators.requiredText(
-                          value,
-                          'Offer title',
-                        ),
+                        label: 'Offer title (optional)',
                         prefixIcon: Icons.title,
                       ),
                       const SizedBox(height: 10),
                       AppTextField(
                         controller: _tamilTitle,
-                        label: 'Tamil offer title',
+                        label: 'Tamil offer title (optional)',
                         prefixIcon: Icons.translate,
                       ),
                       const SizedBox(height: 10),
                       AppTextField(
                         controller: _caption,
-                        label: 'Caption',
-                        validator: (value) => Validators.requiredText(
-                          value,
-                          'Caption',
-                        ),
+                        label: 'Caption (optional)',
                         maxLines: 3,
                         prefixIcon: Icons.notes,
                       ),
@@ -5649,7 +5643,7 @@ class _AdminOfferFormScreenState extends State<AdminOfferFormScreen> {
         return AlertDialog(
           title: const Text('Remove offer?'),
           content: Text(
-            'This will permanently remove "${offer.title}" from the home page offers.',
+            'This will permanently remove "${_offerLabel(offer)}" from the home page offers.',
           ),
           actions: [
             TextButton(
@@ -5777,6 +5771,16 @@ String? _offerDateLabel(Offer offer) {
     return 'From ${formatter.format(startDate)}';
   }
   return 'Until ${formatter.format(endDate!)}';
+}
+
+String _offerLabel(Offer offer) {
+  if (offer.title.trim().isNotEmpty) {
+    return offer.title;
+  }
+  if (offer.badgeTag.isNotEmpty) {
+    return offer.badgeTag;
+  }
+  return 'this photo offer';
 }
 
 class AdminProductManagementScreen extends StatelessWidget {

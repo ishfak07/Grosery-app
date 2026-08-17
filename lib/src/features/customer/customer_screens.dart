@@ -1397,6 +1397,8 @@ class _HomeOfferBanner extends StatelessWidget {
     final languageCode = appState.effectiveLanguageCode;
     final title = offer.localizedTitle(languageCode);
     final caption = offer.localizedCaption(languageCode);
+    final hasTitle = title.trim().isNotEmpty;
+    final hasCaption = caption.trim().isNotEmpty;
     final dateLabel = _offerDateLabel(offer);
     final radius = BorderRadius.circular(8);
     return _Pressable(
@@ -1475,28 +1477,31 @@ class _HomeOfferBanner extends StatelessWidget {
                         ),
                       ),
                       const Spacer(),
-                      Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0,
-                              height: 1.06,
-                            ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        caption,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          fontWeight: FontWeight.w700,
-                          height: 1.24,
+                      if (hasTitle)
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0,
+                                    height: 1.06,
+                                  ),
                         ),
-                      ),
+                      if (hasTitle && hasCaption) const SizedBox(height: 6),
+                      if (hasCaption)
+                        Text(
+                          caption,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            fontWeight: FontWeight.w700,
+                            height: 1.24,
+                          ),
+                        ),
                       if (dateLabel != null) ...[
                         const SizedBox(height: 10),
                         Container(
@@ -1572,6 +1577,8 @@ class OfferDetailsScreen extends StatelessWidget {
     final languageCode = appState.effectiveLanguageCode;
     final title = offer.localizedTitle(languageCode);
     final caption = offer.localizedCaption(languageCode);
+    final hasTitle = title.trim().isNotEmpty;
+    final hasCaption = caption.trim().isNotEmpty;
     final dateLabel = _offerDateLabel(offer);
     return _CustomerScaffold(
       title: 'Offer details',
@@ -1582,15 +1589,16 @@ class OfferDetailsScreen extends StatelessWidget {
             child: ProductImage(url: offer.imageUrl),
           ),
           const SizedBox(height: 16),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: _customerInk,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0,
-                  height: 1.12,
-                ),
-          ),
+          if (hasTitle)
+            Text(
+              title,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0,
+                    height: 1.12,
+                  ),
+            ),
           if (dateLabel != null) ...[
             const SizedBox(height: 10),
             Row(
@@ -1613,15 +1621,17 @@ class OfferDetailsScreen extends StatelessWidget {
               ],
             ),
           ],
-          const SizedBox(height: 14),
-          Text(
-            caption,
-            style: const TextStyle(
-              color: _customerInk,
-              fontWeight: FontWeight.w600,
-              height: 1.45,
+          if (hasCaption) ...[
+            const SizedBox(height: 14),
+            Text(
+              caption,
+              style: const TextStyle(
+                color: _customerInk,
+                fontWeight: FontWeight.w600,
+                height: 1.45,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
