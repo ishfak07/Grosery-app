@@ -54,9 +54,16 @@ def _build_service(service_account_json: str):
     creds = service_account.Credentials.from_service_account_file(
         service_account_json, scopes=SCOPES
     )
-    authed_http = AuthorizedHttp(
-        creds, http=httplib2.Http(timeout=HTTP_TIMEOUT_SECONDS)
-    )
+    http = httplib2.Http(timeout=HTTP_TIMEOUT_SECONDS)
+    # Google's resumable-upload protocol reuses HTTP 308 for "Resume
+    # Incomplete" chunk-acknowledgement responses, which never carry a
+    # Location header. httplib2 treats 308 as a redirect by default and
+    # raises RedirectMissingLocation when one's missing — that's the
+    # "Redirected but the response is missing a Location: header." crash
+    # seen mid-upload. Disabling follow_redirects lets next_chunk() see the
+    # raw 308 status directly, which is how it detects "keep uploading".
+    http.follow_redirects = False
+    authed_http = AuthorizedHttp(creds, http=http)
     return build("androidpublisher", "v3", http=authed_http, cache_discovery=False)
 
 
