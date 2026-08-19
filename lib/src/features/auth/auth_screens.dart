@@ -701,6 +701,26 @@ class _LoginScreenState extends State<LoginScreen> {
               : null,
           child: Text(context.t('Forgot password?')),
         ),
+        if (appState.passwordResetTracker != null) ...[
+          const SizedBox(height: 12),
+          _PasswordResetTrackerCard(
+            status: appState.passwordResetTracker!,
+            isRefreshing: appState.isCheckingPasswordResetTracker,
+            onRefresh: () => appState.refreshPasswordResetTracker(),
+            onContinue: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ResetPasswordScreen(
+                  phone: appState.passwordResetTracker!.phone,
+                ),
+              ),
+            ),
+            onSubmitNew: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const ForgotPasswordPhoneScreen(),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -726,6 +746,172 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     }
   }
+}
+
+/// The Login-page "Password Reset Request" tracker (see AppState.
+/// passwordResetTracker). Only rendered when there is an active/recent
+/// request to show — the customer never has to leave the Login page to
+/// check on a submitted request.
+class _PasswordResetTrackerCard extends StatelessWidget {
+  const _PasswordResetTrackerCard({
+    required this.status,
+    required this.isRefreshing,
+    required this.onRefresh,
+    required this.onContinue,
+    required this.onSubmitNew,
+  });
+
+  final PasswordResetStatusResult status;
+  final bool isRefreshing;
+  final VoidCallback onRefresh;
+  final VoidCallback onContinue;
+  final VoidCallback onSubmitNew;
+
+  @override
+  Widget build(BuildContext context) {
+    final visuals = _resetTrackerVisuals(status);
+    return _AuthCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: visuals.background,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(visuals.icon, color: visuals.color, size: 22),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  context.t('Password Reset Request'),
+                  style: const TextStyle(
+                    color: _authInk,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${context.t('Status')}: ${context.t(visuals.statusLabel)}',
+            style: TextStyle(
+              color: visuals.color,
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            context.t(visuals.message),
+            style: const TextStyle(
+              color: _authMuted,
+              fontWeight: FontWeight.w600,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (status.isApproved)
+            PrimaryActionButton(
+              label: 'Continue password reset',
+              icon: Icons.arrow_forward,
+              isLoading: false,
+              onPressed: onContinue,
+            )
+          else if (status.isRejected || status.isExpired)
+            OutlinedButton.icon(
+              onPressed: onSubmitNew,
+              icon: const Icon(Icons.refresh),
+              label: Text(context.t('Submit new request')),
+            )
+          else if (!status.isCompleted)
+            OutlinedButton.icon(
+              onPressed: isRefreshing ? null : onRefresh,
+              icon: isRefreshing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh),
+              label: Text(
+                context.t(isRefreshing ? 'Checking' : 'Refresh status'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResetTrackerVisuals {
+  const _ResetTrackerVisuals({
+    required this.icon,
+    required this.color,
+    required this.background,
+    required this.statusLabel,
+    required this.message,
+  });
+
+  final IconData icon;
+  final Color color;
+  final Color background;
+  final String statusLabel;
+  final String message;
+}
+
+_ResetTrackerVisuals _resetTrackerVisuals(PasswordResetStatusResult status) {
+  if (status.isApproved) {
+    return const _ResetTrackerVisuals(
+      icon: Icons.check_circle,
+      color: _authPrimary,
+      background: _authPrimaryLight,
+      statusLabel: 'Approved',
+      message:
+          'Your password reset request has been approved. You can now create a new password.',
+    );
+  }
+  if (status.isRejected) {
+    return const _ResetTrackerVisuals(
+      icon: Icons.error_outline,
+      color: Color(0xFFC83A2B),
+      background: Color(0xFFFBEAE8),
+      statusLabel: 'Rejected',
+      message:
+          'Your password reset request was not approved. Please submit a new request if needed.',
+    );
+  }
+  if (status.isExpired) {
+    return const _ResetTrackerVisuals(
+      icon: Icons.timer_off_outlined,
+      color: Color(0xFF6B7280),
+      background: Color(0xFFF1F2F4),
+      statusLabel: 'Expired',
+      message: 'This password reset approval has expired. Please submit a new request.',
+    );
+  }
+  if (status.isCompleted) {
+    return const _ResetTrackerVisuals(
+      icon: Icons.check_circle_outline,
+      color: _authPrimary,
+      background: _authPrimaryLight,
+      statusLabel: 'Completed',
+      message: 'Password updated successfully. Please sign in with your new password.',
+    );
+  }
+  return const _ResetTrackerVisuals(
+    icon: Icons.hourglass_top,
+    color: _authAccent,
+    background: Color(0xFFFFF5E5),
+    statusLabel: 'Pending',
+    message: 'Your request has been sent and is waiting for admin approval.',
+  );
 }
 
 class ForgotPasswordPhoneScreen extends StatefulWidget {
@@ -790,17 +976,18 @@ class _ForgotPasswordPhoneScreenState extends State<ForgotPasswordPhoneScreen> {
     setState(() => _isLoading = true);
     try {
       final phone = PhoneUtils.normalizeSriLankanPhone(_phone.text);
-      final status = await context
-          .read<AppState>()
-          .authService
-          .requestPasswordReset(phone);
+      final appState = context.read<AppState>();
+      final status = await appState.authService.requestPasswordReset(phone);
+      await appState.trackPasswordResetRequest(status);
       if (!mounted) {
         return;
       }
       showSnack(context, status.message);
-      await Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => ResetPasswordScreen(phone: phone)),
-      );
+      // Back to the Login page: the Password Reset Request tracker there
+      // (driven by AppState.passwordResetTracker) picks this request up
+      // automatically, so the customer never has to return to this screen
+      // to check on it.
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (error) {
       if (mounted) {
         showSnack(context, error.toString());

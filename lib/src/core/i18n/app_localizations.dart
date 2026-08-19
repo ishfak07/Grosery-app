@@ -174,6 +174,24 @@ const _tamil = <String, String>{
       'கடவுச்சொல் ஏற்கனவே புதுப்பிக்கப்பட்டது. புதிய கடவுச்சொல்லுடன் உள்நுழையுங்கள்.',
   'Pending admin approval.': 'அட்மின் அனுமதி நிலுவையில் உள்ளது.',
   'Password updated.': 'கடவுச்சொல் புதுப்பிக்கப்பட்டது.',
+  'Password Reset Request': 'கடவுச்சொல் மீட்டமைப்பு கோரிக்கை',
+  'Status': 'நிலை',
+  'Approved': 'அனுமதிக்கப்பட்டது',
+  'Completed': 'முடிக்கப்பட்டது',
+  'Expired': 'காலாவதியானது',
+  'Your password reset request has been approved. You can now create a new password.':
+      'உங்கள் கடவுச்சொல் மீட்டமைப்பு கோரிக்கை அனுமதிக்கப்பட்டது. இப்போது புதிய கடவுச்சொல்லை உருவாக்கலாம்.',
+  'Your password reset request was not approved. Please submit a new request if needed.':
+      'உங்கள் கடவுச்சொல் மீட்டமைப்பு கோரிக்கை அனுமதிக்கப்படவில்லை. தேவைப்பட்டால் புதிய கோரிக்கையை சமர்ப்பிக்கவும்.',
+  'This password reset approval has expired. Please submit a new request.':
+      'இந்த கடவுச்சொல் மீட்டமைப்பு அனுமதி காலாவதியானது. புதிய கோரிக்கையை சமர்ப்பிக்கவும்.',
+  'Password updated successfully. Please sign in with your new password.':
+      'கடவுச்சொல் வெற்றிகரமாக புதுப்பிக்கப்பட்டது. உங்கள் புதிய கடவுச்சொல்லுடன் உள்நுழையவும்.',
+  'Your request has been sent and is waiting for admin approval.':
+      'உங்கள் கோரிக்கை அனுப்பப்பட்டது, அட்மின் அனுமதிக்காக காத்திருக்கிறது.',
+  'Continue password reset': 'கடவுச்சொல் மீட்டமைப்பைத் தொடரவும்',
+  'Submit new request': 'புதிய கோரிக்கையை சமர்ப்பிக்கவும்',
+  'Refresh status': 'நிலையை புதுப்பிக்கவும்',
   'Home': 'முகப்பு',
   'Orders': 'ஆர்டர்கள்',
   'Support': 'ஆதரவு',

@@ -88,6 +88,8 @@ class AppState extends ChangeNotifier {
   bool _hasLoadedPaymentSettings = false;
   String? _notificationsConfiguredForProfileKey;
   String _preferredLanguageCode = AppLanguageCodes.english;
+  PasswordResetStatusResult? _passwordResetTracker;
+  bool _isCheckingPasswordResetTracker = false;
 
   bool get isInitializing => _isInitializing;
   bool get isLoggingOut => _isLoggingOut;
@@ -115,6 +117,8 @@ class AppState extends ChangeNotifier {
       _shopHoursSettings.temporaryClosureReason;
   PaymentSettings get paymentSettings => _paymentSettings;
   bool get hasLoadedPaymentSettings => _hasLoadedPaymentSettings;
+  PasswordResetStatusResult? get passwordResetTracker => _passwordResetTracker;
+  bool get isCheckingPasswordResetTracker => _isCheckingPasswordResetTracker;
   int get cartCount =>
       _cartItems.fold<int>(0, (sum, item) => sum + item.quantity);
 
@@ -176,6 +180,10 @@ class AppState extends ChangeNotifier {
         await localStorageService.loadPreferredLanguageCode();
 
     if (firebaseAvailable) {
+      // Fire-and-forget: the Login page should not wait on a network round
+      // trip to render. It rebuilds via notifyListeners() once this
+      // resolves, so the tracker just pops in when ready.
+      unawaited(_loadPasswordResetTracker());
       final requestNotificationPermission =
           !(await localStorageService.hasRequestedNotificationPermission());
       await notificationService.initialize(
@@ -455,7 +463,78 @@ class AppState extends ChangeNotifier {
     _watchProductCatalog();
     notifyListeners();
     await _configureNotificationsForProfile(user);
+    // A password-reset tracker is only useful pre-login; once the customer
+    // is back in the app (whether via normal login or the auto-login at the
+    // end of a completed reset), it has done its job.
+    await clearPasswordResetTracker();
     return user;
+  }
+
+  /// Called once after a Forgot Password submission returns a fresh or
+  /// reused request, so the Login page can show it immediately without the
+  /// customer navigating back into Forgot Password to check.
+  Future<void> trackPasswordResetRequest(
+    PasswordResetStatusResult status,
+  ) async {
+    if (status.requestId.isEmpty) {
+      return;
+    }
+    await localStorageService.savePasswordResetRequestId(status.requestId);
+    _passwordResetTracker = status;
+    notifyListeners();
+  }
+
+  /// Re-fetches the tracked request's status through the secure
+  /// requestId-based callable (never by phone number) and updates the
+  /// Login-page tracker. Terminal states (rejected/expired/completed) clear
+  /// the saved reference so a stale request doesn't linger forever, while
+  /// still leaving the terminal result visible for this session so the
+  /// customer sees why before it disappears.
+  Future<void> refreshPasswordResetTracker() async {
+    final requestId = _passwordResetTracker?.requestId ??
+        await localStorageService.loadPasswordResetRequestId();
+    if (requestId == null || requestId.isEmpty) {
+      return;
+    }
+    _isCheckingPasswordResetTracker = true;
+    notifyListeners();
+    try {
+      final status =
+          await authService.fetchPasswordResetStatusByRequestId(requestId);
+      _passwordResetTracker = status;
+      if (status.isRejected || status.isExpired || status.isCompleted) {
+        await localStorageService.clearPasswordResetRequestId();
+      }
+    } on PasswordResetRequestNotFoundException {
+      // The server has explicitly confirmed this specific id is gone -
+      // safe to drop, unlike any other failure below.
+      await localStorageService.clearPasswordResetRequestId();
+      _passwordResetTracker = null;
+    } catch (_) {
+      // A transient failure (offline, the callable not deployed yet, etc.)
+      // is not proof the request is invalid - keep showing the last known
+      // state instead of making an otherwise-valid tracker vanish.
+    } finally {
+      _isCheckingPasswordResetTracker = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> clearPasswordResetTracker() async {
+    if (_passwordResetTracker == null) {
+      return;
+    }
+    await localStorageService.clearPasswordResetRequestId();
+    _passwordResetTracker = null;
+    notifyListeners();
+  }
+
+  Future<void> _loadPasswordResetTracker() async {
+    final requestId = await localStorageService.loadPasswordResetRequestId();
+    if (requestId == null || requestId.isEmpty) {
+      return;
+    }
+    await refreshPasswordResetTracker();
   }
 
   Future<void> logout() async {

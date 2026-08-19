@@ -16,6 +16,18 @@ class AuthServiceException implements Exception {
   String toString() => message;
 }
 
+/// Thrown only when the server has explicitly confirmed a tracked
+/// password-reset request id does not exist (a genuine app-level
+/// not-found from getPasswordResetStatusByRequestId) - as opposed to any
+/// other failure (offline, the callable not deployed yet, etc.), which
+/// throws a plain [AuthServiceException] instead. Callers use this
+/// distinction to know when it's actually safe to drop a saved tracking
+/// reference versus when they should just retry later.
+class PasswordResetRequestNotFoundException extends AuthServiceException {
+  const PasswordResetRequestNotFoundException()
+      : super('Reset request not found.');
+}
+
 class PasswordResetStatusResult {
   const PasswordResetStatusResult({
     required this.requestId,
@@ -35,6 +47,7 @@ class PasswordResetStatusResult {
   bool get isPending => status == 'pending';
   bool get isRejected => status == 'rejected';
   bool get isCompleted => status == 'completed';
+  bool get isExpired => status == 'expired';
 
   factory PasswordResetStatusResult.fromMap(Map<dynamic, dynamic> map) {
     return PasswordResetStatusResult(
@@ -169,6 +182,28 @@ class AuthService {
       'getPasswordResetStatus',
       {'phone': PhoneUtils.normalizeSriLankanPhone(phone)},
     );
+  }
+
+  /// Looks up status by the opaque reset-request id instead of phone number,
+  /// so the Login-page tracker can safely re-check a request (including
+  /// after an app restart) without needing to ask the customer for their
+  /// phone number again, and without adding a phone-based lookup surface.
+  Future<PasswordResetStatusResult> fetchPasswordResetStatusByRequestId(
+    String requestId,
+  ) async {
+    try {
+      final result = await _functions
+          .httpsCallable('getPasswordResetStatusByRequestId')
+          .call({'requestId': requestId});
+      return PasswordResetStatusResult.fromMap(
+        result.data as Map<dynamic, dynamic>,
+      );
+    } on FirebaseFunctionsException catch (error) {
+      if (error.code == 'not-found' && !_isCallableFunctionNotDeployed(error)) {
+        throw const PasswordResetRequestNotFoundException();
+      }
+      throw AuthServiceException(_functionsErrorMessage(error));
+    }
   }
 
   Future<void> completeApprovedPasswordReset({

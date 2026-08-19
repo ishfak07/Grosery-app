@@ -1853,6 +1853,7 @@ class PasswordResetRequest {
     this.completedAt,
     this.rejectedAt,
     this.approvedAt,
+    this.expiresAt,
   });
 
   final String requestId;
@@ -1868,11 +1869,23 @@ class PasswordResetRequest {
   final DateTime? completedAt;
   final DateTime? rejectedAt;
   final DateTime? approvedAt;
+  final DateTime? expiresAt;
 
   bool get isPending => status == 'pending';
   bool get isApproved => status == 'approved';
   bool get isCompleted => status == 'completed';
   bool get isRejected => status == 'rejected';
+
+  /// An approval is only valid until [expiresAt]. Requests approved before
+  /// this field existed have no [expiresAt] and never expire client-side —
+  /// the backend applies the same rule (see lib/passwordReset.js in
+  /// functions/) and is the actual authority; this is for admin display only.
+  bool get isApprovalExpired =>
+      status == 'approved' &&
+      expiresAt != null &&
+      expiresAt!.isBefore(DateTime.now());
+
+  String get effectiveStatus => isApprovalExpired ? 'expired' : status;
 
   factory PasswordResetRequest.fromMap(Map<String, dynamic> map, String id) {
     return PasswordResetRequest(
@@ -1892,6 +1905,8 @@ class PasswordResetRequest {
           map['rejectedAt'] == null ? null : _readDate(map['rejectedAt']),
       completedAt:
           map['completedAt'] == null ? null : _readDate(map['completedAt']),
+      expiresAt:
+          map['expiresAt'] == null ? null : _readDate(map['expiresAt']),
     );
   }
 }

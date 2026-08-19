@@ -12,6 +12,13 @@ const {
   TERMINAL_ORDER_STATUSES,
   applyCatalogPriceToOrder,
 } = require("./lib/orderPriceSync");
+const {
+  isApprovalExpired,
+  effectivePasswordResetStatus,
+  isActivePasswordResetRequest,
+  passwordResetApprovalExpiresAtMillis,
+  passwordResetStatusMessage,
+} = require("./lib/passwordReset");
 
 admin.initializeApp();
 
@@ -583,12 +590,15 @@ exports.requestPasswordReset = onCall(async (request) => {
     "pending",
     "approved",
   ]);
-  if (active) {
-    return resetStatusPayload(
-      active.id,
-      active.data(),
-      passwordResetStatusMessage(active.data().status),
-    );
+  if (
+    active &&
+    isActivePasswordResetRequest(
+      active.data().status,
+      timestampMillis(active.data().expiresAt),
+      Date.now(),
+    )
+  ) {
+    return passwordResetStatusPayload(active.id, active.data());
   }
 
   const userDoc = await admin
@@ -628,11 +638,9 @@ exports.requestPasswordReset = onCall(async (request) => {
   });
   await batch.commit();
 
-  return resetStatusPayload(
-    requestRef.id,
-    resetRequest,
-    "Password reset request sent. Wait for admin approval.",
-  );
+  const payload = passwordResetStatusPayload(requestRef.id, resetRequest);
+  payload.message = "Password reset request sent. Wait for admin approval.";
+  return payload;
 });
 
 exports.getPasswordResetStatus = onCall(async (request) => {
@@ -648,12 +656,27 @@ exports.getPasswordResetStatus = onCall(async (request) => {
     );
   }
 
-  const data = latest.data();
-  return resetStatusPayload(
-    latest.id,
-    data,
-    passwordResetStatusMessage(data.status),
-  );
+  return passwordResetStatusPayload(latest.id, latest.data());
+});
+
+// Lets the Login-page tracker poll status by the opaque, unguessable
+// Firestore request id instead of the phone number, so a device that
+// submitted a request can safely re-check it (including across restarts)
+// without exposing a phone-number-based account-existence oracle for this
+// endpoint. requestId is only ever known to the customer who created it
+// (returned once, in the response to requestPasswordReset) and to admins.
+exports.getPasswordResetStatusByRequestId = onCall(async (request) => {
+  const requestId = assertRequestId(request.data?.requestId);
+  const snapshot = await admin
+    .firestore()
+    .collection("password_reset_requests")
+    .doc(requestId)
+    .get();
+  if (!snapshot.exists) {
+    throw new HttpsError("not-found", "Reset request not found.");
+  }
+
+  return passwordResetStatusPayload(snapshot.id, snapshot.data());
 });
 
 exports.approvePasswordReset = onCall(async (request) => {
@@ -675,12 +698,26 @@ exports.approvePasswordReset = onCall(async (request) => {
   }
 
   const now = admin.firestore.Timestamp.now();
-  await requestRef.update({
+  const expiresAt = admin.firestore.Timestamp.fromMillis(
+    passwordResetApprovalExpiresAtMillis(now.toMillis()),
+  );
+  const batch = admin.firestore().batch();
+  batch.update(requestRef, {
     status: "approved",
     approvedBy: adminUid,
     approvedAt: now,
     updatedAt: now,
+    expiresAt,
   });
+  notifyCustomerOfResetDecision(batch, {
+    request: snapshot,
+    requestId,
+    now,
+    title: "Password reset approved",
+    body: "Your password reset request has been approved. Continue from the Login screen.",
+    type: "password_reset_approved",
+  });
+  await batch.commit();
   return {ok: true};
 });
 
@@ -703,12 +740,22 @@ exports.rejectPasswordReset = onCall(async (request) => {
   }
 
   const now = admin.firestore.Timestamp.now();
-  await requestRef.update({
+  const batch = admin.firestore().batch();
+  batch.update(requestRef, {
     status: "rejected",
     rejectedBy: adminUid,
     rejectedAt: now,
     updatedAt: now,
   });
+  notifyCustomerOfResetDecision(batch, {
+    request: snapshot,
+    requestId,
+    now,
+    title: "Password reset request update",
+    body: "Your password reset request was not approved.",
+    type: "password_reset_rejected",
+  });
+  await batch.commit();
   return {ok: true};
 });
 
@@ -725,10 +772,17 @@ exports.completeApprovedPasswordReset = onCall(async (request) => {
 
   const hiddenEmail = hiddenEmailForPhone(phone);
   const latest = await findLatestResetRequest(hiddenEmail, ["approved"]);
-  if (!latest) {
+  if (
+    !latest ||
+    isApprovalExpired(
+      latest.data().status,
+      timestampMillis(latest.data().expiresAt),
+      Date.now(),
+    )
+  ) {
     throw new HttpsError(
       "failed-precondition",
-      "Admin has not approved this password reset yet.",
+      "Admin has not approved this password reset yet, or the approval has expired.",
     );
   }
 
@@ -2408,25 +2462,44 @@ function timestampMillis(value) {
   return value && typeof value.toMillis === "function" ? value.toMillis() : 0;
 }
 
-function resetStatusPayload(requestId, data, message) {
+// Single place that turns a raw Firestore reset-request doc into the
+// customer-facing payload. Applies the expiry rule from lib/passwordReset.js
+// so a stale "approved" status field never leaks past the request's actual
+// authorization window, without needing a background job to rewrite it.
+function passwordResetStatusPayload(requestId, data) {
+  const status = effectivePasswordResetStatus(
+    data.status || "pending",
+    timestampMillis(data.expiresAt),
+    Date.now(),
+  );
   return {
     requestId,
-    status: data.status || "pending",
+    status,
     phone: data.phone || "",
     customerName: data.customerName || "",
-    message,
+    message: passwordResetStatusMessage(status),
   };
 }
 
-function passwordResetStatusMessage(status) {
-  switch (status) {
-    case "approved":
-      return "Admin approved your reset. Set a new password.";
-    case "rejected":
-      return "Admin rejected this reset request. Contact support.";
-    case "completed":
-      return "Password already updated. Login with the new password.";
-    default:
-      return "Waiting for admin approval.";
+// Best-effort customer notification reusing the existing notifications ->
+// push pipeline (sendPushForNotification). Added to the same batch as the
+// status update so it can never fire without the status change actually
+// having been written.
+function notifyCustomerOfResetDecision(batch, {request, requestId, now, title, body, type}) {
+  const userId = request.get("userId");
+  if (!userId) {
+    return;
   }
+  const notificationRef = admin.firestore().collection("notifications").doc();
+  batch.set(notificationRef, {
+    notificationId: notificationRef.id,
+    userId,
+    recipientRole: "user",
+    title,
+    body,
+    type,
+    relatedId: requestId,
+    isRead: false,
+    createdAt: now,
+  });
 }

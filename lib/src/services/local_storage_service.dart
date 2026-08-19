@@ -12,6 +12,7 @@ class LocalStorageService {
   static const _preferredLanguageKey = 'preferred_language_code';
   static const _notificationPermissionRequestedKey =
       'notification_permission_requested';
+  static const _passwordResetRequestIdKey = 'password_reset_request_id';
 
   Future<List<CartItem>> loadCart() async {
     final prefs = await SharedPreferences.getInstance();
@@ -107,5 +108,24 @@ class LocalStorageService {
   Future<void> setNotificationPermissionRequested() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_notificationPermissionRequestedKey, true);
+  }
+
+  /// Only the opaque Firestore request id is kept — no phone number, no
+  /// status, nothing else. The id alone lets the Login-page tracker re-check
+  /// this request through a secure Cloud Function without storing anything
+  /// sensitive on the device.
+  Future<String?> loadPasswordResetRequestId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_passwordResetRequestIdKey);
+  }
+
+  Future<void> savePasswordResetRequestId(String requestId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_passwordResetRequestIdKey, requestId);
+  }
+
+  Future<void> clearPasswordResetRequestId() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_passwordResetRequestIdKey);
   }
 }

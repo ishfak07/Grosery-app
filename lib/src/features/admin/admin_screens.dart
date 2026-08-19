@@ -66,6 +66,8 @@ Color _adminStatusColor(String status) {
     case 'replied':
     case 'approved':
       return _adminBlue;
+    case 'expired':
+      return _adminMuted;
     default:
       return _adminMuted;
   }
@@ -8663,7 +8665,7 @@ class _AdminPasswordResetTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = _adminStatusColor(request.status);
+    final statusColor = _adminStatusColor(request.effectiveStatus);
     final requestedAt = DateFormat.yMMMd().add_jm().format(request.createdAt);
     return _AdminCard(
       child: Column(
@@ -8706,7 +8708,7 @@ class _AdminPasswordResetTile extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               _AdminPill(
-                label: request.status,
+                label: request.effectiveStatus,
                 color: statusColor,
                 icon: Icons.circle,
               ),
