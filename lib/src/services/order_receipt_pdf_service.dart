@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
@@ -330,10 +331,29 @@ class OrderReceiptPdfService {
   static String _money(double amount) =>
       '${AppConstants.currency} ${amount.toStringAsFixed(2)}';
 
+  /// The bundled app logo asset is a large (2500x2500px, ~4MB) source PNG
+  /// meant for high-density app icons. Decoding it at full resolution just
+  /// to draw it at ~42pt in the PDF header risks a large memory spike (and
+  /// possible OOM) on lower-end phones, so it's downsampled through
+  /// Flutter's own image codec — which decodes directly at the target size
+  /// instead of decoding full-size first — before handing it to the pure
+  /// -Dart `pdf` package.
   static Future<pw.MemoryImage?> _loadLogo() async {
     try {
       final data = await rootBundle.load(AppConstants.appLogoAsset);
-      return pw.MemoryImage(data.buffer.asUint8List());
+      final codec = await ui.instantiateImageCodec(
+        data.buffer.asUint8List(),
+        targetWidth: 160,
+        targetHeight: 160,
+      );
+      final frame = await codec.getNextFrame();
+      final resized = await frame.image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+      if (resized == null) {
+        return null;
+      }
+      return pw.MemoryImage(resized.buffer.asUint8List());
     } catch (_) {
       return null;
     }
