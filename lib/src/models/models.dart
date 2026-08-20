@@ -547,6 +547,105 @@ class UserProfile {
   }
 }
 
+/// Admin-only remark about a customer — business notes, remarks, or
+/// profit-related details. Stored in a separate `customer_notes` collection
+/// (rather than a field on the user's own document) so ordinary customers,
+/// who can already read their own `users/{uid}` doc, can never see it.
+class CustomerNote {
+  const CustomerNote({
+    required this.id,
+    required this.customerId,
+    required this.text,
+    required this.createdAt,
+    required this.createdByUid,
+    required this.createdByName,
+  });
+
+  final String id;
+  final String customerId;
+  final String text;
+  final DateTime createdAt;
+  final String createdByUid;
+  final String createdByName;
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'customerId': customerId,
+      'text': text,
+      'createdAt': _writeDate(createdAt),
+      'createdByUid': createdByUid,
+      'createdByName': createdByName,
+    };
+  }
+
+  factory CustomerNote.fromMap(Map<String, dynamic> map, String id) {
+    return CustomerNote(
+      id: map['id'] as String? ?? id,
+      customerId: map['customerId'] as String? ?? '',
+      text: map['text'] as String? ?? '',
+      createdAt: _readDate(map['createdAt']),
+      createdByUid: map['createdByUid'] as String? ?? '',
+      createdByName: map['createdByName'] as String? ?? '',
+    );
+  }
+}
+
+/// A private note kept by an admin for their own use (reminders, quick
+/// figures, business info) — not shared with other admins or customers.
+/// Stored in `admin_general_notes`, scoped and restricted by [adminUid] both
+/// in the app and in firestore.rules.
+class AdminNote {
+  const AdminNote({
+    required this.id,
+    required this.adminUid,
+    required this.title,
+    required this.content,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String adminUid;
+  final String title;
+  final String content;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  AdminNote copyWith({String? title, String? content}) {
+    return AdminNote(
+      id: id,
+      adminUid: adminUid,
+      title: title ?? this.title,
+      content: content ?? this.content,
+      createdAt: createdAt,
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'adminUid': adminUid,
+      'title': title,
+      'content': content,
+      'createdAt': _writeDate(createdAt),
+      'updatedAt': _writeDate(updatedAt),
+    };
+  }
+
+  factory AdminNote.fromMap(Map<String, dynamic> map, String id) {
+    return AdminNote(
+      id: map['id'] as String? ?? id,
+      adminUid: map['adminUid'] as String? ?? '',
+      title: map['title'] as String? ?? '',
+      content: map['content'] as String? ?? '',
+      createdAt: _readDate(map['createdAt']),
+      updatedAt: _readDate(map['updatedAt']),
+    );
+  }
+}
+
 class Shop {
   const Shop({
     required this.shopId,

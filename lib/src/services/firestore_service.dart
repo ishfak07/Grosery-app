@@ -26,6 +26,10 @@ class FirestoreService {
       _db.collection('shops');
   CollectionReference<Map<String, dynamic>> get _offers =>
       _db.collection('offers');
+  CollectionReference<Map<String, dynamic>> get _customerNotes =>
+      _db.collection('customer_notes');
+  CollectionReference<Map<String, dynamic>> get _adminNotes =>
+      _db.collection('admin_general_notes');
   CollectionReference<Map<String, dynamic>> get _products =>
       _db.collection('products');
   CollectionReference<Map<String, dynamic>> get _orders =>
@@ -162,6 +166,54 @@ class FirestoreService {
         ..sort((a, b) => a.fullName.compareTo(b.fullName));
       return users;
     });
+  }
+
+  Stream<List<CustomerNote>> watchCustomerNotes(String customerId) {
+    if (!_firebaseAvailable) {
+      return Stream<List<CustomerNote>>.value(const <CustomerNote>[]);
+    }
+    return _customerNotes
+        .where('customerId', isEqualTo: customerId)
+        .snapshots()
+        .map((snapshot) {
+      final notes = snapshot.docs
+          .map((doc) => CustomerNote.fromMap(doc.data(), doc.id))
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return notes;
+    });
+  }
+
+  Future<void> addCustomerNote(CustomerNote note) {
+    return _customerNotes.doc(note.id).set(note.toMap());
+  }
+
+  Future<void> deleteCustomerNote(String noteId) {
+    return _customerNotes.doc(noteId).delete();
+  }
+
+  Stream<List<AdminNote>> watchAdminNotes(String adminUid) {
+    if (!_firebaseAvailable) {
+      return Stream<List<AdminNote>>.value(const <AdminNote>[]);
+    }
+    return _adminNotes
+        .where('adminUid', isEqualTo: adminUid)
+        .snapshots()
+        .map((snapshot) {
+      final notes = snapshot.docs
+          .map((doc) => AdminNote.fromMap(doc.data(), doc.id))
+          .toList()
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      return notes;
+    });
+  }
+
+  Future<void> saveAdminNote(AdminNote note) {
+    return _adminNotes.doc(note.id).set(note.toMap(), SetOptions(merge: true));
+  }
+
+  Future<void> deleteAdminNote(String noteId) {
+    return _adminNotes.doc(noteId).delete();
   }
 
   Stream<List<UserProfile>> watchDeliveryBoys({bool activeOnly = false}) {

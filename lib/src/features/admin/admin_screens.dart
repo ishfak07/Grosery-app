@@ -21,6 +21,8 @@ import '../../services/order_cancellation_service.dart';
 import '../../state/app_state.dart';
 import '../customer/customer_screens.dart';
 import '../order_cancellation/order_cancellation_countdown.dart';
+import 'admin_account_screen.dart';
+import 'admin_customer_detail_screen.dart';
 import 'admin_order_sheet_screen.dart';
 
 const _adminBackground = Color(0xFFF4F7F4);
@@ -914,12 +916,12 @@ class AdminDashboardScreen extends StatelessWidget {
                 ),
                 _AdminTile(
                   icon: Icons.admin_panel_settings_outlined,
-                  title: 'Admin login',
-                  subtitle: 'Reset password',
+                  title: 'Admin Account',
+                  subtitle: 'Login & general notes',
                   accent: _adminPrimary,
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const AdminLoginPasswordResetScreen(),
+                      builder: (_) => const AdminAccountScreen(),
                     ),
                   ),
                 ),
@@ -7003,6 +7005,12 @@ class _AdminCustomerManagementScreenState
                             user.uid,
                             !value,
                           ),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  AdminCustomerDetailScreen(customer: user),
+                            ),
+                          ),
                         ),
                       ),
                     );
@@ -8747,11 +8755,13 @@ class _AdminCustomerTile extends StatelessWidget {
     required this.user,
     required this.canToggle,
     required this.onActiveChanged,
+    this.onTap,
   });
 
   final UserProfile user;
   final bool canToggle;
   final ValueChanged<bool> onActiveChanged;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -8759,6 +8769,7 @@ class _AdminCustomerTile extends StatelessWidget {
     final statusColor =
         user.isBlocked ? const Color(0xFFC83A2B) : _adminPrimary;
     return _AdminCard(
+      onTap: onTap,
       child: Row(
         children: [
           CircleAvatar(

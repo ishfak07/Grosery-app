@@ -228,6 +228,18 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /customer_notes/{noteId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /admin_general_notes/{noteId} {
+      allow read, delete: if isAdmin() && resource.data.adminUid == request.auth.uid;
+      allow create: if isAdmin() && request.resource.data.adminUid == request.auth.uid;
+      allow update: if isAdmin() &&
+        resource.data.adminUid == request.auth.uid &&
+        request.resource.data.adminUid == request.auth.uid;
+    }
+
     match /shops/{shopId} {
       allow read: if signedIn();
       allow write: if isAdmin();

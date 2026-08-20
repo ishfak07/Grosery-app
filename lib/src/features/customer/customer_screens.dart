@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -19,6 +21,7 @@ import '../../core/utils/validators.dart';
 import '../../core/widgets/common_widgets.dart';
 import '../../models/models.dart';
 import '../../services/order_cancellation_service.dart';
+import '../../services/order_receipt_pdf_service.dart';
 import '../../state/app_state.dart';
 import '../order_cancellation/order_cancellation_countdown.dart';
 
@@ -7218,6 +7221,8 @@ class _DeliveredOrderCompletionView extends StatelessWidget {
         const SizedBox(height: 16),
         _OrderContentSections(order: order),
         const SizedBox(height: 18),
+        _OrderReceiptDownloadButton(order: order),
+        const SizedBox(height: 10),
         ElevatedButton.icon(
           onPressed: () =>
               Navigator.of(context).popUntil((route) => route.isFirst),
@@ -7227,6 +7232,61 @@ class _DeliveredOrderCompletionView extends StatelessWidget {
         const SizedBox(height: 8),
         _OrderSupportButton(order: order),
       ],
+    );
+  }
+}
+
+class _OrderReceiptDownloadButton extends StatefulWidget {
+  const _OrderReceiptDownloadButton({required this.order});
+
+  final OrderModel order;
+
+  @override
+  State<_OrderReceiptDownloadButton> createState() =>
+      _OrderReceiptDownloadButtonState();
+}
+
+class _OrderReceiptDownloadButtonState
+    extends State<_OrderReceiptDownloadButton> {
+  Future<Uint8List>? _pdfFuture;
+  var _isDownloading = false;
+
+  Future<Uint8List> _pdfBytes() {
+    return _pdfFuture ??= OrderReceiptPdfService.build(widget.order);
+  }
+
+  Future<void> _download() async {
+    setState(() => _isDownloading = true);
+    try {
+      final bytes = await _pdfBytes();
+      await Printing.layoutPdf(
+        name: OrderReceiptPdfService.fileName(widget.order),
+        onLayout: (_) async => bytes,
+      );
+    } catch (error) {
+      _pdfFuture = null;
+      if (mounted) {
+        showSnack(context, 'Could not create the receipt. Please try again.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: _isDownloading ? null : _download,
+      icon: _isDownloading
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.receipt_long_outlined),
+      label: Text(context.t('Download receipt')),
     );
   }
 }
