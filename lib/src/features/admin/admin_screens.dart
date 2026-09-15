@@ -932,6 +932,17 @@ class AdminDashboardScreen extends StatelessWidget {
                   ),
                 ),
                 _AdminTile(
+                  icon: Icons.currency_rupee,
+                  title: 'Quick prices',
+                  subtitle: 'Edit prices in place',
+                  accent: _adminPrimary,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AdminQuickPriceScreen(),
+                    ),
+                  ),
+                ),
+                _AdminTile(
                   icon: Icons.local_offer_outlined,
                   title: 'Offers',
                   subtitle: 'Home banners',
@@ -6510,6 +6521,414 @@ class _AdminProductTile extends StatelessWidget {
             ],
           ),
           const Icon(Icons.chevron_right, color: _adminMuted),
+        ],
+      ),
+    );
+  }
+}
+
+/// Category-wise price sheet: product name plus an inline price field per
+/// row, nothing else. A price saves as soon as the admin submits the field
+/// or moves focus away, and since every price in the app streams from the
+/// product document, the change applies everywhere at once.
+class AdminQuickPriceScreen extends StatefulWidget {
+  const AdminQuickPriceScreen({super.key});
+
+  @override
+  State<AdminQuickPriceScreen> createState() => _AdminQuickPriceScreenState();
+}
+
+class _AdminQuickPriceScreenState extends State<AdminQuickPriceScreen> {
+  final _search = TextEditingController();
+  String _query = '';
+  Timer? _searchDebounce;
+  final _collapsedCategories = <String>{};
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(_adminSearchDebounce, () {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _query = value.trim());
+    });
+  }
+
+  void _clearSearch() {
+    _searchDebounce?.cancel();
+    _search.clear();
+    setState(() => _query = '');
+  }
+
+  Future<void> _savePrice(Product product, double price) async {
+    try {
+      await context
+          .read<AppState>()
+          .firestoreService
+          .updateProductPrice(product.productId, price);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text('${product.name}: ${price.money}'),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.read<AppState>();
+    return _AdminScaffold(
+      title: 'Quick prices',
+      body: _AdminPage(
+        maxWidth: 760,
+        child: StreamBuilder<List<Product>>(
+          stream: appState.firestoreService.watchProducts(activeOnly: false),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return RefreshableCenteredContent(
+                child: EmptyState(
+                  icon: Icons.error_outline,
+                  title: 'Could not load products',
+                  message: appFriendlyErrorMessage(snapshot.error),
+                ),
+              );
+            }
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const RefreshableCenteredContent(
+                child: LoadingView(),
+              );
+            }
+            final products = snapshot.data ?? const <Product>[];
+            if (products.isEmpty) {
+              return const RefreshableCenteredContent(
+                child: EmptyState(
+                  icon: Icons.inventory_2_outlined,
+                  title: 'No products',
+                  message: 'Add products first, then edit prices here.',
+                ),
+              );
+            }
+            final matches = filterProductsBySearch(products, _query);
+            final groups = matches.groupByShop();
+            return CustomScrollView(
+              physics: appRefreshScrollPhysics,
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 12),
+                        child: _AdminNotice(
+                          icon: Icons.bolt_outlined,
+                          color: _adminPrimary,
+                          message: 'Type a new price and tap done. It saves '
+                              'instantly and updates everywhere.',
+                        ),
+                      ),
+                      _AdminProductSearchBar(
+                        controller: _search,
+                        hasQuery: _query.isNotEmpty,
+                        matchCount: matches.length,
+                        totalCount: products.length,
+                        categoryCount: groups.length,
+                        onChanged: _onSearchChanged,
+                        onClear: _clearSearch,
+                      ),
+                    ],
+                  ),
+                ),
+                if (matches.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: EmptyState(
+                      icon: Icons.search_off,
+                      title: 'No matching products',
+                      message: 'Nothing matches "$_query".',
+                      action: TextButton.icon(
+                        onPressed: _clearSearch,
+                        icon: const Icon(Icons.close),
+                        label: const Text('Clear search'),
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(0, 4, 0, 40),
+                    sliver: SliverList.list(
+                      children: _buildGroups(groups),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildGroups(List<CategoryGroup<Product>> groups) {
+    final children = <Widget>[];
+    for (final group in groups) {
+      final isCollapsed =
+          _query.isEmpty && _collapsedCategories.contains(group.shopId);
+      children.add(
+        Padding(
+          key: ValueKey('price-category-${group.shopId}'),
+          padding: EdgeInsets.only(top: children.isEmpty ? 4 : 18, bottom: 8),
+          child: _AdminProductCategoryHeader(
+            shopName: group.shopName,
+            productCount: group.items.length,
+            isCollapsed: isCollapsed,
+            onToggle: _query.isNotEmpty
+                ? null
+                : () => setState(() {
+                      if (!_collapsedCategories.remove(group.shopId)) {
+                        _collapsedCategories.add(group.shopId);
+                      }
+                    }),
+          ),
+        ),
+      );
+      if (isCollapsed) {
+        continue;
+      }
+      children.add(
+        KeyedSubtree(
+          key: ValueKey('price-card-${group.shopId}'),
+          child: _AdminCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                for (var i = 0; i < group.items.length; i++) ...[
+                  if (i > 0) const Divider(height: 1, color: _adminLine),
+                  _AdminQuickPriceRow(
+                    key: ValueKey(group.items[i].productId),
+                    product: group.items[i],
+                    onSave: (price) => _savePrice(group.items[i], price),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return children;
+  }
+}
+
+class _AdminQuickPriceRow extends StatefulWidget {
+  const _AdminQuickPriceRow({
+    super.key,
+    required this.product,
+    required this.onSave,
+  });
+
+  final Product product;
+  final Future<void> Function(double price) onSave;
+
+  @override
+  State<_AdminQuickPriceRow> createState() => _AdminQuickPriceRowState();
+}
+
+class _AdminQuickPriceRowState extends State<_AdminQuickPriceRow> {
+  late final TextEditingController _controller;
+  final _focus = FocusNode();
+  var _isSaving = false;
+  String? _error;
+
+  static String _format(double price) {
+    // Show whole rupees without a trailing ".00" so the field stays terse.
+    return price == price.roundToDouble()
+        ? price.toStringAsFixed(0)
+        : price.toStringAsFixed(2);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _format(widget.product.price));
+    _focus.addListener(_onFocusChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AdminQuickPriceRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reflect a price changed elsewhere, but never clobber a field the admin
+    // is typing in.
+    if (oldWidget.product.price != widget.product.price && !_focus.hasFocus) {
+      _controller.text = _format(widget.product.price);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focus
+      ..removeListener(_onFocusChanged)
+      ..dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (!_focus.hasFocus) {
+      _commit();
+    }
+  }
+
+  bool get _isDirty {
+    final parsed = double.tryParse(_controller.text.trim());
+    return parsed != null && parsed != widget.product.price;
+  }
+
+  Future<void> _commit() async {
+    if (_isSaving) {
+      return;
+    }
+    final text = _controller.text.trim();
+    final price = double.tryParse(text);
+    if (text.isEmpty || price == null || price < 0) {
+      setState(() {
+        _error = 'Invalid';
+        _controller.text = _format(widget.product.price);
+      });
+      return;
+    }
+    if (price == widget.product.price) {
+      if (_error != null) {
+        setState(() => _error = null);
+      }
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+      _error = null;
+    });
+    try {
+      await widget.onSave(price);
+    } catch (_) {
+      if (mounted) {
+        _controller.text = _format(widget.product.price);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final product = widget.product;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: product.isActive ? _adminInk : _adminMuted,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+                if (product.unit.trim().isNotEmpty)
+                  Text(
+                    'per ${product.unit}',
+                    style: const TextStyle(
+                      color: _adminMuted,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 128,
+            child: TextField(
+              controller: _controller,
+              focusNode: _focus,
+              enabled: !_isSaving,
+              textAlign: TextAlign.right,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+              ],
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _commit(),
+              onChanged: (_) => setState(() => _error = null),
+              onTap: () => _controller.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: _controller.text.length,
+              ),
+              style: const TextStyle(
+                color: _adminInk,
+                fontWeight: FontWeight.w900,
+                fontSize: 15,
+              ),
+              decoration: InputDecoration(
+                isDense: true,
+                prefixText: '${AppConstants.currency} ',
+                prefixStyle: const TextStyle(
+                  color: _adminMuted,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+                errorText: _error,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                suffixIcon: _isSaving
+                    ? const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : _isDirty
+                        ? IconButton(
+                            tooltip: 'Save price',
+                            icon: const Icon(
+                              Icons.check_circle,
+                              color: _adminPrimary,
+                            ),
+                            onPressed: _commit,
+                          )
+                        : null,
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -544,6 +544,16 @@ class FirestoreService {
         .set(product.toMap(), SetOptions(merge: true));
   }
 
+  /// Price-only update used by the admin quick price editor. Every screen
+  /// that shows a product price reads it live from this document, so this
+  /// is all it takes for the new price to apply across the app.
+  Future<void> updateProductPrice(String productId, double price) {
+    return _products.doc(productId).update({
+      'price': price,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   Future<void> disableProduct(String productId, bool isActive) {
     return _products.doc(productId).update({
       'isActive': isActive,
