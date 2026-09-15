@@ -8,6 +8,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../core/constants/app_constants.dart';
+import '../core/utils/category_grouping.dart';
 import '../models/models.dart';
 
 /// Builds the customer-facing delivery receipt/invoice PDF. Only ever shown
@@ -60,11 +61,13 @@ class OrderReceiptPdfService {
             children: [
               pw.Text(
                 'Thank you for shopping with ${AppConstants.appName}!',
-                style: const pw.TextStyle(color: PdfColors.grey600, fontSize: 8),
+                style:
+                    const pw.TextStyle(color: PdfColors.grey600, fontSize: 8),
               ),
               pw.Text(
                 'Page ${context.pageNumber} of ${context.pagesCount}',
-                style: const pw.TextStyle(color: PdfColors.grey600, fontSize: 8),
+                style:
+                    const pw.TextStyle(color: PdfColors.grey600, fontSize: 8),
               ),
             ],
           ),
@@ -123,7 +126,7 @@ class OrderReceiptPdfService {
                     ),
                   ),
                   pw.Text(
-                    'Grocery delivery',
+                    'Local delivery',
                     style: const pw.TextStyle(
                       color: PdfColors.grey600,
                       fontSize: 9,
@@ -146,7 +149,8 @@ class OrderReceiptPdfService {
               ),
               pw.Text(
                 'Order #${order.orderId}',
-                style: const pw.TextStyle(color: PdfColors.grey600, fontSize: 9),
+                style:
+                    const pw.TextStyle(color: PdfColors.grey600, fontSize: 9),
               ),
             ],
           ),
@@ -225,20 +229,8 @@ class OrderReceiptPdfService {
       );
 
   static pw.Widget _itemsTable(OrderModel order) {
-    final rows = <List<String>>[
-      for (final item in order.items)
-        [
-          item.name,
-          '${item.quantity} ${item.unit}',
-          _money(item.price),
-          _money(item.lineTotal),
-        ],
-      if (order.photoListAmount > 0)
-        ['Shopping-list photo items', '-', '-', _money(order.photoListAmount)],
-      if (order.manualListAmount > 0)
-        ['Manual grocery list', '-', '-', _money(order.manualListAmount)],
-    ];
-    if (rows.isEmpty) {
+    final shoppingListSections = _shoppingListSections(order);
+    if (order.items.isEmpty && shoppingListSections.isEmpty) {
       return pw.Container(
         width: double.infinity,
         padding: const pw.EdgeInsets.all(12),
@@ -252,6 +244,167 @@ class OrderReceiptPdfService {
         ),
       );
     }
+    final groups = order.items.groupByShop();
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        for (var g = 0; g < groups.length; g++) ...[
+          if (g != 0) pw.SizedBox(height: 10),
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 4),
+            child: pw.Text(
+              groups[g].shopName,
+              style: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 10,
+                color: PdfColors.green900,
+              ),
+            ),
+          ),
+          _itemsTableFor([
+            for (final item in groups[g].items)
+              [
+                _bilingualLabel(item.name, item.nameTamil),
+                '${item.quantity} ${item.unit}',
+                _money(item.price),
+                _money(item.lineTotal),
+              ],
+          ]),
+        ],
+        if (shoppingListSections.isNotEmpty) ...[
+          if (groups.isNotEmpty) pw.SizedBox(height: 10),
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 4),
+            child: pw.Text(
+              'Shopping lists',
+              style: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 10,
+                color: PdfColors.green900,
+              ),
+            ),
+          ),
+          ...shoppingListSections,
+        ],
+      ],
+    );
+  }
+
+  static List<pw.Widget> _shoppingListSections(OrderModel order) {
+    final widgets = <pw.Widget>[];
+    final categoryKeys = <String>[];
+    final categoryNames = <String, String>{};
+    final photoListsByCategory = <String, List<OrderPhotoList>>{};
+    final manualListsByCategory = <String, List<OrderManualList>>{};
+
+    void rememberCategory(String shopId, String shopName) {
+      final key = shopId.trim();
+      if (categoryNames.containsKey(key)) return;
+      final name = shopName.trim();
+      categoryNames[key] = name.isEmpty ? uncategorizedCategoryLabel : name;
+      categoryKeys.add(key);
+    }
+
+    for (final list in order.photoLists.sortedByCategory()) {
+      rememberCategory(list.shopId, list.shopName);
+      photoListsByCategory.putIfAbsent(list.shopId.trim(), () => []).add(list);
+    }
+    if (order.photoLists.isEmpty && order.uploadedImageUrl.trim().isNotEmpty) {
+      rememberCategory('', uncategorizedCategoryLabel);
+      photoListsByCategory[''] = [
+        OrderPhotoList(
+          shopId: '',
+          shopName: uncategorizedCategoryLabel,
+          imageUrl: order.uploadedImageUrl,
+          imagePublicId: order.uploadedImagePublicId,
+        ),
+      ];
+    }
+
+    for (final list in order.manualLists.sortedByCategory()) {
+      rememberCategory(list.shopId, list.shopName);
+      manualListsByCategory.putIfAbsent(list.shopId.trim(), () => []).add(list);
+    }
+    if (order.manualLists.isEmpty &&
+        order.effectiveManualListText.trim().isNotEmpty) {
+      rememberCategory('', uncategorizedCategoryLabel);
+      manualListsByCategory[''] = [
+        OrderManualList(
+          shopId: '',
+          shopName: uncategorizedCategoryLabel,
+          text: order.effectiveManualListText,
+        ),
+      ];
+    }
+
+    categoryKeys.sort((a, b) {
+      final aUncategorized = a.isEmpty;
+      final bUncategorized = b.isEmpty;
+      if (aUncategorized != bUncategorized) return aUncategorized ? 1 : -1;
+      return categoryNames[a]!
+          .toLowerCase()
+          .compareTo(categoryNames[b]!.toLowerCase());
+    });
+
+    var showedPhotoAmount = false;
+    var showedManualAmount = false;
+    for (var i = 0; i < categoryKeys.length; i++) {
+      final key = categoryKeys[i];
+      final photoLists = photoListsByCategory[key] ?? const <OrderPhotoList>[];
+      final manualLists =
+          manualListsByCategory[key] ?? const <OrderManualList>[];
+      final rows = <List<String>>[];
+
+      for (var p = 0; p < photoLists.length; p++) {
+        rows.add([
+          photoLists.length == 1 ? 'Photo List' : 'Photo List ${p + 1}',
+          'Photo attached',
+          '-',
+          showedPhotoAmount ? 'Included above' : _money(order.photoListAmount),
+        ]);
+        showedPhotoAmount = true;
+      }
+
+      for (var m = 0; m < manualLists.length; m++) {
+        final list = manualLists[m];
+        final lines = list.lines;
+        rows.add([
+          manualLists.length == 1 ? 'Manual List' : 'Manual List ${m + 1}',
+          lines.isEmpty ? 'Typed list' : '${lines.length} line(s)',
+          '-',
+          showedManualAmount
+              ? 'Included above'
+              : _money(order.manualListAmount),
+        ]);
+        showedManualAmount = true;
+        for (var line = 0; line < lines.length; line++) {
+          rows.add(['  ${line + 1}. ${lines[line]}', '-', '-', '-']);
+        }
+      }
+
+      if (rows.isEmpty) continue;
+      if (widgets.isNotEmpty) widgets.add(pw.SizedBox(height: 10));
+      widgets.add(
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 4),
+          child: pw.Text(
+            categoryNames[key]!,
+            style: pw.TextStyle(
+              fontWeight: pw.FontWeight.bold,
+              fontSize: 10,
+              color: PdfColors.green900,
+            ),
+          ),
+        ),
+      );
+      widgets.add(_itemsTableFor(rows));
+      if (i != categoryKeys.length - 1) widgets.add(pw.SizedBox(height: 2));
+    }
+
+    return widgets;
+  }
+
+  static pw.Widget _itemsTableFor(List<List<String>> rows) {
     return pw.TableHelper.fromTextArray(
       headers: const ['Item', 'Qty', 'Unit price', 'Amount'],
       data: rows,
@@ -330,6 +483,13 @@ class OrderReceiptPdfService {
 
   static String _money(double amount) =>
       '${AppConstants.currency} ${amount.toStringAsFixed(2)}';
+
+  static String _bilingualLabel(String english, String tamil) {
+    final en = english.trim();
+    final ta = tamil.trim();
+    if (ta.isEmpty || ta == en) return en;
+    return '$ta\n$en';
+  }
 
   /// The bundled app logo asset is a large (2500x2500px, ~4MB) source PNG
   /// meant for high-density app icons. Decoding it at full resolution just

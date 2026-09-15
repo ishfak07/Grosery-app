@@ -375,7 +375,13 @@ class FirestoreService {
   }
 
   Future<void> saveShop(Shop shop) {
-    return _shops.doc(shop.shopId).set(shop.toMap(), SetOptions(merge: true));
+    final data = shop.toMap();
+    // The write is merged, so a removed per-category hours override has to be
+    // deleted explicitly or the old nested map would survive.
+    if (data['hoursOverride'] == null) {
+      data['hoursOverride'] = FieldValue.delete();
+    }
+    return _shops.doc(shop.shopId).set(data, SetOptions(merge: true));
   }
 
   Future<void> toggleShop(String shopId, bool isActive) {
@@ -442,6 +448,45 @@ class FirestoreService {
     });
   }
 
+  /// Live stream of active/available products ordered by creation time,
+  /// most recent first — backs the home screen's "New arrivals" section
+  /// (F15 fix; that section previously reused [watchProducts], whose
+  /// alphabetical order has nothing to do with recency and is left
+  /// unchanged here for the main catalog).
+  ///
+  /// Deliberately re-reads the *raw* `createdAt` field instead of using
+  /// [Product.createdAt]: [Product.fromMap] falls back to `DateTime.now()`
+  /// for a document with no stored `createdAt` (a product created before
+  /// that field existed), which would make every such legacy product look
+  /// like it was *just* added. Here a missing/non-Timestamp value sorts as
+  /// the oldest possible time instead, so legacy products fall to the
+  /// back — a stable fallback rather than a moving one.
+  Stream<List<Product>> watchRecentProducts({String? shopId, int limit = 6}) {
+    if (!_firebaseAvailable) {
+      return Stream<List<Product>>.value(const <Product>[]);
+    }
+    return _products.snapshots().map((snapshot) {
+      final available = snapshot.docs.where((doc) {
+        final product = Product.fromMap(doc.data(), doc.id);
+        return product.isAvailable &&
+            (shopId == null || shopId.isEmpty || product.shopId == shopId);
+      }).toList()
+        ..sort(
+          (a, b) => _rawCreatedAtMillis(b.data())
+              .compareTo(_rawCreatedAtMillis(a.data())),
+        );
+      return available
+          .take(limit)
+          .map((doc) => Product.fromMap(doc.data(), doc.id))
+          .toList();
+    });
+  }
+
+  int _rawCreatedAtMillis(Map<String, dynamic> data) {
+    final value = data['createdAt'];
+    return value is Timestamp ? value.millisecondsSinceEpoch : 0;
+  }
+
   /// Live single-product stream, used by screens (e.g. product details)
   /// that are handed one [Product] via navigation but should still reflect
   /// a later admin price edit while they stay open.
@@ -458,18 +503,20 @@ class FirestoreService {
     });
   }
 
-  /// Authoritative (server-source, not cached) current price for each of
-  /// [productIds]. Used right before order creation to close the race
-  /// where an admin changes a price between the customer opening checkout
-  /// and pressing "place order" — see [FirestoreService.syncOrderItemPricesToCatalog]
-  /// for the equivalent used on already-placed active orders.
-  Future<Map<String, double>> fetchLatestProductPrices(
+  /// Authoritative (server-source, not cached) current state — price and
+  /// availability — for each of [productIds]. Used right before order
+  /// creation to close two races at once: an admin changing a price, or
+  /// disabling/depleting a product, between the customer opening checkout
+  /// and pressing "place order". See
+  /// [FirestoreService.syncOrderItemPricesToCatalog] for the equivalent
+  /// price sync used on already-placed active orders (that one doesn't
+  /// need an availability check — an order already exists by then).
+  Future<Map<String, Product>> fetchLatestProducts(
     List<String> productIds,
   ) async {
-    final uniqueIds =
-        productIds.where((id) => id.isNotEmpty).toSet().toList();
+    final uniqueIds = productIds.where((id) => id.isNotEmpty).toSet().toList();
     if (!_firebaseAvailable || uniqueIds.isEmpty) {
-      return const <String, double>{};
+      return const <String, Product>{};
     }
     final docs = await Future.wait(
       uniqueIds.map(
@@ -481,14 +528,14 @@ class FirestoreService {
             ),
       ),
     );
-    final prices = <String, double>{};
+    final products = <String, Product>{};
     for (final doc in docs) {
       final data = doc.data();
       if (doc.exists && data != null) {
-        prices[doc.id] = Product.fromMap(data, doc.id).price;
+        products[doc.id] = Product.fromMap(data, doc.id);
       }
     }
-    return prices;
+    return products;
   }
 
   Future<void> saveProduct(Product product) {
@@ -584,7 +631,18 @@ class FirestoreService {
     }
   }
 
+  /// Creates [order] unless a document already exists at its id — which
+  /// happens when this is a retry of an order-creation attempt whose
+  /// earlier write actually succeeded but whose response the app never
+  /// saw (killed mid-submit, dropped connection, etc; see
+  /// [AppState._reservePendingOrderId], which is what makes [order.orderId]
+  /// stable across such retries instead of a fresh id every call). In that
+  /// case this is a no-op success rather than a duplicate order.
   Future<void> createOrder(OrderModel order) async {
+    final existing = await _orders.doc(order.orderId).get();
+    if (existing.exists) {
+      return;
+    }
     final orderMap = order.toMap()
       ..remove('deliveryRating')
       ..remove('deliveryReview')
@@ -642,7 +700,10 @@ class FirestoreService {
       ..remove('assignedDeliveryPhone')
       ..remove('deliveryRating')
       ..remove('deliveryReview')
-      ..remove('deliveryReviewedAt');
+      ..remove('deliveryReviewedAt')
+      ..remove('photoLists')
+      ..remove('manualLists')
+      ..remove('categories');
   }
 
   Stream<List<OrderModel>> watchOrdersForUser(String userId) {
@@ -810,6 +871,31 @@ class FirestoreService {
           latestOrder.orderStatus != 'Delivered') {
         throw StateError('Order must be out for delivery before delivered.');
       }
+      // F10 fix: the admin dropdown only *offers* active delivery accounts
+      // (watchDeliveryBoys(activeOnly: true)), but that filter is
+      // client-side UI only — nothing previously stopped this write itself
+      // from assigning an order to an id that doesn't exist, isn't a
+      // delivery account, or has since been deactivated. Re-read and
+      // verify the target account for real, inside the same transaction
+      // that performs the assignment.
+      if (assignedDeliveryBoyId != null && assignedDeliveryBoyId.isNotEmpty) {
+        final deliveryBoyDoc =
+            await transaction.get(_users.doc(assignedDeliveryBoyId));
+        final deliveryBoyData = deliveryBoyDoc.data();
+        if (!deliveryBoyDoc.exists || deliveryBoyData == null) {
+          throw StateError('Selected delivery person no longer exists.');
+        }
+        final deliveryBoyProfile =
+            UserProfile.fromMap(deliveryBoyData, deliveryBoyDoc.id);
+        if (!deliveryBoyProfile.isDeliveryBoy) {
+          throw StateError('Selected account is not a delivery person.');
+        }
+        if (deliveryBoyProfile.isBlocked) {
+          throw StateError(
+            'Selected delivery person is inactive. Choose another.',
+          );
+        }
+      }
 
       transaction.update(orderRef, {
         'orderStatus': status,
@@ -951,6 +1037,73 @@ class FirestoreService {
     );
   }
 
+  Future<void> updateOrderPaymentReceipt({
+    required OrderModel order,
+    required String imageUrl,
+    required String imagePublicId,
+  }) async {
+    final trimmedImageUrl = imageUrl.trim();
+    final trimmedImagePublicId = imagePublicId.trim();
+    if (trimmedImageUrl.isEmpty || trimmedImagePublicId.isEmpty) {
+      throw StateError('Upload a valid payment receipt image.');
+    }
+
+    final orderRef = _orders.doc(order.orderId);
+    final notificationId = _uuid.v4();
+    final notificationRef = _notifications.doc(notificationId);
+    await _db.runTransaction((transaction) async {
+      final latestOrderDoc = await transaction.get(orderRef);
+      final latestOrderData = latestOrderDoc.data();
+      if (!latestOrderDoc.exists || latestOrderData == null) {
+        throw StateError('Order not found.');
+      }
+      final latestOrder =
+          OrderModel.fromMap(latestOrderData, latestOrderDoc.id);
+      if (latestOrder.userId != order.userId) {
+        throw StateError('Order ownership changed. Refresh and try again.');
+      }
+      if (latestOrder.paymentMethod != 'Bank Transfer') {
+        throw StateError(
+          'Receipts can only be uploaded for bank transfer orders.',
+        );
+      }
+      if (latestOrder.hasPaymentReceipt) {
+        throw StateError('A payment receipt has already been uploaded.');
+      }
+      const allowedStatuses = <String>{
+        'Bill Updated',
+        'Out for Delivery',
+        'Delivered',
+      };
+      if (!allowedStatuses.contains(latestOrder.orderStatus)) {
+        throw StateError(
+          'Upload the receipt after the admin updates the final bill.',
+        );
+      }
+
+      transaction.update(orderRef, {
+        'paymentReceiptImageUrl': trimmedImageUrl,
+        'paymentReceiptImagePublicId': trimmedImagePublicId,
+        'paymentStatus': 'receipt uploaded',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      transaction.set(
+        notificationRef,
+        AppNotification(
+          notificationId: notificationId,
+          userId: '',
+          recipientRole: 'admin',
+          title: 'Payment receipt uploaded',
+          body: '${order.customerName} uploaded receipt for ${order.orderId}',
+          type: 'order',
+          relatedId: order.orderId,
+          isRead: false,
+          createdAt: DateTime.now(),
+        ).toMap(),
+      );
+    });
+  }
+
   /// Applies the current `products` catalog price to every structured item
   /// on [order] whose price has drifted, and recalculates
   /// `cartItemsAmount`/`subtotal`/`totalAmount` to match.
@@ -976,9 +1129,11 @@ class FirestoreService {
       if (!latestOrderDoc.exists || latestOrderData == null) {
         throw StateError('Order not found.');
       }
-      final latestOrder = OrderModel.fromMap(latestOrderData, latestOrderDoc.id);
+      final latestOrder =
+          OrderModel.fromMap(latestOrderData, latestOrderDoc.id);
       if (!latestOrder.canApplyCurrentProductPrice) {
-        throw StateError('This order is finalized and can no longer be repriced.');
+        throw StateError(
+            'This order is finalized and can no longer be repriced.');
       }
       final productIds = latestOrder.items
           .map((item) => item.productId)

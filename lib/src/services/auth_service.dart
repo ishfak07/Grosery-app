@@ -1,5 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../core/i18n/language_codes.dart';
 import '../core/utils/phone_utils.dart';
@@ -122,25 +123,61 @@ class AuthService {
     }
 
     final user = credential.user!;
-    await user.updateDisplayName(fullName.trim());
+    try {
+      await user.updateDisplayName(fullName.trim());
 
-    final now = DateTime.now();
-    final profile = UserProfile(
-      uid: user.uid,
-      fullName: fullName.trim(),
-      phone: normalizedPhone,
-      hiddenEmail: hiddenEmail,
-      role: 'user',
-      address: address.trim(),
-      createdAt: now,
-      updatedAt: now,
-      isPhoneVerified: true,
-      isBlocked: false,
-      preferredLanguageCode: AppLanguageCodes.normalize(preferredLanguageCode),
-    );
+      final now = DateTime.now();
+      final profile = UserProfile(
+        uid: user.uid,
+        fullName: fullName.trim(),
+        phone: normalizedPhone,
+        hiddenEmail: hiddenEmail,
+        role: 'user',
+        address: address.trim(),
+        createdAt: now,
+        updatedAt: now,
+        isPhoneVerified: true,
+        isBlocked: false,
+        preferredLanguageCode:
+            AppLanguageCodes.normalize(preferredLanguageCode),
+      );
 
-    await _firestoreService.saveUserProfile(profile);
-    return profile;
+      await _firestoreService.saveUserProfile(profile);
+      return profile;
+    } catch (error) {
+      // The Auth account was just created by this call; if the profile it
+      // needs never got written, don't leave the phone number permanently
+      // claimed by an unusable account - undo the Auth side too, so the
+      // customer can simply try registering again.
+      await _rollbackJustCreatedRegistration(user);
+      throw const AuthServiceException(
+        'Registration could not be completed. Please check your connection '
+        'and try again.',
+      );
+    }
+  }
+
+  /// Best-effort cleanup for [completeRegistration]: only ever called on the
+  /// Auth user this same call just created (never a pre-existing account),
+  /// immediately after its creation - so the still-fresh sign-in is used to
+  /// delete it. If deletion itself fails (offline, token already stale),
+  /// this still signs the device out so a half-registered session isn't
+  /// left active, and logs enough to let support find/delete the orphaned
+  /// Auth account manually - never the password or any other secret.
+  Future<void> _rollbackJustCreatedRegistration(User user) async {
+    try {
+      await user.delete();
+    } catch (deleteError) {
+      debugPrint(
+        'AuthService: failed to roll back orphaned registration for uid '
+        '${user.uid} - manual cleanup required. ($deleteError)',
+      );
+    }
+    try {
+      await _auth.signOut();
+    } catch (_) {
+      // Already signed out or no session left - nothing further to do.
+    }
   }
 
   Future<UserProfile> loginWithPhonePassword({
@@ -161,7 +198,17 @@ class AuthService {
       credential.user!.uid,
     );
     if (profile == null) {
-      throw StateError('User profile was not found in Firestore.');
+      // Auth succeeded but there's no matching profile document (e.g. an
+      // interrupted registration, or a manually removed account). Leaving
+      // the session signed in here would strand the device on a permanent
+      // login-screen loop: every future launch restores this same
+      // profile-less session and fails the same way with no way out. Sign
+      // out so the next attempt starts clean and is actually retryable.
+      await _auth.signOut();
+      throw const AuthServiceException(
+        'We could not find your account details. Please contact support, '
+        'or try registering again if this is a new account.',
+      );
     }
     if (profile.isBlocked) {
       await _auth.signOut();
@@ -206,13 +253,18 @@ class AuthService {
     }
   }
 
+  /// Completes a password reset for the exact request identified by
+  /// [requestId] - never by phone number - so completion can only happen
+  /// for the specific request that was actually approved, by whoever holds
+  /// that request id (returned once, to the requester, when the request was
+  /// created).
   Future<void> completeApprovedPasswordReset({
-    required String phone,
+    required String requestId,
     required String newPassword,
   }) async {
     try {
       await _functions.httpsCallable('completeApprovedPasswordReset').call({
-        'phone': PhoneUtils.normalizeSriLankanPhone(phone),
+        'requestId': requestId,
         'newPassword': newPassword,
       });
     } on FirebaseFunctionsException catch (error) {

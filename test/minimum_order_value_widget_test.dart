@@ -91,7 +91,7 @@ void main() {
     expect(find.text('Important Order Notice'), findsOneWidget);
     expect(
       find.text(
-        'Please include multiple grocery items in your photo list. '
+        'Please include multiple items in your photo list. '
         'Orders containing only one or very few items may be rejected by the admin.',
       ),
       findsOneWidget,
@@ -122,7 +122,7 @@ void main() {
     expect(find.text('Important Order Notice'), findsOneWidget);
     expect(
       find.text(
-        'Please include multiple grocery items in your manual list. '
+        'Please include multiple items in your manual list. '
         'Orders containing only one or very few items may be rejected by the admin.',
       ),
       findsOneWidget,

@@ -993,18 +993,28 @@ bool _looksLikeTechnicalFirebaseError(String message) {
   return markers.any(message.contains);
 }
 
+/// Shows a friendly, animated toast for general status/error messages
+/// (e.g. validation errors, "Cart cleared."). Replaces the previous bare
+/// [SnackBar], which rendered as a flat unstyled black bar with no
+/// animation beyond Flutter's default slide.
 void showSnack(BuildContext context, Object? message) {
   final friendlyMessage = appFriendlyErrorMessage(message);
   if (friendlyMessage == appOfflineMessage) {
     context.read<AppState>().markInternetUnavailable();
     return;
   }
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(context.tNow(friendlyMessage))));
+  final isError = friendlyMessage != message;
+  _showToast(
+    context,
+    message: friendlyMessage,
+    icon: isError ? Icons.error_outline_rounded : Icons.info_rounded,
+    anchorTop: false,
+    background: isError ? const Color(0xFF3A1414) : const Color(0xFF10231A),
+    foreground: Colors.white,
+    iconBackground: Colors.white.withValues(alpha: 0.14),
+    iconColor: isError ? const Color(0xFFFF9E8A) : Colors.white,
+  );
 }
-
-OverlayEntry? _activeCartConfirmationEntry;
 
 /// Shows a polished, self-dismissing confirmation banner for cart actions
 /// (e.g. "Added to cart."). It is inserted into the root [Overlay] rather
@@ -1015,48 +1025,98 @@ void showCartConfirmation(
   String message = 'Added to cart.',
   IconData icon = Icons.check_circle_rounded,
 }) {
+  final success =
+      Theme.of(context).extension<AppExtraColors>()?.success ??
+          const Color(0xFF1E8E5A);
+  _showToast(
+    context,
+    message: message,
+    icon: icon,
+    anchorTop: true,
+    background: Colors.white,
+    foreground: const Color(0xFF10231A),
+    iconBackground: success.withValues(alpha: 0.12),
+    iconColor: success,
+    border: success.withValues(alpha: 0.18),
+  );
+}
+
+OverlayEntry? _activeToastEntry;
+
+/// Shared implementation behind [showSnack] and [showCartConfirmation]: a
+/// slide + fade toast rendered in the root [Overlay] so it always floats
+/// above bottom nav bars/action bars, self-dismisses after a few seconds,
+/// and can be tapped or swiped away early.
+void _showToast(
+  BuildContext context, {
+  required String message,
+  required IconData icon,
+  required bool anchorTop,
+  required Color background,
+  required Color foreground,
+  required Color iconBackground,
+  required Color iconColor,
+  Color? border,
+}) {
   final overlayState = Overlay.of(context, rootOverlay: true);
 
-  _activeCartConfirmationEntry?.remove();
-  _activeCartConfirmationEntry = null;
+  _activeToastEntry?.remove();
+  _activeToastEntry = null;
 
   late final OverlayEntry entry;
   void removeEntry() {
-    if (identical(_activeCartConfirmationEntry, entry)) {
-      _activeCartConfirmationEntry = null;
+    if (identical(_activeToastEntry, entry)) {
+      _activeToastEntry = null;
     }
     entry.remove();
   }
 
   entry = OverlayEntry(
-    builder: (overlayContext) => _CartConfirmationToast(
+    builder: (overlayContext) => _AppToast(
       message: message,
       icon: icon,
+      anchorTop: anchorTop,
+      background: background,
+      foreground: foreground,
+      iconBackground: iconBackground,
+      iconColor: iconColor,
+      border: border,
       onDismissed: removeEntry,
     ),
   );
 
-  _activeCartConfirmationEntry = entry;
+  _activeToastEntry = entry;
   overlayState.insert(entry);
 }
 
-class _CartConfirmationToast extends StatefulWidget {
-  const _CartConfirmationToast({
+class _AppToast extends StatefulWidget {
+  const _AppToast({
     required this.message,
     required this.icon,
+    required this.anchorTop,
+    required this.background,
+    required this.foreground,
+    required this.iconBackground,
+    required this.iconColor,
     required this.onDismissed,
+    this.border,
   });
 
   final String message;
   final IconData icon;
+  final bool anchorTop;
+  final Color background;
+  final Color foreground;
+  final Color iconBackground;
+  final Color iconColor;
+  final Color? border;
   final VoidCallback onDismissed;
 
   @override
-  State<_CartConfirmationToast> createState() => _CartConfirmationToastState();
+  State<_AppToast> createState() => _AppToastState();
 }
 
-class _CartConfirmationToastState extends State<_CartConfirmationToast>
-    with SingleTickerProviderStateMixin {
+class _AppToastState extends State<_AppToast> with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<Offset> _slide;
   late final Animation<double> _fade;
@@ -1077,12 +1137,12 @@ class _CartConfirmationToastState extends State<_CartConfirmationToast>
       reverseCurve: Curves.easeInCubic,
     );
     _slide = Tween<Offset>(
-      begin: const Offset(0, -1),
+      begin: Offset(0, widget.anchorTop ? -1 : 1),
       end: Offset.zero,
     ).animate(curved);
     _fade = curved;
     _controller.forward();
-    _autoDismissTimer = Timer(const Duration(milliseconds: 2400), _dismiss);
+    _autoDismissTimer = Timer(const Duration(milliseconds: 2800), _dismiss);
   }
 
   Future<void> _dismiss() async {
@@ -1104,26 +1164,31 @@ class _CartConfirmationToastState extends State<_CartConfirmationToast>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final success =
-        theme.extension<AppExtraColors>()?.success ?? const Color(0xFF1E8E5A);
     final textScaler = MediaQuery.textScalerOf(context).clamp(
       minScaleFactor: 1,
       maxScaleFactor: 1.2,
     );
 
     return Positioned(
-      top: 0,
+      top: widget.anchorTop ? 0 : null,
+      bottom: widget.anchorTop ? null : 0,
       left: 0,
       right: 0,
       child: SafeArea(
-        bottom: false,
+        top: widget.anchorTop,
+        bottom: !widget.anchorTop,
         child: MediaQuery(
           data: MediaQuery.of(context).copyWith(textScaler: textScaler),
           child: Align(
-            alignment: Alignment.topCenter,
+            alignment:
+                widget.anchorTop ? Alignment.topCenter : Alignment.bottomCenter,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                widget.anchorTop ? 10 : 0,
+                16,
+                widget.anchorTop ? 0 : 14,
+              ),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 460),
                 child: SlideTransition(
@@ -1135,20 +1200,21 @@ class _CartConfirmationToastState extends State<_CartConfirmationToast>
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: _dismiss,
+                        onVerticalDragEnd: (_) => _dismiss(),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 14,
                             vertical: 12,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: success.withValues(alpha: 0.18),
-                            ),
+                            color: widget.background,
+                            borderRadius: BorderRadius.circular(14),
+                            border: widget.border == null
+                                ? null
+                                : Border.all(color: widget.border!),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.14),
+                                color: Colors.black.withValues(alpha: 0.22),
                                 blurRadius: 24,
                                 offset: const Offset(0, 10),
                               ),
@@ -1157,27 +1223,27 @@ class _CartConfirmationToastState extends State<_CartConfirmationToast>
                           child: Row(
                             children: [
                               Container(
-                                width: 32,
-                                height: 32,
+                                width: 30,
+                                height: 30,
                                 decoration: BoxDecoration(
-                                  color: success.withValues(alpha: 0.12),
+                                  color: widget.iconBackground,
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   widget.icon,
-                                  color: success,
-                                  size: 19,
+                                  color: widget.iconColor,
+                                  size: 17,
                                 ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
                                   context.t(widget.message),
-                                  style: const TextStyle(
-                                    color: Color(0xFF10231A),
+                                  style: TextStyle(
+                                    color: widget.foreground,
                                     fontWeight: FontWeight.w800,
-                                    fontSize: 14.5,
-                                    height: 1.25,
+                                    fontSize: 14,
+                                    height: 1.3,
                                   ),
                                 ),
                               ),
@@ -1185,7 +1251,7 @@ class _CartConfirmationToastState extends State<_CartConfirmationToast>
                               Icon(
                                 Icons.close_rounded,
                                 size: 16,
-                                color: Colors.black.withValues(alpha: 0.32),
+                                color: widget.foreground.withValues(alpha: 0.4),
                               ),
                             ],
                           ),
@@ -1194,6 +1260,160 @@ class _CartConfirmationToastState extends State<_CartConfirmationToast>
                     ),
                   ),
                 ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shows a themed, animated confirm/cancel dialog with a pop-in scale+fade
+/// transition and an icon-in-circle header — a drop-in, better-looking
+/// replacement for a bare [AlertDialog] with a title/message/two actions.
+Future<bool> showAppConfirmDialog(
+  BuildContext context, {
+  required String title,
+  required String message,
+  String cancelLabel = 'Cancel',
+  required String confirmLabel,
+  IconData icon = Icons.help_outline_rounded,
+  IconData confirmIcon = Icons.check_rounded,
+  bool isDestructive = false,
+  bool barrierDismissible = true,
+}) async {
+  final theme = Theme.of(context);
+  final danger =
+      theme.extension<AppExtraColors>()?.danger ?? const Color(0xFFC83A2B);
+  final accent = isDestructive ? danger : theme.colorScheme.primary;
+
+  final result = await showGeneralDialog<bool>(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    barrierLabel: title,
+    barrierColor: const Color(0xFF10231A).withValues(alpha: 0.45),
+    transitionDuration: const Duration(milliseconds: 260),
+    pageBuilder: (dialogContext, _, __) {
+      return _AppConfirmDialog(
+        title: title,
+        message: message,
+        cancelLabel: cancelLabel,
+        confirmLabel: confirmLabel,
+        icon: icon,
+        confirmIcon: confirmIcon,
+        accent: accent,
+      );
+    },
+    transitionBuilder: (dialogContext, animation, _, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutBack,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.86, end: 1).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+  return result ?? false;
+}
+
+class _AppConfirmDialog extends StatelessWidget {
+  const _AppConfirmDialog({
+    required this.title,
+    required this.message,
+    required this.cancelLabel,
+    required this.confirmLabel,
+    required this.icon,
+    required this.confirmIcon,
+    required this.accent,
+  });
+
+  final String title;
+  final String message;
+  final String cancelLabel;
+  final String confirmLabel;
+  final IconData icon;
+  final IconData confirmIcon;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            clipBehavior: Clip.antiAlias,
+            elevation: 12,
+            shadowColor: const Color(0xFF10231A).withValues(alpha: 0.3),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: accent, size: 28),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    context.t(title),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFF10231A),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    context.t(message),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFF66736B),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          child: Text(context.t(cancelLabel)),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: accent,
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: () => Navigator.of(context).pop(true),
+                          icon: Icon(confirmIcon, size: 18),
+                          label: Text(context.t(confirmLabel)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),

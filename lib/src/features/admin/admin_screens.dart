@@ -13,7 +13,10 @@ import '../../../services/image_picker_helper.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/i18n/app_localizations.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/bilingual_text.dart';
+import '../../core/utils/category_grouping.dart';
 import '../../core/utils/phone_utils.dart';
+import '../../core/utils/search_matching.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/common_widgets.dart';
 import '../../models/models.dart';
@@ -38,6 +41,10 @@ const _adminWarning = Color(0xFFD88413);
 const _adminDanger = Color(0xFFC83A2B);
 const _adminSuccess = _adminPrimary;
 const _minimumOrderSearchLength = 4;
+
+/// Pause in typing before an admin list re-filters. Long enough that a
+/// burst of keystrokes rebuilds the list once, short enough to feel live.
+const _adminSearchDebounce = Duration(milliseconds: 250);
 const _defaultAdminNote =
     'Kindly be patient \u{1F60A} Your order will be delivered soon by our '
     'delivery person. Thank you!';
@@ -413,6 +420,71 @@ class _AdminSectionHeader extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AdminCategoryLabel extends StatelessWidget {
+  const _AdminCategoryLabel({required this.shopName, required this.itemCount});
+
+  final String shopName;
+  final int itemCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: _adminPrimary,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              shopName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _adminInk,
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Text(
+            '$itemCount item${itemCount == 1 ? '' : 's'}',
+            style: const TextStyle(
+              color: _adminMuted,
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminCategoryCaption extends StatelessWidget {
+  const _AdminCategoryCaption({required this.shopName});
+
+  final String shopName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'Category: $shopName',
+      style: const TextStyle(
+        color: _adminMuted,
+        fontWeight: FontWeight.w700,
+        fontSize: 11,
       ),
     );
   }
@@ -2953,6 +3025,46 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                       _OrderInfoRow('Method', order.paymentMethod),
                       _OrderInfoRow('Payment status', order.paymentStatus),
                       _OrderInfoRow('Order total', order.totalAmount.money),
+                      if (order.orderStatus == 'Delivered' &&
+                          order.paymentMethod ==
+                              AppConstants.paymentMethodCod &&
+                          order.paymentStatus != 'collected') ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF4E5),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _adminWarning.withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: const Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                color: _adminWarning,
+                                size: 20,
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Delivered but COD payment is not marked '
+                                  'collected. Follow up with the delivery '
+                                  'person or the customer.',
+                                  style: TextStyle(
+                                    color: _adminWarning,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       if (order.paymentMethod ==
                           AppConstants.paymentMethodBankTransfer) ...[
                         const Divider(height: 22),
@@ -2995,123 +3107,163 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
                     ],
                   ),
                 ),
+                if (order.categories.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const _AdminSectionHeader(
+                    title: 'Category shopping methods',
+                    icon: Icons.rule_outlined,
+                  ),
+                  for (final category in order.categories) ...[
+                    _AdminOrderCategoryMethodCard(category: category),
+                    const SizedBox(height: 8),
+                  ],
+                ],
                 const SizedBox(height: 12),
                 if (order.items.isNotEmpty) ...[
                   const _AdminSectionHeader(
                     title: 'Items',
                     icon: Icons.shopping_basket_outlined,
                   ),
-                  for (var index = 0; index < order.items.length; index++)
-                    Padding(
-                      padding: EdgeInsets.only(
-                        bottom: index == order.items.length - 1 ? 0 : 8,
-                      ),
-                      child: _AdminCard(
-                        child: CheckboxListTile(
-                          enabled: true,
-                          value: order.items[index].isAvailable,
-                          onChanged: null,
-                          title: Text(
-                            order.items[index].name,
-                            style: const TextStyle(
-                              color: Color(0xFF17201B),
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '${order.items[index].quantity} x ${order.items[index].price.money} / ${order.items[index].unit}',
-                                style: const TextStyle(
-                                  color: Color(0xFF4B5A51),
-                                  fontWeight: FontWeight.w500,
-                                ),
+                  for (final group in order.items.groupByShop()) ...[
+                    _AdminCategoryLabel(
+                      shopName: group.shopName,
+                      itemCount: group.items.length,
+                    ),
+                    for (var index = 0; index < group.items.length; index++)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          bottom: index == group.items.length - 1 ? 0 : 8,
+                        ),
+                        child: _AdminCard(
+                          child: CheckboxListTile(
+                            enabled: true,
+                            value: group.items[index].isAvailable,
+                            onChanged: null,
+                            title: BilingualLines(
+                              english: group.items[index].name,
+                              tamil: group.items[index].nameTamil,
+                              style: const TextStyle(
+                                color: Color(0xFF17201B),
+                                fontWeight: FontWeight.w700,
                               ),
-                              if (order.items[index].hasPriceChanged)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2),
-                                  child: Text(
-                                    '${order.items[index].originalPrice.money} → ${order.items[index].price.money} · Price updated',
-                                    style: const TextStyle(
-                                      color: _adminWarning,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 11,
-                                    ),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '${group.items[index].quantity} x ${group.items[index].price.money} / ${group.items[index].unit}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF4B5A51),
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
-                            ],
-                          ),
-                          secondary: Text(
-                            order.items[index].lineTotal.money,
-                            style: const TextStyle(
-                              color: Color(0xFF4B5A51),
-                              fontWeight: FontWeight.w600,
+                                if (group.items[index].hasPriceChanged)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Text(
+                                      '${group.items[index].originalPrice.money} → ${group.items[index].price.money} · Price updated',
+                                      style: const TextStyle(
+                                        color: _adminWarning,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            secondary: Text(
+                              group.items[index].lineTotal.money,
+                              style: const TextStyle(
+                                color: Color(0xFF4B5A51),
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
+                  ],
                   _AdminOrderPriceSyncAction(order: order),
                 ],
                 if (manualListLines.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   const _AdminSectionHeader(
-                    title: 'Manual grocery list',
+                    title: 'Manual lists',
                     icon: Icons.edit_note,
                   ),
-                  for (var index = 0; index < manualListLines.length; index++)
-                    Padding(
-                      padding: EdgeInsets.only(
-                        bottom: index == manualListLines.length - 1 ? 0 : 8,
+                  for (final entry
+                      in order.manualLists.sortedByCategory().indexed) ...[
+                    if (entry.$2.shopName.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child:
+                            _AdminCategoryCaption(shopName: entry.$2.shopName),
                       ),
-                      child: _AdminCard(
-                        child: CheckboxListTile(
-                          enabled: true,
-                          value: true,
-                          onChanged: null,
-                          title: SelectableText(
-                            manualListLines[index],
-                            style: const TextStyle(
-                              color: _adminInk,
-                              fontWeight: FontWeight.w800,
+                    for (var index = 0; index < entry.$2.lines.length; index++)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          bottom: index == entry.$2.lines.length - 1 ? 0 : 8,
+                        ),
+                        child: _AdminCard(
+                          child: CheckboxListTile(
+                            enabled: true,
+                            value: true,
+                            onChanged: null,
+                            title: SelectableText(
+                              entry.$2.lines[index],
+                              style: const TextStyle(
+                                color: _adminInk,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                          ),
-                          subtitle: const Text(
-                            'Manual list item',
-                            style: TextStyle(
-                              color: _adminMuted,
-                              fontWeight: FontWeight.w600,
+                            subtitle: const Text(
+                              'Manual list item',
+                              style: TextStyle(
+                                color: _adminMuted,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                          secondary: Text(
-                            '#${index + 1}',
-                            style: const TextStyle(
-                              color: _adminMuted,
-                              fontWeight: FontWeight.w800,
+                            secondary: Text(
+                              '#${index + 1}',
+                              style: const TextStyle(
+                                color: _adminMuted,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
+                    if (entry.$1 != order.manualLists.length - 1)
+                      const SizedBox(height: 12),
+                  ],
                 ],
                 if (order.hasUpload) ...[
                   const SizedBox(height: 12),
                   const _AdminSectionHeader(
-                    title: 'Uploaded bill/list image',
+                    title: 'Uploaded bill/list images',
                     icon: Icons.image_outlined,
                   ),
-                  _AdminCard(
-                    padding: const EdgeInsets.all(8),
-                    child: GestureDetector(
-                      onTap: () => _showZoomImage(order.uploadedImageUrl),
-                      child: AspectRatio(
-                        aspectRatio: 1.35,
-                        child: ProductImage(url: order.uploadedImageUrl),
+                  for (final entry
+                      in order.photoLists.sortedByCategory().indexed) ...[
+                    if (entry.$2.shopName.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child:
+                            _AdminCategoryCaption(shopName: entry.$2.shopName),
+                      ),
+                    _AdminCard(
+                      padding: const EdgeInsets.all(8),
+                      child: GestureDetector(
+                        onTap: () => _showZoomImage(entry.$2.imageUrl),
+                        child: AspectRatio(
+                          aspectRatio: 1.35,
+                          child: ProductImage(url: entry.$2.imageUrl),
+                        ),
                       ),
                     ),
-                  ),
+                    if (entry.$1 != order.photoLists.length - 1)
+                      const SizedBox(height: 12),
+                  ],
                 ],
                 const SizedBox(height: 16),
                 _AdminCard(
@@ -3536,6 +3688,78 @@ class _AdminOrderDetailsScreenState extends State<AdminOrderDetailsScreen> {
         );
       },
     );
+  }
+}
+
+class _AdminOrderCategoryMethodCard extends StatelessWidget {
+  const _AdminOrderCategoryMethodCard({required this.category});
+
+  final OrderCategoryMethod category;
+
+  @override
+  Widget build(BuildContext context) {
+    return _AdminCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  category.displayCategoryName,
+                  style: const TextStyle(
+                    color: _adminInk,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              _AdminPill(
+                label: category.methodLabel,
+                color: category.selectedMethod ==
+                        OrderCategoryMethod.methodLegacyMixed
+                    ? _adminWarning
+                    : _adminPrimary,
+                icon: _methodIcon(category.selectedMethod),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (category.hasPhotoList)
+            _OrderInfoRow(
+              'Images',
+              '${category.photoList!.images.length}',
+            ),
+          if (category.hasManualList)
+            SelectableText(
+              category.manualList!.text.trim(),
+              style: const TextStyle(
+                color: _adminInk,
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+              ),
+            ),
+          if (category.hasSelectedItems)
+            for (final item in category.selectedItems)
+              _OrderInfoRow(
+                BilingualText.label(item.name, item.nameTamil),
+                '${item.quantity} x ${item.price.money}',
+              ),
+        ],
+      ),
+    );
+  }
+
+  static IconData _methodIcon(String method) {
+    switch (method) {
+      case OrderCategoryMethod.methodPhoto:
+        return Icons.image_outlined;
+      case OrderCategoryMethod.methodManual:
+        return Icons.edit_note;
+      case OrderCategoryMethod.methodItems:
+        return Icons.shopping_basket_outlined;
+      default:
+        return Icons.warning_amber_rounded;
+    }
   }
 }
 
@@ -5158,32 +5382,22 @@ class _AdminOfferTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  _offerLabel(offer),
-                  overflow: TextOverflow.ellipsis,
+                BilingualLines(
+                  english: offer.title,
+                  tamil: offer.tamilTitle,
+                  gap: 3,
                   style: const TextStyle(
                     color: _adminInk,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                if (offer.tamilTitle.trim().isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    offer.tamilTitle,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: _adminMuted,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-                if (offer.caption.trim().isNotEmpty) ...[
+                if (offer.caption.trim().isNotEmpty ||
+                    offer.tamilCaption.trim().isNotEmpty) ...[
                   const SizedBox(height: 4),
-                  Text(
-                    offer.caption,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  BilingualLines(
+                    english: offer.caption,
+                    tamil: offer.tamilCaption,
+                    gap: 2,
                     style: const TextStyle(
                       color: _adminMuted,
                       fontWeight: FontWeight.w600,
@@ -5787,8 +6001,49 @@ String _offerLabel(Offer offer) {
   return 'this photo offer';
 }
 
-class AdminProductManagementScreen extends StatelessWidget {
+class AdminProductManagementScreen extends StatefulWidget {
   const AdminProductManagementScreen({super.key});
+
+  @override
+  State<AdminProductManagementScreen> createState() =>
+      _AdminProductManagementScreenState();
+}
+
+class _AdminProductManagementScreenState
+    extends State<AdminProductManagementScreen> {
+  final _search = TextEditingController();
+  String _query = '';
+  Timer? _searchDebounce;
+
+  /// Category ids the admin collapsed. Ignored while searching so a match is
+  /// never hidden inside a folded section.
+  final _collapsedCategories = <String>{};
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _search.dispose();
+    super.dispose();
+  }
+
+  /// Re-filtering rebuilds every tile in the catalog, so running it on each
+  /// keystroke janks badly enough that typing a whole word is a fight. Wait
+  /// for a short pause in typing instead.
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(_adminSearchDebounce, () {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _query = value.trim());
+    });
+  }
+
+  void _clearSearch() {
+    _searchDebounce?.cancel();
+    _search.clear();
+    setState(() => _query = '');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -5838,35 +6093,117 @@ class AdminProductManagementScreen extends StatelessWidget {
                 ),
               );
             }
-            return ListView.separated(
+            final matches = filterProductsBySearch(products, _query);
+            final groups = matches.groupByShop();
+            return CustomScrollView(
               physics: appRefreshScrollPhysics,
-              padding: const EdgeInsets.fromLTRB(0, 16, 0, 96),
-              itemCount: products.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final product = products[index];
-                return _AdminReveal(
-                  index: index,
-                  child: _AdminProductTile(
-                    product: product,
-                    onActiveChanged: (value) => appState.firestoreService
-                        .disableProduct(product.productId, value),
-                    onDelete: () => _confirmDeleteProduct(context, product),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => AdminProductFormScreen(
-                          product: product,
-                        ),
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _AdminProductSearchBar(
+                    controller: _search,
+                    hasQuery: _query.isNotEmpty,
+                    matchCount: matches.length,
+                    totalCount: products.length,
+                    categoryCount: groups.length,
+                    onChanged: _onSearchChanged,
+                    onClear: _clearSearch,
+                  ),
+                ),
+                if (matches.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: EmptyState(
+                      icon: Icons.search_off,
+                      title: 'No matching products',
+                      message:
+                          'Nothing matches "$_query". Try a different name, '
+                          'category, or unit.',
+                      action: TextButton.icon(
+                        onPressed: _clearSearch,
+                        icon: const Icon(Icons.close),
+                        label: const Text('Clear search'),
                       ),
                     ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(0, 4, 0, 96),
+                    sliver: SliverList.list(
+                      children: _buildGroupedSlivers(appState, groups),
+                    ),
                   ),
-                );
-              },
+              ],
             );
           },
         ),
       ),
     );
+  }
+
+  /// Category sections, each a tappable header followed by its products.
+  List<Widget> _buildGroupedSlivers(
+    AppState appState,
+    List<CategoryGroup<Product>> groups,
+  ) {
+    final children = <Widget>[];
+    // Staggers the reveal animation across the whole page, not per section,
+    // so sections do not all animate in lockstep.
+    var revealIndex = 0;
+    for (final group in groups) {
+      final isCollapsed =
+          _query.isEmpty && _collapsedCategories.contains(group.shopId);
+      children.add(
+        Padding(
+          key: ValueKey('category-header-${group.shopId}'),
+          padding: EdgeInsets.only(top: children.isEmpty ? 4 : 18, bottom: 8),
+          child: _AdminProductCategoryHeader(
+            shopName: group.shopName,
+            productCount: group.items.length,
+            isCollapsed: isCollapsed,
+            // Collapsing is meaningless while a search is narrowing the list.
+            onToggle: _query.isNotEmpty
+                ? null
+                : () => setState(() {
+                      if (!_collapsedCategories.remove(group.shopId)) {
+                        _collapsedCategories.add(group.shopId);
+                      }
+                    }),
+          ),
+        ),
+      );
+      if (isCollapsed) {
+        continue;
+      }
+      for (var i = 0; i < group.items.length; i++) {
+        final product = group.items[i];
+        children.add(
+          Padding(
+            // Keyed by product so filtering reuses surviving rows instead of
+            // rebuilding every tile (and reloading its image) from scratch.
+            key: ValueKey(product.productId),
+            padding: EdgeInsets.only(bottom: i == group.items.length - 1 ? 0 : 10),
+            child: _AdminReveal(
+              index: revealIndex++,
+              child: _AdminProductTile(
+                product: product,
+                showCategory: false,
+                onActiveChanged: (value) => appState.firestoreService
+                    .disableProduct(product.productId, value),
+                onDelete: () => _confirmDeleteProduct(context, product),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AdminProductFormScreen(product: product),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+    return children;
   }
 
   Future<void> _confirmDeleteProduct(
@@ -5918,18 +6255,177 @@ class AdminProductManagementScreen extends StatelessWidget {
   }
 }
 
+/// Live filter for the product catalog. The whole list already streams into
+/// memory, so this narrows as the admin types rather than needing a submit.
+class _AdminProductSearchBar extends StatelessWidget {
+  const _AdminProductSearchBar({
+    required this.controller,
+    required this.hasQuery,
+    required this.matchCount,
+    required this.totalCount,
+    required this.categoryCount,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final bool hasQuery;
+  final int matchCount;
+  final int totalCount;
+  final int categoryCount;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = hasQuery
+        ? '$matchCount of $totalCount product${totalCount == 1 ? '' : 's'} '
+            'in $categoryCount categor${categoryCount == 1 ? 'y' : 'ies'}'
+        : '$totalCount product${totalCount == 1 ? '' : 's'} '
+            'in $categoryCount categor${categoryCount == 1 ? 'y' : 'ies'}';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 16, 0, 6),
+      child: _AdminCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Bound to the controller rather than the debounced query so the
+            // clear button appears the instant a character is typed.
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (context, value, _) {
+                return TextField(
+                  controller: controller,
+                  autocorrect: false,
+                  textInputAction: TextInputAction.search,
+                  onChanged: onChanged,
+                  decoration: InputDecoration(
+                    labelText: 'Search products',
+                    hintText: 'Name, category, or unit',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: value.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear search',
+                            onPressed: onClear,
+                            icon: const Icon(Icons.close),
+                          ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 10),
+            Text(
+              summary,
+              style: const TextStyle(
+                color: _adminMuted,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Section header for one category on the product management screen. Tapping
+/// it folds the section away; [onToggle] is null while a search is active.
+class _AdminProductCategoryHeader extends StatelessWidget {
+  const _AdminProductCategoryHeader({
+    required this.shopName,
+    required this.productCount,
+    required this.isCollapsed,
+    required this.onToggle,
+  });
+
+  final String shopName;
+  final int productCount;
+  final bool isCollapsed;
+  final VoidCallback? onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: _adminPrimary.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onToggle,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.category_outlined,
+                size: 17,
+                color: _adminPrimary,
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  shopName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _adminInk,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _adminLine),
+                ),
+                child: Text(
+                  '$productCount',
+                  style: const TextStyle(
+                    color: _adminPrimary,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              if (onToggle != null) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  isCollapsed ? Icons.expand_more : Icons.expand_less,
+                  size: 20,
+                  color: _adminMuted,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AdminProductTile extends StatelessWidget {
   const _AdminProductTile({
     required this.product,
     required this.onTap,
     required this.onActiveChanged,
     required this.onDelete,
+    this.showCategory = true,
   });
 
   final Product product;
   final VoidCallback onTap;
   final ValueChanged<bool> onActiveChanged;
   final VoidCallback onDelete;
+
+  /// False when the tile sits under a category header, which already names
+  /// the category.
+  final bool showCategory;
 
   @override
   Widget build(BuildContext context) {
@@ -5948,36 +6444,27 @@ class _AdminProductTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  product.name,
-                  overflow: TextOverflow.ellipsis,
+                BilingualLines(
+                  english: product.name,
+                  tamil: product.nameTamil,
+                  gap: 3,
                   style: const TextStyle(
                     color: _adminInk,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                if (product.nameTamil.trim().isNotEmpty) ...[
-                  const SizedBox(height: 3),
+                if (showCategory) ...[
+                  const SizedBox(height: 4),
                   Text(
-                    product.nameTamil,
+                    product.shopName,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: _adminMuted,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       fontSize: 12,
                     ),
                   ),
                 ],
-                const SizedBox(height: 4),
-                Text(
-                  product.shopName,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _adminMuted,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -6152,10 +6639,6 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                           AppTextField(
                             controller: _nameTamil,
                             label: 'Tamil product name',
-                            validator: (value) => Validators.requiredText(
-                              value,
-                              'Tamil product name',
-                            ),
                             prefixIcon: Icons.translate,
                           ),
                           const SizedBox(height: 10),
@@ -6190,10 +6673,6 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                           AppTextField(
                             controller: _descriptionTamil,
                             label: 'Tamil description',
-                            validator: (value) => Validators.requiredText(
-                              value,
-                              'Tamil description',
-                            ),
                             maxLines: 3,
                             prefixIcon: Icons.translate,
                           ),
@@ -6215,7 +6694,11 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                             controller: _price,
                             label: 'Price',
                             validator: (value) {
-                              if ((double.tryParse(value ?? '') ?? 0) <= 0) {
+                              final text = value?.trim() ?? '';
+                              if (text.isEmpty) {
+                                return null;
+                              }
+                              if ((double.tryParse(text) ?? -1) < 0) {
                                 return 'Enter a valid price';
                               }
                               return null;
@@ -6249,10 +6732,6 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
                             AppTextField(
                               controller: _customUnit,
                               label: 'Custom unit',
-                              validator: (value) => Validators.requiredText(
-                                value,
-                                'Custom unit',
-                              ),
                               prefixIcon: Icons.edit_outlined,
                             ),
                           ],
@@ -6384,7 +6863,9 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         imagePublicId = uploadedImage.publicId;
       }
       final now = DateTime.now();
-      final productUnit = _isCustomUnit ? _customUnit.text.trim() : _unit;
+      final customUnit = _customUnit.text.trim();
+      final productUnit =
+          _isCustomUnit && customUnit.isNotEmpty ? customUnit : _unit;
       final product = Product(
         productId: productId,
         shopId: selectedShop.shopId,
@@ -6394,7 +6875,7 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         category: widget.product?.category ?? 'Other',
         description: _description.text.trim(),
         descriptionTamil: _descriptionTamil.text.trim(),
-        price: double.parse(_price.text.trim()),
+        price: double.tryParse(_price.text.trim()) ?? 0,
         imageUrl: imageUrl,
         imagePublicId: imagePublicId,
         unit: productUnit,
@@ -6592,95 +7073,345 @@ class AdminShopManagementScreen extends StatelessWidget {
   }
 
   void _showShopDialog(BuildContext context, {Shop? shop}) {
-    final name = TextEditingController(text: shop?.shopName ?? '');
-    final address = TextEditingController(text: shop?.address ?? '');
-    final phone = TextEditingController(
-      text: PhoneUtils.localSriLankanDigits(shop?.phone ?? ''),
-    );
     showDialog<void>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: _adminSurface,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          title: Row(
+      builder: (dialogContext) => _ShopEditorDialog(shop: shop),
+    );
+  }
+}
+
+/// Add/edit dialog for a category. Beyond the name/phone/details fields it
+/// owns the two per-category policies: which shopping methods customers may
+/// use for it (a pharmacy can be photo/manual only) and whether it runs on
+/// its own opening hours instead of the global shop hours.
+class _ShopEditorDialog extends StatefulWidget {
+  const _ShopEditorDialog({this.shop});
+
+  final Shop? shop;
+
+  @override
+  State<_ShopEditorDialog> createState() => _ShopEditorDialogState();
+}
+
+class _ShopEditorDialogState extends State<_ShopEditorDialog> {
+  late final TextEditingController _name;
+  late final TextEditingController _address;
+  late final TextEditingController _phone;
+  late final TextEditingController _closureReason;
+
+  late Set<String> _allowedMethods;
+  late bool _useCustomHours;
+  late int _openingMinutes;
+  late int _closingMinutes;
+  late bool _isTemporarilyClosed;
+  bool _isSaving = false;
+
+  static const _methodLabels = <String, ({String label, IconData icon})>{
+    OrderCategoryMethod.methodItems: (
+      label: 'Item selection',
+      icon: Icons.shopping_basket_outlined,
+    ),
+    OrderCategoryMethod.methodPhoto: (
+      label: 'Photo list',
+      icon: Icons.document_scanner_outlined,
+    ),
+    OrderCategoryMethod.methodManual: (
+      label: 'Manual list',
+      icon: Icons.edit_note,
+    ),
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    final shop = widget.shop;
+    _name = TextEditingController(text: shop?.shopName ?? '');
+    _address = TextEditingController(text: shop?.address ?? '');
+    _phone = TextEditingController(
+      text: PhoneUtils.localSriLankanDigits(shop?.phone ?? ''),
+    );
+    _allowedMethods = {...(shop?.allowedMethods ?? Shop.allShoppingMethods)};
+    final hours = shop?.hoursOverride;
+    _useCustomHours = hours != null;
+    _openingMinutes = hours?.openingMinutes ?? 0;
+    _closingMinutes = hours?.closingMinutes ?? 0;
+    _isTemporarilyClosed = hours?.isTemporarilyClosed ?? false;
+    _closureReason = TextEditingController(
+      text: hours?.temporaryClosureReason ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _address.dispose();
+    _phone.dispose();
+    _closureReason.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isNew = widget.shop == null;
+    return AlertDialog(
+      backgroundColor: _adminSurface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      title: Row(
+        children: [
+          _AdminIconBadge(
+            icon: Icons.category_outlined,
+            color: isNew ? _adminPrimary : _adminBlue,
+            size: 38,
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(isNew ? 'Add category' : 'Edit category')),
+        ],
+      ),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _AdminIconBadge(
-                icon: Icons.category_outlined,
-                color: shop == null ? _adminPrimary : _adminBlue,
-                size: 38,
+              TextField(
+                controller: _name,
+                decoration: const InputDecoration(
+                  labelText: 'Category name',
+                  prefixIcon: Icon(Icons.category_outlined),
+                ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(shop == null ? 'Add category' : 'Edit category'),
+              const SizedBox(height: 8),
+              AppPhoneField(controller: _phone, label: 'Contact phone'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _address,
+                decoration: const InputDecoration(
+                  labelText: 'Details',
+                  prefixIcon: Icon(Icons.notes_outlined),
+                ),
+                minLines: 2,
+                maxLines: 3,
               ),
+              const SizedBox(height: 18),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              const _AdminSectionHeader(
+                title: 'Shopping methods',
+                icon: Icons.tune_outlined,
+              ),
+              const Text(
+                'Only the methods you enable here are offered to customers '
+                'for this category.',
+                style: TextStyle(
+                  color: _adminMuted,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 4),
+              for (final method in Shop.allShoppingMethods)
+                CheckboxListTile(
+                  value: _allowedMethods.contains(method),
+                  onChanged: (value) => setState(() {
+                    if (value == true) {
+                      _allowedMethods.add(method);
+                    } else {
+                      _allowedMethods.remove(method);
+                    }
+                  }),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  activeColor: _adminPrimary,
+                  secondary: Icon(
+                    _methodLabels[method]!.icon,
+                    color: _adminMuted,
+                  ),
+                  title: Text(
+                    _methodLabels[method]!.label,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              const _AdminSectionHeader(
+                title: 'Opening hours',
+                icon: Icons.schedule_outlined,
+              ),
+              SwitchListTile(
+                value: _useCustomHours,
+                onChanged: (value) => setState(() => _useCustomHours = value),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                activeThumbColor: _adminPrimary,
+                title: const Text(
+                  'Use custom hours',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                subtitle: Text(
+                  _useCustomHours
+                      ? 'This category ignores the global shop hours.'
+                      : 'This category follows the global shop hours.',
+                  style: const TextStyle(
+                    color: _adminMuted,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              if (_useCustomHours) ...[
+                const SizedBox(height: 8),
+                _ShopTimePicker(
+                  label: 'Opening time',
+                  time: ShopHoursSettings.formatMinutes(_openingMinutes),
+                  icon: Icons.wb_sunny_outlined,
+                  onTap: () => _pickTime(opening: true),
+                ),
+                const SizedBox(height: 10),
+                _ShopTimePicker(
+                  label: 'Closing time',
+                  time: ShopHoursSettings.formatMinutes(_closingMinutes),
+                  icon: Icons.nightlight_outlined,
+                  onTap: () => _pickTime(opening: false),
+                ),
+                if (_openingMinutes == _closingMinutes) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Same opening and closing time means open all day.',
+                    style: TextStyle(
+                      color: _adminMuted,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  value: _isTemporarilyClosed,
+                  onChanged: (value) =>
+                      setState(() => _isTemporarilyClosed = value),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  activeThumbColor: _adminDanger,
+                  title: const Text(
+                    'Temporarily closed',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  subtitle: const Text(
+                    'Blocks new orders for this category only.',
+                    style: TextStyle(
+                      color: _adminMuted,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                if (_isTemporarilyClosed)
+                  TextField(
+                    controller: _closureReason,
+                    decoration: const InputDecoration(
+                      labelText: 'Closure reason',
+                      prefixIcon: Icon(Icons.info_outline),
+                    ),
+                    minLines: 1,
+                    maxLines: 2,
+                  ),
+              ],
             ],
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: name,
-                  decoration: const InputDecoration(
-                    labelText: 'Category name',
-                    prefixIcon: Icon(Icons.category_outlined),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                AppPhoneField(
-                  controller: phone,
-                  label: 'Contact phone',
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: address,
-                  decoration: const InputDecoration(
-                    labelText: 'Details',
-                    prefixIcon: Icon(Icons.notes_outlined),
-                  ),
-                  minLines: 2,
-                  maxLines: 3,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                if (name.text.trim().isEmpty) {
-                  return;
-                }
-                final phoneError = Validators.phone(phone.text);
-                if (phoneError != null) {
-                  showSnack(context, phoneError);
-                  return;
-                }
-                final appState = context.read<AppState>();
-                final saved = Shop(
-                  shopId: shop?.shopId ?? const Uuid().v4(),
-                  shopName: name.text.trim(),
-                  address: address.text.trim(),
-                  phone: PhoneUtils.normalizeSriLankanPhone(phone.text),
-                  isActive: shop?.isActive ?? true,
-                  createdAt: shop?.createdAt ?? DateTime.now(),
-                );
-                await appState.firestoreService.saveShop(saved);
-                if (dialogContext.mounted) {
-                  Navigator.of(dialogContext).pop();
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isSaving ? null : _save,
+          child: Text(_isSaving ? 'Saving...' : 'Save'),
+        ),
+      ],
     );
+  }
+
+  Future<void> _pickTime({required bool opening}) async {
+    final current = opening ? _openingMinutes : _closingMinutes;
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: current ~/ 60, minute: current % 60),
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    setState(() {
+      final minutes = selected.hour * 60 + selected.minute;
+      if (opening) {
+        _openingMinutes = minutes;
+      } else {
+        _closingMinutes = minutes;
+      }
+    });
+  }
+
+  Future<void> _save() async {
+    if (_name.text.trim().isEmpty) {
+      showSnack(context, 'Enter a category name.');
+      return;
+    }
+    final phoneError = Validators.phone(_phone.text);
+    if (phoneError != null) {
+      showSnack(context, phoneError);
+      return;
+    }
+    if (_allowedMethods.isEmpty) {
+      showSnack(context, 'Enable at least one shopping method.');
+      return;
+    }
+    if (_useCustomHours &&
+        _isTemporarilyClosed &&
+        _closureReason.text.trim().isEmpty) {
+      showSnack(context, 'Enter a reason for the temporary closure.');
+      return;
+    }
+
+    final shop = widget.shop;
+    final saved = Shop(
+      shopId: shop?.shopId ?? const Uuid().v4(),
+      shopName: _name.text.trim(),
+      address: _address.text.trim(),
+      phone: PhoneUtils.normalizeSriLankanPhone(_phone.text),
+      isActive: shop?.isActive ?? true,
+      createdAt: shop?.createdAt ?? DateTime.now(),
+      allowedMethods: Shop.normalizeMethods(_allowedMethods),
+      hoursOverride: _useCustomHours
+          ? ShopHoursSettings(
+              openingMinutes: _openingMinutes,
+              closingMinutes: _closingMinutes,
+              updatedAt: DateTime.now(),
+              isTemporarilyClosed: _isTemporarilyClosed,
+              temporaryClosureReason: _isTemporarilyClosed
+                  ? _closureReason.text.trim()
+                  : '',
+            )
+          : null,
+    );
+
+    setState(() => _isSaving = true);
+    try {
+      await context.read<AppState>().firestoreService.saveShop(saved);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        showSnack(context, error.toString());
+      }
+    }
   }
 }
 
@@ -6742,6 +7473,35 @@ class _AdminShopTile extends StatelessWidget {
                     ),
                   ),
                 ],
+                if (shop.hasMethodRestrictions || shop.hasCustomHours) ...[
+                  const SizedBox(height: 7),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      if (shop.hasMethodRestrictions)
+                        _AdminShopBadge(
+                          icon: Icons.tune_outlined,
+                          label: shop.allowedMethods
+                              .map(AppState.shoppingMethodLabel)
+                              .join(' + '),
+                          color: _adminBlue,
+                        ),
+                      if (shop.hasCustomHours)
+                        _AdminShopBadge(
+                          icon: shop.hoursOverride!.isTemporarilyClosed
+                              ? Icons.block
+                              : Icons.schedule_outlined,
+                          label: shop.hoursOverride!.isTemporarilyClosed
+                              ? 'Temporarily closed'
+                              : shop.hoursOverride!.rangeLabel,
+                          color: shop.hoursOverride!.isTemporarilyClosed
+                              ? _adminDanger
+                              : _adminPrimary,
+                        ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -6763,6 +7523,45 @@ class _AdminShopTile extends StatelessWidget {
             ],
           ),
           const Icon(Icons.chevron_right, color: _adminMuted),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminShopBadge extends StatelessWidget {
+  const _AdminShopBadge({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w800,
+              fontSize: 11,
+            ),
+          ),
         ],
       ),
     );
@@ -6911,22 +7710,39 @@ class AdminCustomerManagementScreen extends StatefulWidget {
 class _AdminCustomerManagementScreenState
     extends State<AdminCustomerManagementScreen> {
   final _searchController = TextEditingController();
-  String _query = '';
+  List<String> _terms = const <String>[];
+  Timer? _searchDebounce;
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
-  bool _matchesSearch(UserProfile user) {
-    if (_query.isEmpty) {
-      return true;
-    }
-    return user.fullName.toLowerCase().contains(_query) ||
-        user.phone.toLowerCase().contains(_query) ||
-        user.address.toLowerCase().contains(_query);
+  /// Re-filtering rebuilds every customer tile, so running it on each
+  /// keystroke janks badly enough that typing a whole name is a fight. Wait
+  /// for a short pause in typing instead.
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(_adminSearchDebounce, () {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _terms = searchTerms(value));
+    });
   }
+
+  void _clearSearch() {
+    _searchDebounce?.cancel();
+    _searchController.clear();
+    setState(() => _terms = const <String>[]);
+  }
+
+  bool _matchesSearch(UserProfile user) => matchesAllSearchTerms(
+        '${user.fullName} ${user.phone} ${user.address}',
+        _terms,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -6954,24 +7770,29 @@ class _AdminCustomerManagementScreenState
                   title: 'Total customers (${allCustomers.length})',
                 ),
                 const SizedBox(height: 10),
-                TextField(
-                  controller: _searchController,
-                  onChanged: (value) {
-                    setState(() => _query = value.trim().toLowerCase());
+                // Bound to the controller rather than the debounced query so
+                // the clear button appears the instant a character is typed.
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _searchController,
+                  builder: (context, value, _) {
+                    return TextField(
+                      controller: _searchController,
+                      autocorrect: false,
+                      textInputAction: TextInputAction.search,
+                      onChanged: _onSearchChanged,
+                      decoration: InputDecoration(
+                        hintText: 'Search by name, phone, or address',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: value.text.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Clear search',
+                                onPressed: _clearSearch,
+                                icon: const Icon(Icons.close),
+                              ),
+                      ),
+                    );
                   },
-                  decoration: InputDecoration(
-                    hintText: 'Search by name, phone, or address',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _query.isEmpty
-                        ? null
-                        : IconButton(
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _query = '');
-                            },
-                            icon: const Icon(Icons.close),
-                          ),
-                  ),
                 ),
                 const SizedBox(height: 12),
                 if (allCustomers.isEmpty)
@@ -6994,6 +7815,9 @@ class _AdminCustomerManagementScreenState
                   ...users.asMap().entries.map((entry) {
                     final user = entry.value;
                     return Padding(
+                      // Keyed by customer so filtering reuses surviving rows
+                      // instead of rebuilding every tile from scratch.
+                      key: ValueKey(user.uid),
                       padding: const EdgeInsets.only(bottom: 10),
                       child: _AdminReveal(
                         index: entry.key,

@@ -18,6 +18,46 @@ void main() {
     );
   });
 
+  test('builds a receipt with photo and manual list categories', () async {
+    final bytes = await OrderReceiptPdfService.buildWithAssets(
+      _order(
+        photoListAmount: 1200,
+        manualListAmount: 650,
+        subtotal: 2750,
+        totalAmount: 3000,
+        photoLists: const [
+          OrderPhotoList(
+            shopId: 'veg',
+            shopName: 'Vegetables',
+            imageUrl: 'https://example.com/veg-list.jpg',
+            imagePublicId: 'veg-list',
+          ),
+          OrderPhotoList(
+            shopId: 'grocery',
+            shopName: 'Groceries',
+            imageUrl: 'https://example.com/grocery-list.jpg',
+            imagePublicId: 'grocery-list',
+          ),
+        ],
+        manualLists: const [
+          OrderManualList(
+            shopId: 'bakery',
+            shopName: 'Bakery',
+            text: 'Bread\nBuns',
+          ),
+          OrderManualList(
+            shopId: 'veg',
+            shopName: 'Vegetables',
+            text: 'Curry leaves',
+          ),
+        ],
+      ),
+    );
+
+    expect(bytes.length, greaterThan(1000));
+    expect(ascii.decode(bytes.take(4).toList()), '%PDF');
+  });
+
   testWidgets(
       'builds the receipt with the real bundled logo without excessive '
       'memory use', (tester) async {
@@ -42,7 +82,14 @@ void main() {
   });
 }
 
-OrderModel _order() {
+OrderModel _order({
+  double photoListAmount = 0,
+  double manualListAmount = 0,
+  double subtotal = 900,
+  double totalAmount = 1150,
+  List<OrderPhotoList> photoLists = const <OrderPhotoList>[],
+  List<OrderManualList> manualLists = const <OrderManualList>[],
+}) {
   final now = DateTime(2026, 6, 9, 14, 30);
   return OrderModel(
     orderId: 'order-123',
@@ -69,13 +116,13 @@ OrderModel _order() {
     paymentReceiptImagePublicId: '',
     orderNotes: '',
     cartItemsAmount: 900,
-    photoListAmount: 0,
-    manualListAmount: 0,
+    photoListAmount: photoListAmount,
+    manualListAmount: manualListAmount,
     listAmountsReviewed: true,
-    subtotal: 900,
+    subtotal: subtotal,
     deliveryCharge: 250,
     serviceCharge: 0,
-    totalAmount: 1150,
+    totalAmount: totalAmount,
     paymentMethod: 'COD',
     paymentStatus: 'paid',
     orderStatus: 'Delivered',
@@ -89,5 +136,7 @@ OrderModel _order() {
     deliveryReviewedAt: null,
     createdAt: now,
     updatedAt: now,
+    photoLists: photoLists,
+    manualLists: manualLists,
   );
 }

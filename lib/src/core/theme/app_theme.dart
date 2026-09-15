@@ -125,6 +125,27 @@ class AppTheme {
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 8,
+        shadowColor: const Color(0xFF10231A).withValues(alpha: 0.25),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        titleTextStyle: const TextStyle(
+          color: Color(0xFF10231A),
+          fontSize: 18,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0,
+        ),
+        contentTextStyle: const TextStyle(
+          color: Color(0xFF3D493F),
+          fontSize: 14.5,
+          fontWeight: FontWeight.w600,
+          height: 1.4,
+        ),
+      ),
       fontFamily: null,
       visualDensity: VisualDensity.standard,
       extensions: const <ThemeExtension<dynamic>>[

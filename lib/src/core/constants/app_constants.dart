@@ -31,6 +31,9 @@ class AppConstants {
   static const privacyPolicyUrl = 'https://whatsconnect.sbs/privacy-policy/';
   static const accountDeletionUrl =
       'https://grocery-delivery-app-388bc.web.app/delete-account';
+  static const whatsappChannelUrl =
+      'https://whatsapp.com/channel/0029VbDhttlEwEjzKCevhw1q';
+  static const facebookPageUrl = 'https://www.facebook.com/share/1Hb3hovLun/';
 
   static const orderStatuses = <String>[
     'Pending',

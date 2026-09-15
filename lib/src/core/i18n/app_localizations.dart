@@ -120,11 +120,11 @@ const _tamil = <String, String>{
   'Show password': 'கடவுச்சொல்லைக் காட்டு',
   'Hide password': 'கடவுச்சொல்லை மறை',
   'Phone number': 'தொலைபேசி எண்',
-  'Local groceries, lists, pickup, and COD delivery.':
-      'உள்ளூர் மளிகை, பட்டியல்கள், பிக்-அப் மற்றும் COD விநியோகம்.',
+  'Local shopping, lists, pickup, and COD delivery.':
+      'உள்ளூர் ஷாப்பிங், பட்டியல்கள், பிக்-அப் மற்றும் COD விநியோகம்.',
   'Everything you need in one place': 'தேவையான அனைத்தும் ஒரே இடத்தில்',
-  'Browse our carefully selected products and enjoy a simple grocery shopping experience.':
-      'கவனமாக தேர்ந்தெடுக்கப்பட்ட பொருட்களை பார்த்து எளிய மளிகை ஷாப்பிங்கை அனுபவிக்கவும்.',
+  'Browse our carefully selected products and enjoy a simple shopping experience.':
+      'கவனமாக தேர்ந்தெடுக்கப்பட்ட பொருட்களை பார்த்து எளிய ஷாப்பிங்கை அனுபவிக்கவும்.',
   'Upload a shopping list': 'ஷாப்பிங் பட்டியலை பதிவேற்றவும்',
   'Send a handwritten or printed list photo when catalog items are not enough.':
       'பட்டியல் பொருட்கள் போதாதபோது கையெழுத்து அல்லது அச்சிடப்பட்ட பட்டியல் புகைப்படத்தை அனுப்புங்கள்.',
@@ -137,7 +137,7 @@ const _tamil = <String, String>{
   'Get started': 'தொடங்குங்கள்',
   'Next': 'அடுத்து',
   'Welcome back': 'மீண்டும் வரவேற்கிறோம்',
-  'Fresh groceries are waiting': 'புதிய மளிகை பொருட்கள் காத்திருக்கின்றன',
+  'Your next order is waiting': 'உங்கள் அடுத்த ஆர்டர் காத்திருக்கிறது',
   'Login with your phone and password to reorder, track deliveries, and send shopping lists.':
       'மீண்டும் ஆர்டர் செய்ய, விநியோகத்தை கண்காணிக்க, பட்டியல்கள் அனுப்ப உங்கள் தொலைபேசி மற்றும் கடவுச்சொல்லுடன் உள்நுழையுங்கள்.',
   'Password': 'கடவுச்சொல்',
@@ -151,7 +151,7 @@ const _tamil = <String, String>{
       'முதலில் அனுமதி கோருங்கள். அனுமதி கிடைத்ததும் இங்கே புதிய கடவுச்சொல்லை அமைக்கலாம்.',
   'Request reset': 'மீட்டமைப்பு கோரு',
   'Complete profile': 'சுயவிவரத்தை முடிக்கவும்',
-  'Your grocery profile': 'உங்கள் மளிகை சுயவிவரம்',
+  'Your shopping profile': 'உங்கள் ஷாப்பிங் சுயவிவரம்',
   'Add your delivery details once and checkout faster on every order.':
       'உங்கள் விநியோக விவரங்களை ஒருமுறை சேர்த்து ஒவ்வொரு ஆர்டரிலும் விரைவாக checkout செய்யுங்கள்.',
   'Full name': 'முழுப் பெயர்',
@@ -203,16 +203,18 @@ const _tamil = <String, String>{
   'Pick the items you need.':
       'உங்களுக்கு தேவையான பொருட்களை தேர்வு செய்யுங்கள்.',
   'Photo list': 'புகைப்பட பட்டியல்',
-  'Send any grocery list': 'எந்த மளிகை பட்டியலையும் அனுப்புங்கள்',
-  'Fresh picks': 'புதிய தேர்வுகள்',
+  'Send any shopping list': 'எந்த ஷாப்பிங் பட்டியலையும் அனுப்புங்கள்',
+  'New arrivals': 'புதிய வரவுகள்',
+  'Example:\nItem name - 2 kg\nItem name - 1 packet\nItem name - 6 pieces':
+      'உதாரணம்:\nபொருளின் பெயர் - 2 kg\nபொருளின் பெயர் - 1 பாக்கெட்\nபொருளின் பெயர் - 6 எண்ணிக்கை',
   'Recently added to the catalog': 'பட்டியலில் சமீபத்தில் சேர்க்கப்பட்டது',
   'View all': 'அனைத்தையும் பார்க்க',
   'Hi {name}': 'வணக்கம் {name}',
   'there': 'நண்பரே',
-  'Search groceries ': 'மளிகைகளை தேடுங்கள்',
+  'Search products ': 'பொருட்களை தேடுங்கள்',
   'Fast local delivery': 'வேகமான உள்ளூர் விநியோகம்',
-  'Fresh groceries, photo lists, and COD in one smooth order.':
-      'புதிய மளிகை, புகைப்பட பட்டியல்கள், COD அனைத்தும் ஒரே எளிய ஆர்டரில்.',
+  'Everyday essentials, photo lists, and COD in one smooth order.':
+      'அன்றாட தேவைகள், புகைப்பட பட்டியல்கள், COD அனைத்தும் ஒரே எளிய ஆர்டரில்.',
   'We source from trusted partners and keep you updated.':
       'நம்பகமான கூட்டாளர்களிடமிருந்து வாங்கி உங்களை தொடர்ந்து புதுப்பிப்போம்.',
   'No products yet': 'இன்னும் பொருட்கள் இல்லை',
@@ -245,6 +247,7 @@ const _tamil = <String, String>{
   'Add to cart': 'கார்டில் சேர்',
   'Unavailable': 'கிடைக்கவில்லை',
   'Available': 'கிடைக்கிறது',
+  'No longer available': 'இனி கிடைக்கவில்லை',
   'About this item': 'இந்த பொருள் பற்றி',
   'No description added yet. You can still add it to your cart and confirm details at checkout.':
       'இன்னும் விளக்கம் சேர்க்கப்படவில்லை. இதை கார்டில் சேர்த்து checkoutல் விவரங்களை உறுதிப்படுத்தலாம்.',
@@ -346,6 +349,7 @@ const _tamil = <String, String>{
   'This order is no longer active.': 'இந்த ஆர்டர் இனி செயல்பாட்டில் இல்லை.',
   'Cancelled by customer within the order window.':
       'ஆர்டர் நேர எல்லைக்குள் வாடிக்கையாளர் ரத்து செய்தார்.',
+  'This order was cancelled.': 'இந்த ஆர்டர் ரத்து செய்யப்பட்டது.',
   'Online cancellation is unavailable for this order. Please contact support.':
       'இந்த ஆர்டருக்கு ஆன்லைன் ரத்து செய்யும் வசதி இல்லை. ஆதரவு குழுவை தொடர்புகொள்ளவும்.',
   'Customer cancellation window:': 'வாடிக்கையாளர் ரத்து செய்யும் நேரம்:',
@@ -419,6 +423,32 @@ const _tamil = <String, String>{
   'No notifications': 'அறிவிப்புகள் இல்லை',
   'Order and support updates will appear here.':
       'ஆர்டர் மற்றும் ஆதரவு புதுப்பிப்புகள் இங்கே தோன்றும்.',
+  'Delete All': 'அனைத்தையும் நீக்கு',
+  'Delete all notifications?': 'அனைத்து அறிவிப்புகளையும் நீக்கவா?',
+  'This permanently deletes every saved notification from the database. This action cannot be undone.':
+      'இது சேமிக்கப்பட்ட அனைத்து அறிவிப்புகளையும் தரவுத்தளத்திலிருந்து நிரந்தரமாக நீக்குகிறது. இச்செயலை மீட்டெடுக்க முடியாது.',
+  'Cancel': 'ரத்து செய்',
+  'Delete all': 'அனைத்தையும் நீக்கு',
+  'Follow us': 'எங்களைப் பின்தொடருங்கள்',
+  'Join our WhatsApp channel': 'எங்கள் WhatsApp சேனலில் இணையுங்கள்',
+  'Get offers and updates on WhatsApp.':
+      'WhatsApp இல் சலுகைகள் மற்றும் புதுப்பிப்புகளைப் பெறுங்கள்.',
+  'Like our Facebook page': 'எங்கள் Facebook பக்கத்தை லைக் செய்யுங்கள்',
+  'Follow us on Facebook for the latest news.':
+      'சமீபத்திய செய்திகளுக்கு Facebook இல் எங்களைப் பின்தொடருங்கள்.',
+  'Privacy policy': 'தனியுரிமைக் கொள்கை',
+  'See how account, order, and image data is handled.':
+      'கணக்கு, ஆர்டர் மற்றும் படத் தரவு எவ்வாறு கையாளப்படுகிறது என்பதைப் பார்க்கவும்.',
+  'Delete account': 'கணக்கை நீக்கு',
+  'Permanently remove your account and personal data.':
+      'உங்கள் கணக்கு மற்றும் தனிப்பட்ட தரவை நிரந்தரமாக அகற்றவும்.',
+  'Permanently delete account?': 'கணக்கை நிரந்தரமாக நீக்கவா?',
+  'Your profile, support messages, notifications, and uploaded personal images will be removed. Closed order records are anonymized for accounting. Active orders must be completed or cancelled first.':
+      'உங்கள் சுயவிவரம், ஆதரவு செய்திகள், அறிவிப்புகள் மற்றும் பதிவேற்றிய தனிப்பட்ட படங்கள் அகற்றப்படும். முடிந்த ஆர்டர் பதிவுகள் கணக்கியலுக்காக அடையாளம் நீக்கப்படும். நடப்பில் உள்ள ஆர்டர்களை முதலில் முடிக்க வேண்டும் அல்லது ரத்து செய்ய வேண்டும்.',
+  'I understand this cannot be undone.':
+      'இதை மீட்டெடுக்க முடியாது என்பதை புரிந்துகொள்கிறேன்.',
+  'Keep account': 'கணக்கை வைத்திரு',
+  'Delete permanently': 'நிரந்தரமாக நீக்கு',
   'Subject': 'தலைப்பு',
   'Message': 'செய்தி',
   'Create ticket': 'டிக்கெட் உருவாக்கு',
@@ -489,6 +519,8 @@ const _tamil = <String, String>{
   'collected': 'பெறப்பட்டது',
   'Payment marked collected.': 'கட்டணம் பெற்றதாக சேமிக்கப்பட்டது.',
   'Order marked delivered.': 'ஆர்டர் டெலிவரி முடிந்ததாக சேமிக்கப்பட்டது.',
+  'Collect the COD payment above before marking this order delivered.':
+      'இந்த ஆர்டரை டெலிவரி செய்யப்பட்டதாகக் குறிக்கும் முன் மேலே உள்ள COD கட்டணத்தைப் பெறவும்.',
   'Customer review': 'வாடிக்கையாளர் கருத்து',
   'Amount details': 'தொகை விவரம்',
   'Total amount': 'மொத்த தொகை',
@@ -581,15 +613,19 @@ const _tamil = <String, String>{
   'Add products or upload a shopping list before checkout.':
       'Checkoutக்கு முன் பொருட்களை சேர்க்கவும் அல்லது ஷாப்பிங் பட்டியலை பதிவேற்றவும்.',
   'Important Order Notice': 'முக்கியமான ஆர்டர் அறிவிப்பு',
-  'Please include multiple grocery items in your photo list. Orders containing only one or very few items may be rejected by the admin.':
-      'தயவுசெய்து உங்கள் புகைப்பட பட்டியலில் பல மளிகை பொருட்களை சேர்க்கவும். ஒரே ஒரு பொருள் அல்லது மிகக் குறைந்த பொருட்கள் மட்டும் கொண்ட ஆர்டர்கள் அட்மினால் நிராகரிக்கப்படலாம்.',
-  'Please include multiple grocery items in your manual list. Orders containing only one or very few items may be rejected by the admin.':
-      'தயவுசெய்து உங்கள் கைமுறை பட்டியலில் பல மளிகை பொருட்களை சேர்க்கவும். ஒரே ஒரு பொருள் அல்லது மிகக் குறைந்த பொருட்கள் மட்டும் கொண்ட ஆர்டர்கள் அட்மினால் நிராகரிக்கப்படலாம்.',
+  'Please include multiple items in your photo list. Orders containing only one or very few items may be rejected by the admin.':
+      'தயவுசெய்து உங்கள் புகைப்பட பட்டியலில் பல பொருட்களை சேர்க்கவும். ஒரே ஒரு பொருள் அல்லது மிகக் குறைந்த பொருட்கள் மட்டும் கொண்ட ஆர்டர்கள் அட்மினால் நிராகரிக்கப்படலாம்.',
+  'Please include multiple items in your manual list. Orders containing only one or very few items may be rejected by the admin.':
+      'தயவுசெய்து உங்கள் கைமுறை பட்டியலில் பல பொருட்களை சேர்க்கவும். ஒரே ஒரு பொருள் அல்லது மிகக் குறைந்த பொருட்கள் மட்டும் கொண்ட ஆர்டர்கள் அட்மினால் நிராகரிக்கப்படலாம்.',
   'Minimum Order Value': 'குறைந்தபட்ச ஆர்டர் தொகை',
   'Your order must be at least Rs. {amount} to continue.':
       'தொடர உங்கள் ஆர்டர் குறைந்தது Rs. {amount} ஆக இருக்க வேண்டும்.',
   'Add Rs. {amount} more to reach the minimum order value.':
       'குறைந்தபட்ச ஆர்டர் தொகையை எட்ட இன்னும் Rs. {amount} சேர்க்கவும்.',
+  '{name} is no longer available. Remove it from your cart to continue.':
+      '{name} இனி கிடைக்கவில்லை. தொடர அதை உங்கள் கார்ட்டிலிருந்து அகற்றவும்.',
+  'These items are no longer available: {names}. Remove them from your cart to continue.':
+      'இந்தப் பொருட்கள் இனி கிடைக்கவில்லை: {names}. தொடர அவற்றை உங்கள் கார்ட்டிலிருந்து அகற்றவும்.',
   'Temporarily Close Shop': 'கடையை தற்காலிகமாக மூடு',
   'Reason for closure': 'மூடுவதற்கான காரணம்',
   'Please enter a reason before closing the shop.':
@@ -601,4 +637,15 @@ const _tamil = <String, String>{
   'Please try again later.': 'பிறகு மீண்டும் முயற்சிக்கவும்.',
   'Shop is temporarily closed.': 'கடை தற்காலிகமாக மூடப்பட்டுள்ளது.',
   'OK': 'சரி',
+  'Closed right now': 'இப்போது மூடப்பட்டுள்ளது',
+  'This category is not accepting orders right now.':
+      'இந்தப் பிரிவு இப்போது ஆர்டர்களை ஏற்கவில்லை.',
+  'This category is closed. Please come back at {time}.':
+      'இந்தப் பிரிவு மூடப்பட்டுள்ளது. {time} மணிக்கு மீண்டும் வரவும்.',
+  'Opens at {time}': '{time} மணிக்கு திறக்கும்',
+  '{category} does not accept {method} orders.':
+      '{category} பிரிவு {method} ஆர்டர்களை ஏற்காது.',
+  'Photo List': 'புகைப்பட பட்டியல்',
+  'Manual List': 'கைமுறை பட்டியல்',
+  'Item Selection': 'பொருள் தேர்வு',
 };

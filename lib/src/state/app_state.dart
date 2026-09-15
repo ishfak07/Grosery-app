@@ -36,6 +36,81 @@ class MinimumOrderNotMetException implements Exception {
       'Your order must be at least Rs. ${AppConstants.formatRupees(minimumOrderValue)} to continue.';
 }
 
+/// Thrown by [AppState.createOrder] when the server-authoritative recheck in
+/// [AppState._resolveCheckoutItems] finds that one or more cart items are no
+/// longer orderable — the admin disabled/depleted the product, or deleted it
+/// outright, after it was added to the cart. The order is never created and
+/// the cart is left untouched, so the customer can remove/replace the item
+/// and try again.
+class CartItemsUnavailableException implements Exception {
+  const CartItemsUnavailableException(this.unavailableItemNames);
+
+  /// Display names (English) of every cart item that failed the
+  /// availability recheck, in cart order.
+  final List<String> unavailableItemNames;
+
+  @override
+  String toString() {
+    final names = unavailableItemNames.join(', ');
+    return unavailableItemNames.length == 1
+        ? '$names is no longer available. Remove it from your cart to continue.'
+        : 'These items are no longer available: $names. Remove them from your cart to continue.';
+  }
+}
+
+class CategoryMethodConflictException implements Exception {
+  const CategoryMethodConflictException({
+    required this.categoryName,
+    required this.currentMethod,
+    required this.requestedMethod,
+  });
+
+  final String categoryName;
+  final String currentMethod;
+  final String requestedMethod;
+
+  String get currentMethodLabel => AppState.shoppingMethodLabel(currentMethod);
+  String get requestedMethodLabel =>
+      AppState.shoppingMethodLabel(requestedMethod);
+
+  @override
+  String toString() =>
+      '$categoryName category already uses $currentMethodLabel. Change the shopping method to continue.';
+}
+
+/// Thrown when a draft/checkout touches a category that is closed right now
+/// — either by its own [Shop.hoursOverride] or by the global shop hours.
+class CategoryClosedException implements Exception {
+  const CategoryClosedException({
+    required this.categoryName,
+    required this.hours,
+  });
+
+  final String categoryName;
+  final ShopHoursSettings hours;
+
+  @override
+  String toString() => hours.closedMessageFor(categoryName);
+}
+
+/// Thrown when a category is asked for a shopping method the admin did not
+/// enable for it (see [Shop.allowedMethods]).
+class CategoryMethodNotAllowedException implements Exception {
+  const CategoryMethodNotAllowedException({
+    required this.categoryName,
+    required this.method,
+  });
+
+  final String categoryName;
+  final String method;
+
+  String get methodLabel => AppState.shoppingMethodLabel(method);
+
+  @override
+  String toString() =>
+      '$categoryName does not accept $methodLabel orders. Choose another shopping method.';
+}
+
 class AppState extends ChangeNotifier {
   AppState(FirebaseBootstrap bootstrap)
       : firebaseAvailable = bootstrap.isReady,
@@ -69,6 +144,7 @@ class AppState extends ChangeNotifier {
   StreamSubscription<ShopHoursSettings>? _shopHoursSettingsSubscription;
   StreamSubscription<PaymentSettings>? _paymentSettingsSubscription;
   StreamSubscription<List<Product>>? _productCatalogSubscription;
+  StreamSubscription<List<Shop>>? _categoriesSubscription;
 
   bool _isInitializing = true;
   bool _isLoggingOut = false;
@@ -77,8 +153,10 @@ class AppState extends ChangeNotifier {
   UserProfile? _profile;
   List<CartItem> _cartItems = const <CartItem>[];
   Map<String, Product> _catalogById = const <String, Product>{};
-  String? _billImagePath;
-  String _manualListText = '';
+  List<Shop> _categories = const <Shop>[];
+  List<DraftPhotoList> _photoLists = const <DraftPhotoList>[];
+  List<DraftManualList> _manualLists = const <DraftManualList>[];
+  Shop? _selectedHomeCategory;
   CheckoutChargeSettings _checkoutChargeSettings =
       CheckoutChargeSettings.defaults;
   bool _hasLoadedCheckoutChargeSettings = false;
@@ -103,10 +181,148 @@ class AppState extends ChangeNotifier {
   String get effectiveLanguageCode =>
       isAdmin ? AppLanguageCodes.english : _preferredLanguageCode;
   List<CartItem> get cartItems => List.unmodifiable(_cartItems);
-  String? get billImagePath => _billImagePath;
-  bool get hasBillImage => _billImagePath != null && _billImagePath!.isNotEmpty;
-  String get manualListText => _manualListText;
-  bool get hasManualList => _manualListText.trim().isNotEmpty;
+
+  /// Every attached photo list, one per category — a Groceries photo and a
+  /// Vegetables photo can coexist. See [currentPhotoList] for the entry
+  /// scoped to whatever category is selected on Home right now.
+  List<DraftPhotoList> get photoLists => List.unmodifiable(_photoLists);
+
+  /// Every typed manual list, one per category. See [currentManualList].
+  List<DraftManualList> get manualLists => List.unmodifiable(_manualLists);
+
+  bool get hasBillImage => _photoLists.isNotEmpty;
+  bool get hasManualList => _manualLists.isNotEmpty;
+  Shop? get selectedHomeCategory => _selectedHomeCategory;
+
+  /// The category key drafts are read/written under: the selected Home
+  /// category's shop id, or '' (a shared "uncategorized" bucket) when none
+  /// is selected — matching how [CategoryGroup]'s fallback bucket works
+  /// everywhere else in the app.
+  String _draftCategoryKey() => _selectedHomeCategory?.shopId ?? '';
+  String _draftCategoryName() => _selectedHomeCategory?.shopName ?? '';
+
+  /// The photo list entry for the currently selected Home category (or the
+  /// uncategorized bucket), if any. [UploadBillScreen] reads/edits this —
+  /// switching category before opening it scopes it to a different entry,
+  /// so attaching a Vegetables photo never overwrites a Groceries one.
+  DraftPhotoList? get currentPhotoList {
+    final key = _draftCategoryKey();
+    for (final entry in _photoLists) {
+      if (entry.shopId == key) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  /// The manual list entry for the currently selected Home category (or the
+  /// uncategorized bucket), if any. See [currentPhotoList].
+  DraftManualList? get currentManualList {
+    final key = _draftCategoryKey();
+    for (final entry in _manualLists) {
+      if (entry.shopId == key) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  static String shoppingMethodLabel(String method) {
+    switch (method) {
+      case OrderCategoryMethod.methodPhoto:
+        return 'Photo List';
+      case OrderCategoryMethod.methodManual:
+        return 'Manual List';
+      case OrderCategoryMethod.methodItems:
+        return 'Item Selection';
+      default:
+        return method;
+    }
+  }
+
+  String? selectedMethodForCategory(String shopId) {
+    final key = shopId.trim();
+    if (_photoLists.any((entry) => entry.shopId == key)) {
+      return OrderCategoryMethod.methodPhoto;
+    }
+    if (_manualLists.any((entry) => entry.shopId == key)) {
+      return OrderCategoryMethod.methodManual;
+    }
+    if (_cartItems.any((item) => item.shopId == key)) {
+      return OrderCategoryMethod.methodItems;
+    }
+    return null;
+  }
+
+  bool categoryHasDraftData(String shopId) =>
+      selectedMethodForCategory(shopId) != null;
+
+  String _categoryDisplayName(String shopId, String fallback) {
+    final key = shopId.trim();
+    final name = fallback.trim();
+    if (name.isNotEmpty) {
+      return name;
+    }
+    for (final entry in _photoLists) {
+      if (entry.shopId == key && entry.shopName.trim().isNotEmpty) {
+        return entry.shopName;
+      }
+    }
+    for (final entry in _manualLists) {
+      if (entry.shopId == key && entry.shopName.trim().isNotEmpty) {
+        return entry.shopName;
+      }
+    }
+    for (final item in _cartItems) {
+      if (item.shopId == key && item.shopName.trim().isNotEmpty) {
+        return item.shopName;
+      }
+    }
+    return 'This';
+  }
+
+  void _ensureCategoryMethod({
+    required String shopId,
+    required String shopName,
+    required String requestedMethod,
+  }) {
+    if (!isMethodAllowedForCategory(shopId, requestedMethod)) {
+      throw CategoryMethodNotAllowedException(
+        categoryName: _categoryDisplayName(shopId, shopName),
+        method: requestedMethod,
+      );
+    }
+    final currentMethod = selectedMethodForCategory(shopId);
+    if (currentMethod == null || currentMethod == requestedMethod) {
+      return;
+    }
+    throw CategoryMethodConflictException(
+      categoryName: _categoryDisplayName(shopId, shopName),
+      currentMethod: currentMethod,
+      requestedMethod: requestedMethod,
+    );
+  }
+
+  Future<void> clearCategoryDraft(String shopId) async {
+    final key = shopId.trim();
+    _cartItems = _cartItems.where((item) => item.shopId != key).toList();
+    _photoLists = _photoLists.where((entry) => entry.shopId != key).toList();
+    _manualLists = _manualLists.where((entry) => entry.shopId != key).toList();
+    notifyListeners();
+    await Future.wait([
+      localStorageService.saveCart(_cartItems),
+      localStorageService.savePhotoLists(_photoLists),
+      localStorageService.saveManualLists(_manualLists),
+    ]);
+  }
+
+  Future<void> changeCategoryMethod({
+    required String shopId,
+    required String method,
+  }) async {
+    await clearCategoryDraft(shopId);
+  }
+
   CheckoutChargeSettings get checkoutChargeSettings => _checkoutChargeSettings;
   bool get hasLoadedCheckoutChargeSettings => _hasLoadedCheckoutChargeSettings;
   ShopHoursSettings get shopHoursSettings => _shopHoursSettings;
@@ -115,6 +331,54 @@ class AppState extends ChangeNotifier {
   bool get isShopManuallyClosed => _shopHoursSettings.isTemporarilyClosed;
   String get shopManualClosureReason =>
       _shopHoursSettings.temporaryClosureReason;
+
+  /// Every category, active or not, mirrored from the `shops` collection so
+  /// that per-category shopping methods and hours can be resolved without a
+  /// stream lookup at every call site.
+  List<Shop> get categories => _categories;
+
+  Shop? categoryById(String shopId) {
+    final key = shopId.trim();
+    if (key.isEmpty) {
+      return null;
+    }
+    for (final category in _categories) {
+      if (category.shopId == key) {
+        return category;
+      }
+    }
+    return null;
+  }
+
+  /// The hours governing [shopId] right now: its own override when it has
+  /// one, otherwise the global shop hours. An unknown category (deleted, or
+  /// the uncategorized bucket) falls back to the global hours.
+  ShopHoursSettings effectiveHoursForCategory(String shopId) =>
+      categoryById(shopId)?.effectiveHours(_shopHoursSettings) ??
+      _shopHoursSettings;
+
+  bool isCategoryOpenNow(String shopId) =>
+      effectiveHoursForCategory(shopId).isOpenAt(DateTime.now());
+
+  /// The methods [shopId] accepts. Unknown categories accept all of them so
+  /// existing drafts are never stranded.
+  List<String> allowedMethodsForCategory(String shopId) =>
+      categoryById(shopId)?.allowedMethods ?? Shop.allShoppingMethods;
+
+  bool isMethodAllowedForCategory(String shopId, String method) =>
+      allowedMethodsForCategory(shopId).contains(method);
+
+  /// [selectedHomeCategory] re-resolved against the live category list.
+  /// [setSelectedHomeCategory] keeps the snapshot it was handed, so the
+  /// stored copy can carry stale shopping-method/hours settings after an
+  /// admin edit; call sites that read those must go through this.
+  Shop? get liveSelectedHomeCategory {
+    final selected = _selectedHomeCategory;
+    if (selected == null) {
+      return null;
+    }
+    return categoryById(selected.shopId) ?? selected;
+  }
   PaymentSettings get paymentSettings => _paymentSettings;
   bool get hasLoadedPaymentSettings => _hasLoadedPaymentSettings;
   PasswordResetStatusResult? get passwordResetTracker => _passwordResetTracker;
@@ -137,12 +401,21 @@ class AppState extends ChangeNotifier {
   double? catalogPriceForProductId(String productId) =>
       _catalogById[productId]?.price;
 
+  /// Whether [item]'s product is still orderable according to the live
+  /// catalog snapshot — drives the Cart screen's soft "no longer
+  /// available" indicator. Returns true (no warning shown) when the
+  /// product isn't in the snapshot yet/at all, matching [livePriceFor]'s
+  /// same "unknown -> don't alarm the customer" fallback; the actual
+  /// authoritative gate is the server recheck in [_resolveCheckoutItems],
+  /// which runs at checkout regardless of what this getter shows.
+  bool isCartItemAvailable(CartItem item) =>
+      _catalogById[item.productId]?.isAvailable ?? true;
+
   double lineTotalFor(CartItem item) => livePriceFor(item) * item.quantity;
 
   /// True when the catalog price has moved away from what was cached in
   /// the cart when the item was added.
-  bool isCartItemPriceStale(CartItem item) =>
-      livePriceFor(item) != item.price;
+  bool isCartItemPriceStale(CartItem item) => livePriceFor(item) != item.price;
 
   double get cartSubtotal =>
       _cartItems.fold<double>(0, (sum, item) => sum + lineTotalFor(item));
@@ -173,8 +446,8 @@ class AppState extends ChangeNotifier {
       connectivityService.start(onStatusChanged: _setInternetConnection),
     );
     _cartItems = await localStorageService.loadCart();
-    _billImagePath = await localStorageService.loadBillImagePath();
-    _manualListText = await localStorageService.loadManualListText();
+    _photoLists = await localStorageService.loadPhotoLists();
+    _manualLists = await localStorageService.loadManualLists();
     _hasSeenOnboarding = await localStorageService.hasSeenOnboarding();
     _preferredLanguageCode =
         await localStorageService.loadPreferredLanguageCode();
@@ -216,6 +489,7 @@ class AppState extends ChangeNotifier {
       await _shopHoursSettingsSubscription?.cancel();
       await _paymentSettingsSubscription?.cancel();
       await _productCatalogSubscription?.cancel();
+      await _categoriesSubscription?.cancel();
       if (!_isCurrentAuthUser(user)) {
         return;
       }
@@ -227,6 +501,7 @@ class AppState extends ChangeNotifier {
       _paymentSettings = PaymentSettings.defaults;
       _hasLoadedPaymentSettings = false;
       _catalogById = const <String, Product>{};
+      _categories = const <Shop>[];
       _notificationsConfiguredForProfileKey = null;
       unawaited(notificationService.detachUser());
       _isInitializing = false;
@@ -238,10 +513,24 @@ class AppState extends ChangeNotifier {
     _watchShopHoursSettings();
     _watchPaymentSettings();
     _watchProductCatalog();
+    _watchCategories();
 
     _profileSubscription = firestoreService.watchUserProfile(user.uid).listen(
       (profile) async {
         if (_isLoggingOut || !_isCurrentAuthUser(user)) {
+          return;
+        }
+        if (profile == null) {
+          // The Firebase Auth session is live but its Firestore profile
+          // document doesn't exist (an interrupted registration, or the
+          // document was removed while the account was signed in). Without
+          // signing out here, this same broken session would be restored
+          // and hit this exact branch again on every future app launch,
+          // leaving the customer stuck on a login screen with a session
+          // that can never complete. logout() also cancels this very
+          // subscription, which is safe to do from within its own
+          // listener callback.
+          await logout();
           return;
         }
         _profile = profile;
@@ -338,9 +627,8 @@ class AppState extends ChangeNotifier {
       return;
     }
     unawaited(_productCatalogSubscription?.cancel());
-    _productCatalogSubscription = firestoreService
-        .watchProducts(activeOnly: false)
-        .listen(
+    _productCatalogSubscription =
+        firestoreService.watchProducts(activeOnly: false).listen(
       (products) {
         _catalogById = {
           for (final product in products) product.productId: product,
@@ -350,6 +638,27 @@ class AppState extends ChangeNotifier {
       onError: (_) {
         // Keep the last-known catalog snapshot; cart/checkout fall back to
         // each item's cached price when a product id is missing from it.
+      },
+    );
+  }
+
+  /// Keeps [_categories] in sync with the live `shops` collection so
+  /// per-category shopping methods and opening hours stay authoritative at
+  /// checkout even if the admin changes them mid-session.
+  void _watchCategories() {
+    if (!firebaseAvailable) {
+      return;
+    }
+    unawaited(_categoriesSubscription?.cancel());
+    _categoriesSubscription =
+        firestoreService.watchShops(activeOnly: false).listen(
+      (shops) {
+        _categories = shops;
+        notifyListeners();
+      },
+      onError: (_) {
+        // Keep the last-known category snapshot; the per-category helpers
+        // fall back to the global hours and all methods when it is empty.
       },
     );
   }
@@ -461,6 +770,7 @@ class AppState extends ChangeNotifier {
     _watchShopHoursSettings();
     _watchPaymentSettings();
     _watchProductCatalog();
+    _watchCategories();
     notifyListeners();
     await _configureNotificationsForProfile(user);
     // A password-reset tracker is only useful pre-login; once the customer
@@ -554,6 +864,7 @@ class AppState extends ChangeNotifier {
     _paymentSettings = PaymentSettings.defaults;
     _hasLoadedPaymentSettings = false;
     _catalogById = const <String, Product>{};
+    _categories = const <Shop>[];
     notifyListeners();
 
     try {
@@ -569,6 +880,7 @@ class AppState extends ChangeNotifier {
       await _shopHoursSettingsSubscription?.cancel();
       await _paymentSettingsSubscription?.cancel();
       await _productCatalogSubscription?.cancel();
+      await _categoriesSubscription?.cancel();
       await authService.logout();
     } finally {
       _isLoggingOut = false;
@@ -589,12 +901,14 @@ class AppState extends ChangeNotifier {
       await _shopHoursSettingsSubscription?.cancel();
       await _paymentSettingsSubscription?.cancel();
       await _productCatalogSubscription?.cancel();
+      await _categoriesSubscription?.cancel();
       await notificationService.detachUser();
       await localStorageService.clearPrivateAccountData();
       _profile = null;
       _cartItems = const <CartItem>[];
-      _billImagePath = null;
-      _manualListText = '';
+      _photoLists = const <DraftPhotoList>[];
+      _manualLists = const <DraftManualList>[];
+      _selectedHomeCategory = null;
       _notificationsConfiguredForProfileKey = null;
       _checkoutChargeSettings = CheckoutChargeSettings.defaults;
       _hasLoadedCheckoutChargeSettings = false;
@@ -603,6 +917,7 @@ class AppState extends ChangeNotifier {
       _paymentSettings = PaymentSettings.defaults;
       _hasLoadedPaymentSettings = false;
       _catalogById = const <String, Product>{};
+      _categories = const <Shop>[];
     } finally {
       _isLoggingOut = false;
       notifyListeners();
@@ -622,12 +937,14 @@ class AppState extends ChangeNotifier {
       await _shopHoursSettingsSubscription?.cancel();
       await _paymentSettingsSubscription?.cancel();
       await _productCatalogSubscription?.cancel();
+      await _categoriesSubscription?.cancel();
       await notificationService.detachUser();
       await localStorageService.clearPrivateAccountData();
       _profile = null;
       _cartItems = const <CartItem>[];
-      _billImagePath = null;
-      _manualListText = '';
+      _photoLists = const <DraftPhotoList>[];
+      _manualLists = const <DraftManualList>[];
+      _selectedHomeCategory = null;
       _notificationsConfiguredForProfileKey = null;
       _checkoutChargeSettings = CheckoutChargeSettings.defaults;
       _hasLoadedCheckoutChargeSettings = false;
@@ -636,6 +953,7 @@ class AppState extends ChangeNotifier {
       _paymentSettings = PaymentSettings.defaults;
       _hasLoadedPaymentSettings = false;
       _catalogById = const <String, Product>{};
+      _categories = const <Shop>[];
     } finally {
       _isLoggingOut = false;
       notifyListeners();
@@ -663,6 +981,7 @@ class AppState extends ChangeNotifier {
     _watchShopHoursSettings();
     _watchPaymentSettings();
     _watchProductCatalog();
+    _watchCategories();
     notifyListeners();
     await _configureNotificationsForProfile(_profile);
   }
@@ -812,6 +1131,11 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> addToCart(Product product) async {
+    _ensureCategoryMethod(
+      shopId: product.shopId,
+      shopName: product.shopName,
+      requestedMethod: OrderCategoryMethod.methodItems,
+    );
     final index = _cartItems.indexWhere(
       (item) => item.productId == product.productId,
     );
@@ -860,26 +1184,99 @@ class AppState extends ChangeNotifier {
 
   Future<void> clearCheckoutDraft() async {
     _cartItems = const <CartItem>[];
-    _billImagePath = null;
-    _manualListText = '';
+    _photoLists = const <DraftPhotoList>[];
+    _manualLists = const <DraftManualList>[];
     notifyListeners();
     await Future.wait([
       localStorageService.saveCart(_cartItems),
-      localStorageService.saveBillImagePath(null),
-      localStorageService.saveManualListText(''),
+      localStorageService.savePhotoLists(_photoLists),
+      localStorageService.saveManualLists(_manualLists),
     ]);
   }
 
-  Future<void> setBillImagePath(String? path) async {
-    _billImagePath = path;
+  /// The category currently selected on the Home page, used to filter Fresh
+  /// Picks/the "Items" shortcut and to scope which Photo List/Manual List
+  /// entry [currentPhotoList]/[currentManualList]/[setBillImagePath]/
+  /// [setManualListText] read and write. Held here (rather than as local
+  /// widget state) because Photo List/Manual List are pushed as
+  /// parameterless routes from several entry points and need a single,
+  /// uniformly reachable source for "what category is selected right now."
+  void setSelectedHomeCategory(Shop? shop) {
+    if (_selectedHomeCategory?.shopId == shop?.shopId) {
+      return;
+    }
+    _selectedHomeCategory = shop;
     notifyListeners();
-    await localStorageService.saveBillImagePath(path);
   }
 
-  Future<void> setManualListText(String value) async {
-    _manualListText = value;
+  /// Upserts (or, when [path] is empty, removes) the photo list entry for
+  /// the currently selected Home category — every other category's entry
+  /// is left untouched, so a Groceries photo and a Vegetables photo can
+  /// coexist.
+  Future<void> setBillImagePath(String? path) async {
+    final key = _draftCategoryKey();
+    if (path != null && path.isNotEmpty) {
+      _ensureCategoryMethod(
+        shopId: key,
+        shopName: _draftCategoryName(),
+        requestedMethod: OrderCategoryMethod.methodPhoto,
+      );
+    }
+    final others = _photoLists.where((entry) => entry.shopId != key).toList();
+    _photoLists = (path == null || path.isEmpty)
+        ? others
+        : [
+            ...others,
+            DraftPhotoList(
+              shopId: key,
+              shopName: _draftCategoryName(),
+              imagePath: path,
+            ),
+          ];
     notifyListeners();
-    await localStorageService.saveManualListText(value);
+    await localStorageService.savePhotoLists(_photoLists);
+  }
+
+  /// Upserts (or, when [value] is blank, removes) the manual list entry for
+  /// the currently selected Home category. See [setBillImagePath].
+  Future<void> setManualListText(String value) async {
+    final key = _draftCategoryKey();
+    if (value.trim().isNotEmpty) {
+      _ensureCategoryMethod(
+        shopId: key,
+        shopName: _draftCategoryName(),
+        requestedMethod: OrderCategoryMethod.methodManual,
+      );
+    }
+    final others = _manualLists.where((entry) => entry.shopId != key).toList();
+    _manualLists = value.trim().isEmpty
+        ? others
+        : [
+            ...others,
+            DraftManualList(
+              shopId: key,
+              shopName: _draftCategoryName(),
+              text: value,
+            ),
+          ];
+    notifyListeners();
+    await localStorageService.saveManualLists(_manualLists);
+  }
+
+  /// Removes one category's photo list entry, for the Cart screen's
+  /// per-entry remove button.
+  Future<void> removePhotoList(String shopId) async {
+    _photoLists = _photoLists.where((entry) => entry.shopId != shopId).toList();
+    notifyListeners();
+    await localStorageService.savePhotoLists(_photoLists);
+  }
+
+  /// Removes one category's manual list entry. See [removePhotoList].
+  Future<void> removeManualList(String shopId) async {
+    _manualLists =
+        _manualLists.where((entry) => entry.shopId != shopId).toList();
+    notifyListeners();
+    await localStorageService.saveManualLists(_manualLists);
   }
 
   Future<OrderModel> createOrder({
@@ -902,6 +1299,12 @@ class AppState extends ChangeNotifier {
         'Add products, upload a shopping list, or type a manual list before checkout.',
       );
     }
+    final incompleteCategory = _firstIncompleteCategoryName();
+    if (incompleteCategory != null) {
+      throw StateError(
+        'Please complete the shopping method for $incompleteCategory.',
+      );
+    }
     if (!meetsMinimumOrderValue) {
       throw MinimumOrderNotMetException(
         minimumOrderValue: AppConstants.minimumOrderValue,
@@ -911,90 +1314,205 @@ class AppState extends ChangeNotifier {
     if (!_shopHoursSettings.isOpenAt(DateTime.now())) {
       throw StateError(_shopHoursSettings.closedMessage);
     }
+    _assertDraftCategoriesOrderable();
     if (!_paymentSettings.hasAvailablePaymentMethod) {
       throw StateError('Payment methods are temporarily unavailable.');
     }
     if (!_paymentSettings.isPaymentMethodEnabled(paymentMethod)) {
       throw StateError('This payment method is temporarily unavailable.');
     }
-    if (paymentMethod == AppConstants.paymentMethodBankTransfer &&
-        (paymentReceiptImagePath == null ||
-            paymentReceiptImagePath.trim().isEmpty)) {
-      throw StateError('Upload the bank transfer receipt before checkout.');
-    }
+    final orderId = await _reservePendingOrderId();
+    // Tracks every asset that finishes uploading below so that, if
+    // anything after it fails (an item going unavailable, a dropped
+    // connection, the write itself failing), those now-orphaned Cloudinary
+    // assets can be reported for cleanup — see the catch block below (F11
+    // fix). Never touched again once the order is actually created.
+    final uploadedPublicIds = <String>[];
+    try {
+      final photoLists = <OrderPhotoList>[];
+      for (final entry in _photoLists) {
+        final uploaded = await ImageUploadService.uploadUserImage(
+          imageFile: File(entry.imagePath),
+          ownerUid: current.uid,
+          folder: 'orders/$orderId',
+          fileName:
+              'shopping-list-${entry.shopId.isEmpty ? 'general' : entry.shopId}',
+        );
+        uploadedPublicIds.add(uploaded.publicId);
+        photoLists.add(
+          OrderPhotoList(
+            shopId: entry.shopId,
+            shopName: entry.shopName,
+            imageUrl: uploaded.secureUrl,
+            imagePublicId: uploaded.publicId,
+          ),
+        );
+      }
+      final manualLists = [
+        for (final entry in _manualLists)
+          OrderManualList(
+            shopId: entry.shopId,
+            shopName: entry.shopName,
+            text: entry.text.trim(),
+          ),
+      ];
+      CloudinaryUploadResult? paymentReceiptImage;
+      if (paymentMethod == AppConstants.paymentMethodBankTransfer &&
+          paymentReceiptImagePath != null &&
+          paymentReceiptImagePath.trim().isNotEmpty) {
+        paymentReceiptImage = await ImageUploadService.uploadUserImage(
+          imageFile: File(paymentReceiptImagePath),
+          ownerUid: current.uid,
+          folder: 'orders/$orderId',
+          fileName: 'payment-receipt',
+        );
+        uploadedPublicIds.add(paymentReceiptImage.publicId);
+      }
 
-    final orderId = _uuid.v4();
-    CloudinaryUploadResult? uploadedImage;
-    if (hasBillImage) {
-      uploadedImage = await ImageUploadService.uploadUserImage(
-        imageFile: File(_billImagePath!),
-        ownerUid: current.uid,
-        folder: 'orders/$orderId',
-        fileName: 'shopping-list',
+      final resolvedItems = await _resolveCheckoutItems();
+      final orderCategories = _buildOrderCategories(
+        items: resolvedItems,
+        photoLists: photoLists,
+        manualLists: manualLists,
+      );
+
+      final charges = _checkoutChargeSettings;
+      final subtotal = resolvedItems.fold<double>(
+        0,
+        (sum, item) => sum + item.lineTotal,
+      );
+      final total = charges.totalFor(subtotal);
+      final now = DateTime.now();
+      final order = OrderModel(
+        orderId: orderId,
+        userId: current.uid,
+        customerName: customerName.trim(),
+        customerPhone: PhoneUtils.normalizeSriLankanPhone(customerPhone),
+        customerAddress: customerAddress.trim(),
+        items: resolvedItems,
+        uploadedImageUrl: '',
+        uploadedImagePublicId: '',
+        manualListText: '',
+        paymentReceiptImageUrl: paymentReceiptImage?.secureUrl ?? '',
+        paymentReceiptImagePublicId: paymentReceiptImage?.publicId ?? '',
+        orderNotes: orderNotes.trim(),
+        cartItemsAmount: subtotal,
+        photoListAmount: 0,
+        manualListAmount: 0,
+        listAmountsReviewed: false,
+        subtotal: subtotal,
+        deliveryCharge: charges.deliveryCharge,
+        serviceCharge: charges.serviceCharge,
+        totalAmount: total,
+        paymentMethod: paymentMethod,
+        paymentStatus: paymentMethod == AppConstants.paymentMethodBankTransfer
+            ? paymentReceiptImage == null
+                ? 'pending'
+                : 'receipt uploaded'
+            : 'pending',
+        orderStatus: 'Pending',
+        adminNotes: '',
+        rejectionReason: '',
+        assignedDeliveryBoyId: '',
+        assignedDeliveryPerson: '',
+        assignedDeliveryPhone: '',
+        deliveryRating: 0,
+        deliveryReview: '',
+        deliveryReviewedAt: null,
+        createdAt: now,
+        updatedAt: now,
+        photoLists: photoLists,
+        manualLists: manualLists,
+        categories: orderCategories,
+      );
+
+      await firestoreService.createOrder(order);
+      _pendingOrderId = null;
+      await localStorageService.clearPendingOrderId();
+      await clearCheckoutDraft();
+      return order;
+    } catch (error) {
+      if (uploadedPublicIds.isNotEmpty) {
+        unawaited(ImageUploadService.reportOrphanedUploads(uploadedPublicIds));
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> uploadOrderPaymentReceipt({
+    required OrderModel order,
+    required String imagePath,
+  }) async {
+    final current = _profile;
+    if (current == null) {
+      throw StateError('Please login before uploading the receipt.');
+    }
+    if (current.isBlocked) {
+      throw StateError('Blocked users cannot upload payment receipts.');
+    }
+    if (order.userId != current.uid) {
+      throw StateError('You can only upload receipts for your own orders.');
+    }
+    if (order.paymentMethod != AppConstants.paymentMethodBankTransfer) {
+      throw StateError(
+          'Receipts can only be uploaded for bank transfer orders.');
+    }
+    if (order.hasPaymentReceipt) {
+      throw StateError('A payment receipt has already been uploaded.');
+    }
+    if (!_canUploadPaymentReceiptForOrder(order)) {
+      throw StateError(
+        'Upload the receipt after the admin updates the final bill.',
       );
     }
-    CloudinaryUploadResult? paymentReceiptImage;
-    if (paymentMethod == AppConstants.paymentMethodBankTransfer &&
-        paymentReceiptImagePath != null &&
-        paymentReceiptImagePath.trim().isNotEmpty) {
-      paymentReceiptImage = await ImageUploadService.uploadUserImage(
-        imageFile: File(paymentReceiptImagePath),
-        ownerUid: current.uid,
-        folder: 'orders/$orderId',
-        fileName: 'payment-receipt',
+
+    final uploaded = await ImageUploadService.uploadUserImage(
+      imageFile: File(imagePath),
+      ownerUid: current.uid,
+      folder: 'orders/${order.orderId}',
+      fileName: 'payment-receipt',
+    );
+    try {
+      await firestoreService.updateOrderPaymentReceipt(
+        order: order,
+        imageUrl: uploaded.secureUrl,
+        imagePublicId: uploaded.publicId,
       );
+    } catch (error) {
+      unawaited(ImageUploadService.reportOrphanedUploads([uploaded.publicId]));
+      rethrow;
     }
+  }
 
-    final resolvedItems = await _resolveCheckoutItems();
+  bool _canUploadPaymentReceiptForOrder(OrderModel order) {
+    const allowedStatuses = <String>{
+      'Bill Updated',
+      'Out for Delivery',
+      'Delivered',
+    };
+    return allowedStatuses.contains(order.orderStatus);
+  }
 
-    final charges = _checkoutChargeSettings;
-    final subtotal = resolvedItems.fold<double>(
-      0,
-      (sum, item) => sum + item.lineTotal,
-    );
-    final total = charges.totalFor(subtotal);
-    final now = DateTime.now();
-    final order = OrderModel(
-      orderId: orderId,
-      userId: current.uid,
-      customerName: customerName.trim(),
-      customerPhone: PhoneUtils.normalizeSriLankanPhone(customerPhone),
-      customerAddress: customerAddress.trim(),
-      items: resolvedItems,
-      uploadedImageUrl: uploadedImage?.secureUrl ?? '',
-      uploadedImagePublicId: uploadedImage?.publicId ?? '',
-      manualListText: _manualListText.trim(),
-      paymentReceiptImageUrl: paymentReceiptImage?.secureUrl ?? '',
-      paymentReceiptImagePublicId: paymentReceiptImage?.publicId ?? '',
-      orderNotes: orderNotes.trim(),
-      cartItemsAmount: subtotal,
-      photoListAmount: 0,
-      manualListAmount: 0,
-      listAmountsReviewed: false,
-      subtotal: subtotal,
-      deliveryCharge: charges.deliveryCharge,
-      serviceCharge: charges.serviceCharge,
-      totalAmount: total,
-      paymentMethod: paymentMethod,
-      paymentStatus: paymentMethod == AppConstants.paymentMethodBankTransfer
-          ? 'receipt uploaded'
-          : 'pending',
-      orderStatus: 'Pending',
-      adminNotes: '',
-      rejectionReason: '',
-      assignedDeliveryBoyId: '',
-      assignedDeliveryPerson: '',
-      assignedDeliveryPhone: '',
-      deliveryRating: 0,
-      deliveryReview: '',
-      deliveryReviewedAt: null,
-      createdAt: now,
-      updatedAt: now,
-    );
+  String? _pendingOrderId;
 
-    await firestoreService.createOrder(order);
-    await clearCheckoutDraft();
-    return order;
+  /// Returns the same order id across retries of the same checkout attempt
+  /// (including across an app kill/relaunch, since it's persisted) instead
+  /// of generating a fresh one every call. [FirestoreService.createOrder]
+  /// uses this stability to recognize "this order already got created" and
+  /// no-op instead of writing a duplicate. Cleared only once an order
+  /// actually finishes creating successfully (see [createOrder]), so a
+  /// later, genuinely separate order — even with identical cart contents —
+  /// still gets its own fresh id.
+  Future<String> _reservePendingOrderId() async {
+    final existing =
+        _pendingOrderId ??= await localStorageService.loadPendingOrderId();
+    if (existing != null && existing.isNotEmpty) {
+      return existing;
+    }
+    final reserved = _uuid.v4();
+    _pendingOrderId = reserved;
+    await localStorageService.savePendingOrderId(reserved);
+    return reserved;
   }
 
   /// Test-only seam: lets tests exercise [createOrder]'s validation (e.g.
@@ -1013,6 +1531,14 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Test-only seam: lets tests exercise per-category shopping methods and
+  /// opening hours without a real Firestore stream.
+  @visibleForTesting
+  void debugSetCategoriesForTesting(List<Shop> categories) {
+    _categories = categories;
+    notifyListeners();
+  }
+
   /// Test-only seam: lets tests exercise live cart/checkout pricing
   /// ([livePriceFor], [cartSubtotal]) without a real Firestore stream.
   @visibleForTesting
@@ -1023,21 +1549,61 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Map<String, Product>? _debugLatestProductsForTesting;
+
+  /// Test-only seam: overrides what [_resolveCheckoutItems] treats as the
+  /// server-authoritative product snapshot (price + availability), so the
+  /// checkout recheck can be unit tested without a real Firestore
+  /// connection. Pass `null` to clear the override.
+  @visibleForTesting
+  void debugSetLatestProductsForTesting(Map<String, Product>? products) {
+    _debugLatestProductsForTesting = products;
+  }
+
   /// Builds the [OrderItem]s [createOrder] would write for the current
-  /// cart: re-verifies each item's price against the Firestore server
-  /// (falling back to the live-catalog/cached price only if that read is
-  /// unavailable), so a stale cart price is never silently used.
+  /// cart: re-verifies each item's price *and availability* against the
+  /// Firestore server (falling back to the live-catalog/cached price only
+  /// if that authoritative read itself is unavailable — e.g. offline, or
+  /// [firebaseAvailable] is false), so neither a stale price nor an
+  /// item the admin has since disabled/removed is silently carried into
+  /// the order.
+  ///
+  /// Throws [CartItemsUnavailableException] — without creating anything —
+  /// if the server confirms one or more items are no longer orderable.
+  /// Only enforced when the authoritative snapshot was actually fetched
+  /// (real or, in tests, injected via [debugSetLatestProductsForTesting]),
+  /// so demo/offline mode (where [firebaseAvailable] is false and the
+  /// fetch never runs at all) still falls back to the cached cart data
+  /// instead of blocking checkout, the same way the price fallback
+  /// already does.
   ///
   /// Exposed directly (rather than only inline inside [createOrder]) so
   /// this price-resolution/race-condition-guard behavior is unit
   /// testable without requiring a real Firestore write.
   Future<List<OrderItem>> _resolveCheckoutItems() async {
-    final latestServerPrices = await firestoreService.fetchLatestProductPrices(
-      _cartItems.map((item) => item.productId).toSet().toList(),
-    );
+    final productIds =
+        _cartItems.map((item) => item.productId).toSet().toList();
+    final latestProducts = _debugLatestProductsForTesting ??
+        await firestoreService.fetchLatestProducts(productIds);
+    final hasAuthoritativeSnapshot =
+        firebaseAvailable || _debugLatestProductsForTesting != null;
+
+    if (hasAuthoritativeSnapshot) {
+      final unavailableNames = <String>[];
+      for (final item in _cartItems) {
+        final latest = latestProducts[item.productId];
+        if (latest == null || !latest.isAvailable) {
+          unavailableNames.add(item.name);
+        }
+      }
+      if (unavailableNames.isNotEmpty) {
+        throw CartItemsUnavailableException(unavailableNames);
+      }
+    }
+
     return _cartItems.map((item) {
       final resolvedPrice =
-          latestServerPrices[item.productId] ?? livePriceFor(item);
+          latestProducts[item.productId]?.price ?? livePriceFor(item);
       return OrderItem(
         productId: item.productId,
         name: item.name,
@@ -1052,11 +1618,136 @@ class AppState extends ChangeNotifier {
     }).toList();
   }
 
+  String? _firstIncompleteCategoryName() {
+    for (final entry in _photoLists) {
+      if (entry.imagePath.trim().isEmpty) {
+        return _categoryDisplayName(entry.shopId, entry.shopName);
+      }
+    }
+    for (final entry in _manualLists) {
+      if (entry.text.trim().isEmpty) {
+        return _categoryDisplayName(entry.shopId, entry.shopName);
+      }
+    }
+    return null;
+  }
+
+  /// Re-checks every category in the current draft against the live
+  /// category settings just before the order is written. The per-draft
+  /// guards in [_ensureCategoryMethod] run when data is *added*, so a draft
+  /// can go stale if the admin closes a category or drops one of its
+  /// shopping methods while the customer is still shopping.
+  void _assertDraftCategoriesOrderable() {
+    final now = DateTime.now();
+    final drafted = <String, ({String name, String method})>{};
+
+    void touch(String shopId, String shopName, String method) {
+      drafted.putIfAbsent(
+        shopId.trim(),
+        () => (name: _categoryDisplayName(shopId, shopName), method: method),
+      );
+    }
+
+    for (final item in _cartItems) {
+      touch(item.shopId, item.shopName, OrderCategoryMethod.methodItems);
+    }
+    for (final entry in _photoLists) {
+      touch(entry.shopId, entry.shopName, OrderCategoryMethod.methodPhoto);
+    }
+    for (final entry in _manualLists) {
+      touch(entry.shopId, entry.shopName, OrderCategoryMethod.methodManual);
+    }
+
+    for (final entry in drafted.entries) {
+      final shopId = entry.key;
+      final hours = effectiveHoursForCategory(shopId);
+      if (!hours.isOpenAt(now)) {
+        throw CategoryClosedException(
+          categoryName: entry.value.name,
+          hours: hours,
+        );
+      }
+      if (!isMethodAllowedForCategory(shopId, entry.value.method)) {
+        throw CategoryMethodNotAllowedException(
+          categoryName: entry.value.name,
+          method: entry.value.method,
+        );
+      }
+    }
+  }
+
+  List<OrderCategoryMethod> _buildOrderCategories({
+    required List<OrderItem> items,
+    required List<OrderPhotoList> photoLists,
+    required List<OrderManualList> manualLists,
+  }) {
+    final order = <String>[];
+    final names = <String, String>{};
+    final itemBuckets = <String, List<OrderItem>>{};
+    final photoBuckets = <String, List<OrderPhotoList>>{};
+    final manualBuckets = <String, List<OrderManualList>>{};
+
+    void touch(String id, String name) {
+      if (!names.containsKey(id)) {
+        order.add(id);
+        names[id] = name;
+      } else if ((names[id] ?? '').trim().isEmpty && name.trim().isNotEmpty) {
+        names[id] = name;
+      }
+    }
+
+    for (final item in items) {
+      touch(item.shopId, item.shopName);
+      itemBuckets.putIfAbsent(item.shopId, () => <OrderItem>[]).add(item);
+    }
+    for (final list in photoLists) {
+      touch(list.shopId, list.shopName);
+      photoBuckets.putIfAbsent(list.shopId, () => <OrderPhotoList>[]).add(list);
+    }
+    for (final list in manualLists) {
+      touch(list.shopId, list.shopName);
+      manualBuckets
+          .putIfAbsent(list.shopId, () => <OrderManualList>[])
+          .add(list);
+    }
+
+    return [
+      for (final id in order)
+        OrderCategoryMethod(
+          categoryId: id,
+          categoryName: names[id] ?? '',
+          selectedMethod: photoBuckets.containsKey(id)
+              ? OrderCategoryMethod.methodPhoto
+              : manualBuckets.containsKey(id)
+                  ? OrderCategoryMethod.methodManual
+                  : OrderCategoryMethod.methodItems,
+          photoList: photoBuckets.containsKey(id)
+              ? OrderCategoryPhotoList(images: photoBuckets[id]!)
+              : null,
+          manualList: manualBuckets.containsKey(id)
+              ? OrderCategoryManualList(
+                  text: manualBuckets[id]!
+                      .map((entry) => entry.text.trim())
+                      .join('\n'),
+                )
+              : null,
+          selectedItems: itemBuckets[id] ?? const <OrderItem>[],
+        ),
+    ];
+  }
+
   /// Test-only seam: lets tests assert on the race-condition-guarded
   /// checkout item resolution ([_resolveCheckoutItems]) directly.
   @visibleForTesting
   Future<List<OrderItem>> debugResolveCheckoutItemsForTesting() =>
       _resolveCheckoutItems();
+
+  /// Test-only seam: exposes the id [_reservePendingOrderId] would return
+  /// right now (reserving/persisting one first if none exists yet), so
+  /// tests can assert it stays stable across a retried [createOrder] call.
+  @visibleForTesting
+  Future<String> debugReservePendingOrderIdForTesting() =>
+      _reservePendingOrderId();
 
   @override
   void dispose() {
@@ -1066,6 +1757,7 @@ class AppState extends ChangeNotifier {
     _shopHoursSettingsSubscription?.cancel();
     _paymentSettingsSubscription?.cancel();
     _productCatalogSubscription?.cancel();
+    _categoriesSubscription?.cancel();
     unawaited(connectivityService.dispose());
     notificationService.dispose();
     super.dispose();

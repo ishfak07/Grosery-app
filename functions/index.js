@@ -16,9 +16,17 @@ const {
   isApprovalExpired,
   effectivePasswordResetStatus,
   isActivePasswordResetRequest,
+  isPasswordResetRequestThrottled,
   passwordResetApprovalExpiresAtMillis,
   passwordResetStatusMessage,
+  resetRequestCompletionStatus,
 } = require("./lib/passwordReset");
+const {
+  extractCloudinaryReferences,
+  isMediaCleanupEligible,
+  interpretCloudinaryDestroyResult,
+} = require("./lib/cloudinaryCleanup");
+const {isCodPaymentPendingForDelivery} = require("./lib/deliveryCompletion");
 
 admin.initializeApp();
 
@@ -403,6 +411,66 @@ exports.purgeExpiredPrivacyRecords = onSchedule(
   },
 );
 
+// Retries the Cloudinary destroy pass for legacy_media_cleanup records that
+// either couldn't be processed inline during account deletion (F4 fix) or
+// haven't been attempted yet (older records queued before this processor
+// existed). Runs independently of purgeExpiredPrivacyRecords above, which
+// only purges long-retired *Firestore* records years later - this instead
+// retries the *Cloudinary* side on a short interval so a transient failure
+// doesn't leave a customer's images undeleted indefinitely.
+exports.processPendingMediaCleanup = onSchedule(
+  {schedule: "every 60 minutes", secrets: [cloudinaryApiSecret]},
+  async () => {
+    const db = admin.firestore();
+    const [pendingSnapshot, failedSnapshot] = await Promise.all([
+      db
+        .collection("legacy_media_cleanup")
+        .where("status", "==", "pending")
+        .limit(200)
+        .get(),
+      db
+        .collection("legacy_media_cleanup")
+        .where("status", "==", "failed")
+        .limit(200)
+        .get(),
+    ]);
+
+    const candidates = [...pendingSnapshot.docs, ...failedSnapshot.docs].filter(
+      (doc) => isMediaCleanupEligible(doc.data()),
+    );
+
+    for (const doc of candidates) {
+      const data = doc.data();
+      await doc.ref.update({
+        status: "processing",
+        updatedAt: admin.firestore.Timestamp.now(),
+      });
+      try {
+        const results = await destroyCloudinaryAssets(data.imagePublicIds);
+        const allDeleted = results.every((item) => item.outcome === "deleted");
+        await doc.ref.update({
+          status: allDeleted ? "completed" : "failed",
+          attempts: admin.firestore.FieldValue.increment(1),
+          lastAttemptAt: admin.firestore.Timestamp.now(),
+          lastError: allDeleted ?
+            null :
+            `${results.filter((item) => item.outcome !== "deleted").length} asset(s) not deleted`,
+          results,
+          updatedAt: admin.firestore.Timestamp.now(),
+        });
+      } catch (error) {
+        await doc.ref.update({
+          status: "failed",
+          attempts: admin.firestore.FieldValue.increment(1),
+          lastAttemptAt: admin.firestore.Timestamp.now(),
+          lastError: error.message || "unknown_error",
+          updatedAt: admin.firestore.Timestamp.now(),
+        });
+      }
+    }
+  },
+);
+
 exports.submitAccountDeletionRequest = onRequest(
   {cors: true, maxInstances: 10},
   async (request, response) => {
@@ -503,6 +571,45 @@ exports.signCloudinaryUpload = onCall(
   },
 );
 
+// F11 fix: lets a client report Cloudinary assets it just uploaded but
+// whose order never got created (an item went unavailable, the write
+// failed, the app was killed, ...) - queued into the same
+// legacy_media_cleanup pipeline account deletion uses (F4), so
+// processPendingMediaCleanup destroys them on its next sweep instead of
+// them sitting on Cloudinary forever. A caller can only ever report ids
+// under their own upload folder (puttalam-drop/user_uploads/{uid}/...),
+// so this can never be used to queue someone else's images for deletion.
+exports.reportOrphanedUpload = onCall(async (request) => {
+  const activeUser = await requireActiveUser(request);
+  const rawIds = Array.isArray(request.data?.publicIds) ?
+    request.data.publicIds :
+    [];
+  const ownedPrefix = `puttalam-drop/user_uploads/${activeUser.uid}/`;
+  const ownedIds = [...new Set(
+    rawIds
+      .map((id) => `${id || ""}`.trim())
+      .filter((id) => id.length > 0 && id.startsWith(ownedPrefix)),
+  )];
+  if (ownedIds.length === 0) {
+    return {queued: 0};
+  }
+
+  const now = admin.firestore.Timestamp.now();
+  await admin.firestore().collection("legacy_media_cleanup").add({
+    deletedCustomerHash: "",
+    imageUrls: [],
+    imagePublicIds: ownedIds,
+    status: "pending",
+    reason: "abandoned-checkout-upload",
+    attempts: 0,
+    lastAttemptAt: null,
+    lastError: null,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return {queued: ownedIds.length};
+});
+
 exports.sendPushForNotification = onDocumentCreated(
   "notifications/{notificationId}",
   async (event) => {
@@ -568,22 +675,28 @@ exports.sendPushForNotification = onDocumentCreated(
   },
 );
 
+// F6 fix: this must behave identically whether or not [phone] belongs to a
+// real account - no thrown error, no differently-shaped response - so it
+// can never be used to test whether a given phone number has an account
+// (the "phone-number oracle" the audit flagged). When the account doesn't
+// exist, a request document is still created (with userId left blank)
+// purely so the response/tracking flow is indistinguishable from a real
+// one; nothing downstream can ever act on it, because both
+// approvePasswordReset's notification and completeApprovedPasswordReset's
+// resetRequestCompletionStatus gate (F1 fix) already require a non-empty
+// userId before anything account-affecting can happen.
 exports.requestPasswordReset = onCall(async (request) => {
   const phone = normalizeSriLankanPhone(request.data?.phone || "");
   assertSriLankanMobile(phone);
 
   const hiddenEmail = hiddenEmailForPhone(phone);
-  let userRecord;
+  let userRecord = null;
   try {
     userRecord = await admin.auth().getUserByEmail(hiddenEmail);
   } catch (error) {
-    if (error.code === "auth/user-not-found") {
-      throw new HttpsError(
-        "not-found",
-        "No account exists for that phone number.",
-      );
+    if (error.code !== "auth/user-not-found") {
+      throw error;
     }
-    throw error;
   }
 
   const active = await findLatestResetRequest(hiddenEmail, [
@@ -601,18 +714,32 @@ exports.requestPasswordReset = onCall(async (request) => {
     return passwordResetStatusPayload(active.id, active.data());
   }
 
-  const userDoc = await admin
-    .firestore()
-    .collection("users")
-    .doc(userRecord.uid)
-    .get();
-  const userProfile = userDoc.exists ? userDoc.data() : {};
+  // Rate limit: refuse (by quietly returning the previous request's status,
+  // never a distinguishing error) a new request created too soon after the
+  // last one for this phone number, of any status - closes the gap right
+  // after a rejection/expiry where the active-request check above no
+  // longer applies.
+  const mostRecent = active || (await findLatestResetRequest(hiddenEmail));
+  if (
+    mostRecent &&
+    isPasswordResetRequestThrottled(
+      timestampMillis(mostRecent.get("createdAt")),
+      Date.now(),
+    )
+  ) {
+    return passwordResetStatusPayload(mostRecent.id, mostRecent.data());
+  }
+
+  const userDoc = userRecord ?
+    await admin.firestore().collection("users").doc(userRecord.uid).get() :
+    null;
+  const userProfile = userDoc?.exists ? userDoc.data() : {};
   const requestRef = admin.firestore().collection("password_reset_requests").doc();
   const now = admin.firestore.Timestamp.now();
   const resetRequest = {
     requestId: requestRef.id,
-    userId: userRecord.uid,
-    customerName: userProfile.fullName || userRecord.displayName || "",
+    userId: userRecord ? userRecord.uid : "",
+    customerName: userProfile.fullName || userRecord?.displayName || "",
     phone,
     hiddenEmail,
     status: "pending",
@@ -622,20 +749,24 @@ exports.requestPasswordReset = onCall(async (request) => {
     rejectedBy: "",
   };
 
-  const notificationRef = admin.firestore().collection("notifications").doc();
   const batch = admin.firestore().batch();
   batch.set(requestRef, resetRequest);
-  batch.set(notificationRef, {
-    notificationId: notificationRef.id,
-    userId: "",
-    recipientRole: "admin",
-    title: "Password reset request",
-    body: `${resetRequest.customerName || phone} requested password reset`,
-    type: "password_reset",
-    relatedId: requestRef.id,
-    isRead: false,
-    createdAt: now,
-  });
+  if (userRecord) {
+    // Only page the admin when there's a real account to act on - a shell
+    // request for a nonexistent phone number has nothing for them to do.
+    const notificationRef = admin.firestore().collection("notifications").doc();
+    batch.set(notificationRef, {
+      notificationId: notificationRef.id,
+      userId: "",
+      recipientRole: "admin",
+      title: "Password reset request",
+      body: `${resetRequest.customerName || phone} requested password reset`,
+      type: "password_reset",
+      relatedId: requestRef.id,
+      isRead: false,
+      createdAt: now,
+    });
+  }
   await batch.commit();
 
   const payload = passwordResetStatusPayload(requestRef.id, resetRequest);
@@ -759,40 +890,87 @@ exports.rejectPasswordReset = onCall(async (request) => {
   return {ok: true};
 });
 
+// Completion is bound to the exact approved request id the requester (or an
+// admin) already holds - never looked up by phone number. This closes the
+// account-takeover window where anyone who merely knew a customer's phone
+// number could complete *any* approved reset for that number. The Firestore
+// status transition (approved -> completing -> completed) is claimed inside
+// a transaction so two concurrent/replayed completion attempts for the same
+// request can't both succeed, and the Auth password write only happens
+// after that claim is safely won.
 exports.completeApprovedPasswordReset = onCall(async (request) => {
-  const phone = normalizeSriLankanPhone(request.data?.phone || "");
-  const newPassword = `${request.data?.newPassword || ""}`;
-  assertSriLankanMobile(phone);
-  if (newPassword.length < 6) {
-    throw new HttpsError(
-      "invalid-argument",
-      "Password must be at least 6 characters.",
-    );
-  }
+  const requestId = assertRequestId(request.data?.requestId);
+  const newPassword = assertPassword(request.data?.newPassword);
 
-  const hiddenEmail = hiddenEmailForPhone(phone);
-  const latest = await findLatestResetRequest(hiddenEmail, ["approved"]);
-  if (
-    !latest ||
-    isApprovalExpired(
-      latest.data().status,
-      timestampMillis(latest.data().expiresAt),
+  const requestRef = admin
+    .firestore()
+    .collection("password_reset_requests")
+    .doc(requestId);
+
+  const claim = await admin.firestore().runTransaction(async (txn) => {
+    const snapshot = await txn.get(requestRef);
+    if (!snapshot.exists) {
+      throw new HttpsError("not-found", "Password reset request not found.");
+    }
+    const data = snapshot.data();
+    const userId = `${data.userId || ""}`.trim();
+    const outcome = resetRequestCompletionStatus(
+      data.status,
+      timestampMillis(data.expiresAt),
+      userId,
       Date.now(),
-    )
-  ) {
-    throw new HttpsError(
-      "failed-precondition",
-      "Admin has not approved this password reset yet, or the approval has expired.",
     );
+    if (outcome === "already_completed") {
+      throw new HttpsError(
+        "failed-precondition",
+        "This password reset has already been completed.",
+      );
+    }
+    if (outcome === "not_approved") {
+      throw new HttpsError(
+        "failed-precondition",
+        "Admin has not approved this password reset yet.",
+      );
+    }
+    if (outcome === "expired") {
+      throw new HttpsError(
+        "failed-precondition",
+        "This approval has expired. Submit a new reset request.",
+      );
+    }
+    if (outcome === "missing_account") {
+      throw new HttpsError(
+        "failed-precondition",
+        "This reset request is missing account information.",
+      );
+    }
+    const now = admin.firestore.Timestamp.now();
+    // Claim the request before touching Auth so a second, concurrent call
+    // (or a replay of the same request) can never also pass the status
+    // check above once this transaction commits.
+    txn.update(requestRef, {
+      status: "completing",
+      updatedAt: now,
+    });
+    return {userId, now};
+  });
+
+  try {
+    await admin.auth().updateUser(claim.userId, {password: newPassword});
+  } catch (error) {
+    // Best-effort revert so the customer isn't left stuck on a claimed
+    // request whose password was never actually changed.
+    await requestRef.update({
+      status: "approved",
+      updatedAt: admin.firestore.Timestamp.now(),
+    });
+    throw error;
   }
 
-  const userRecord = await admin.auth().getUserByEmail(hiddenEmail);
-  const now = admin.firestore.Timestamp.now();
-  await admin.auth().updateUser(userRecord.uid, {password: newPassword});
-  await latest.ref.update({
+  await requestRef.update({
     status: "completed",
-    completedAt: now,
-    updatedAt: now,
+    completedAt: admin.firestore.Timestamp.now(),
+    updatedAt: admin.firestore.Timestamp.now(),
   });
   return {ok: true};
 });
@@ -952,6 +1130,18 @@ exports.markAssignedOrderDelivered = onCall(async (request) => {
     throw new HttpsError(
       "failed-precondition",
       "Only out-for-delivery orders can be marked delivered.",
+    );
+  }
+  // COD is cash collected in hand at the door - it must actually be
+  // collected (via markAssignedOrderPaymentCollected) before the order can
+  // be closed out as delivered, otherwise "Delivered" and "payment
+  // pending" could both be true indefinitely with nothing reconciling
+  // them. Bank Transfer receipts can be uploaded after the final bill is
+  // updated, so they are not part of this COD cash-collection gate.
+  if (isCodPaymentPendingForDelivery(order.paymentMethod, order.paymentStatus)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Collect the COD payment for this order before marking it delivered.",
     );
   }
 
@@ -1642,7 +1832,8 @@ async function deleteCustomerData(customer, options = {}) {
   const writer = db.bulkWriter();
   writer.onWriteError((error) => error.failedAttempts < 3);
   for (const orderDoc of orders.docs) {
-    writer.update(orderDoc.ref, {
+    const orderData = orderDoc.data() || {};
+    const update = {
       userId: "",
       customerName: "Deleted customer",
       customerPhone: "",
@@ -1659,7 +1850,20 @@ async function deleteCustomerData(customer, options = {}) {
       customerDeletedAt: now,
       deletedCustomerHash: uidHash,
       updatedAt: now,
-    });
+    };
+    // photoLists carries its own imageUrl/imagePublicId per entry (the
+    // legacy uploadedImageUrl/uploadedImagePublicId fields above only cover
+    // pre-migration single-photo orders) - clear those too so an
+    // anonymized order never keeps a live-looking photo reference around,
+    // even before the Cloudinary asset itself is destroyed below.
+    if (Array.isArray(orderData.photoLists)) {
+      update.photoLists = orderData.photoLists.map((photoList) => ({
+        ...photoList,
+        imageUrl: "",
+        imagePublicId: "",
+      }));
+    }
+    writer.update(orderDoc.ref, update);
   }
   for (const saleDoc of accountSales.docs) {
     writer.update(saleDoc.ref, {
@@ -1692,16 +1896,22 @@ async function deleteCustomerData(customer, options = {}) {
     });
   }
   writer.delete(db.collection("users").doc(customer.uid));
-  if (
+  const hasCloudinaryImages =
     cloudinaryImages.imageUrls.length > 0 ||
-    cloudinaryImages.publicIds.length > 0
-  ) {
-    writer.set(db.collection("legacy_media_cleanup").doc(), {
+    cloudinaryImages.publicIds.length > 0;
+  const cleanupRef = hasCloudinaryImages ?
+    db.collection("legacy_media_cleanup").doc() :
+    null;
+  if (cleanupRef) {
+    writer.set(cleanupRef, {
       deletedCustomerHash: uidHash,
       imageUrls: cloudinaryImages.imageUrls,
       imagePublicIds: cloudinaryImages.publicIds,
       status: "pending",
       reason: "customer-account-deletion",
+      attempts: 0,
+      lastAttemptAt: null,
+      lastError: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -1709,11 +1919,53 @@ async function deleteCustomerData(customer, options = {}) {
 
   await writer.close();
   await deleteAuthUserIfExists(customer.uid);
+
+  // Best-effort immediate cleanup: try to actually destroy the Cloudinary
+  // assets right away so deletion doesn't rely on the retry sweep for the
+  // common case. This must never fail account deletion itself - Auth/
+  // Firestore deletion above has already committed by this point, and any
+  // Cloudinary outcome here (including "couldn't reach Cloudinary") is
+  // recorded on cleanupRef for processPendingMediaCleanup to retry.
+  let mediaCleanup = null;
+  if (cleanupRef && cloudinaryImages.publicIds.length > 0) {
+    try {
+      const results = await destroyCloudinaryAssets(cloudinaryImages.publicIds);
+      const allDeleted = results.every((item) => item.outcome === "deleted");
+      await cleanupRef.update({
+        status: allDeleted ? "completed" : "failed",
+        attempts: admin.firestore.FieldValue.increment(1),
+        lastAttemptAt: admin.firestore.Timestamp.now(),
+        lastError: allDeleted ?
+          null :
+          `${results.filter((item) => item.outcome !== "deleted").length} asset(s) not deleted`,
+        results,
+        updatedAt: admin.firestore.Timestamp.now(),
+      });
+      mediaCleanup = {attempted: true, completed: allDeleted};
+    } catch (error) {
+      await cleanupRef.update({
+        status: "failed",
+        attempts: admin.firestore.FieldValue.increment(1),
+        lastAttemptAt: admin.firestore.Timestamp.now(),
+        lastError: error.message || "unknown_error",
+        updatedAt: admin.firestore.Timestamp.now(),
+      }).catch(() => {});
+      mediaCleanup = {attempted: true, completed: false};
+    }
+  } else if (cleanupRef) {
+    // Only bare image URLs with no public id were found (pre-public-id-
+    // capture legacy data) - there is nothing safe to destroy automatically
+    // without guessing an id from the URL, so this is left "pending" for
+    // manual review rather than retried forever.
+    mediaCleanup = {attempted: false, completed: false};
+  }
+
   return {
     deleted: true,
     anonymizedOrderCount: orders.size,
     legacyImageCleanupQueued:
       cloudinaryImages.imageUrls.length + cloudinaryImages.publicIds.length,
+    mediaCleanup,
   };
 }
 
@@ -1969,31 +2221,16 @@ async function deleteAuthUserIfExists(uid) {
   }
 }
 
+// Thin adapter over the pure extractCloudinaryReferences (lib/
+// cloudinaryCleanup.js): callers here hold Firestore QueryDocumentSnapshots,
+// the pure function only wants plain data - keeping the mapping here is
+// what lets extractCloudinaryReferences itself be unit tested without an
+// emulator.
 function collectCloudinaryImageReferences(orderDocs, messageDocs) {
-  const urls = [];
-  const publicIds = [];
-  for (const orderDoc of orderDocs) {
-    const order = orderDoc.data();
-    urls.push(order.uploadedImageUrl, order.paymentReceiptImageUrl);
-    publicIds.push(
-      order.uploadedImagePublicId,
-      order.paymentReceiptImagePublicId,
-    );
-  }
-  for (const messageDoc of messageDocs) {
-    urls.push(messageDoc.get("imageUrl"));
-    publicIds.push(messageDoc.get("imagePublicId"));
-  }
-  return {
-    imageUrls: [...new Set(urls.filter((url) =>
-      typeof url === "string" &&
-      url.includes("res.cloudinary.com/"),
-    ))],
-    publicIds: [...new Set(publicIds.filter((publicId) =>
-      typeof publicId === "string" &&
-      publicId.trim().length > 0,
-    ))],
-  };
+  return extractCloudinaryReferences(
+    orderDocs.map((doc) => doc.data()),
+    messageDocs.map((doc) => doc.data()),
+  );
 }
 
 async function deleteUserStorage(uid) {
@@ -2200,6 +2437,61 @@ function assertCloudinaryPathSegment(value) {
     );
   }
   return segment;
+}
+
+// Calls Cloudinary's signed "destroy" endpoint for one asset, reusing the
+// exact same credential/signing helpers signCloudinaryUpload already uses -
+// the API secret stays server-side in Secret Manager and never reaches
+// Flutter. Used only by server-side cleanup (account deletion, and the
+// retry sweep below), never by an upload path.
+async function destroyCloudinaryAsset(publicId) {
+  const id = `${publicId || ""}`.trim();
+  if (!id) {
+    return {publicId: id, outcome: "skipped", result: "empty_public_id"};
+  }
+  const credentials = cloudinaryCredentials();
+  const timestamp = Math.floor(Date.now() / 1000);
+  const parameters = {public_id: id, timestamp};
+  const signature = signCloudinaryParameters(parameters, credentials.apiSecret);
+  const body = new URLSearchParams({
+    public_id: id,
+    timestamp: `${timestamp}`,
+    api_key: credentials.apiKey,
+    signature,
+  });
+  let response;
+  try {
+    response = await fetch(
+      `https://api.cloudinary.com/v1_1/${credentials.cloudName}/image/destroy`,
+      {method: "POST", body},
+    );
+  } catch (error) {
+    return {publicId: id, outcome: "failed", result: error.message || "network_error"};
+  }
+  const payload = await response.json().catch(() => ({}));
+  const outcome = interpretCloudinaryDestroyResult(response.ok, payload);
+  return {
+    publicId: id,
+    outcome,
+    result: payload.result || (outcome === "failed" ? `http_${response.status}` : ""),
+  };
+}
+
+// Sequential (not parallel) on purpose - this only ever runs for one
+// customer's own handful of images at a time (account deletion) or a
+// bounded retry batch (the scheduled sweep below), and avoids bursting
+// Cloudinary's per-account rate limit.
+async function destroyCloudinaryAssets(publicIds) {
+  const uniqueIds = [...new Set(
+    (publicIds || [])
+      .map((id) => `${id || ""}`.trim())
+      .filter((id) => id.length > 0),
+  )];
+  const results = [];
+  for (const id of uniqueIds) {
+    results.push(await destroyCloudinaryAsset(id));
+  }
+  return results;
 }
 
 function requireRole(activeUser, role) {

@@ -135,7 +135,10 @@ service cloud.firestore {
         'assignedDeliveryPerson',
         'assignedDeliveryPhone',
         'createdAt',
-        'updatedAt'
+        'updatedAt',
+        'photoLists',
+        'manualLists',
+        'categories'
       ];
     }
 
@@ -145,6 +148,15 @@ service cloud.firestore {
         'cancelledAt',
         'cancelledBy',
         'cancellationReason',
+        'updatedAt'
+      ];
+    }
+
+    function customerPaymentReceiptUpdateKeys() {
+      return [
+        'paymentReceiptImageUrl',
+        'paymentReceiptImagePublicId',
+        'paymentStatus',
         'updatedAt'
       ];
     }
@@ -196,6 +208,64 @@ service cloud.firestore {
         request.resource.data.updatedAt == request.time &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(customerCancellationUpdateKeys());
+    }
+
+    function isValidCustomerPaymentReceiptUpload() {
+      return notBlocked() &&
+        resource.data.userId == request.auth.uid &&
+        resource.data.paymentMethod == 'Bank Transfer' &&
+        resource.data.get('paymentReceiptImageUrl', '') == '' &&
+        resource.data.get('paymentReceiptImagePublicId', '') == '' &&
+        resource.data.get('paymentStatus', 'pending') == 'pending' &&
+        resource.data.orderStatus in
+          ['Bill Updated', 'Out for Delivery', 'Delivered'] &&
+        request.resource.data.paymentReceiptImageUrl is string &&
+        request.resource.data.paymentReceiptImageUrl.size() > 0 &&
+        request.resource.data.paymentReceiptImagePublicId is string &&
+        request.resource.data.paymentReceiptImagePublicId.size() > 0 &&
+        request.resource.data.paymentStatus == 'receipt uploaded' &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(customerPaymentReceiptUpdateKeys());
+    }
+
+    // Every orderStatus value an admin's own direct writes are allowed to
+    // set. Deliberately excludes 'Cancelled' - that transition is reserved
+    // for isValidCustomerCancellation() (and the cancelOrderWithinWindow /
+    // markAssignedOrderDelivered Cloud Functions, which use the Admin SDK
+    // and never go through these rules at all) - so a compromised or
+    // buggy admin session can no longer perform the customer-only
+    // cancellation transition directly.
+    function adminOrderStatusValues() {
+      return [
+        'Pending', 'Accepted', 'Need Clarification', 'Shopping Started',
+        'Item Unavailable', 'Bill Updated', 'Out for Delivery', 'Delivered',
+        'Rejected'
+      ];
+    }
+
+    // F9 fix: previously `allow update: if isAdmin();` placed no limits at
+    // all on what an admin-authenticated client could write to an order -
+    // any status string (including the customer-only 'Cancelled'),
+    // reassigning the order to a different customer, backdating
+    // updatedAt, or negative financial totals were all accepted. This adds
+    // the minimum guardrails for the fields the audit called out as
+    // critical, while leaving every write shape the app's own admin flows
+    // actually use (FirestoreService.updateOrderStatus,
+    // updateOrderFinancials, syncOrderItemPricesToCatalog) unaffected -
+    // it is intentionally not a full status state-machine (which stage
+    // can follow which stays enforced client-side, same as before).
+    function isValidAdminOrderUpdate() {
+      return request.resource.data.userId == resource.data.userId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.orderStatus in adminOrderStatusValues() &&
+        request.resource.data.paymentStatus in
+          ['pending', 'receipt uploaded', 'collected'] &&
+        request.resource.data.subtotal >= 0 &&
+        request.resource.data.deliveryCharge >= 0 &&
+        request.resource.data.serviceCharge >= 0 &&
+        request.resource.data.totalAmount >= 0;
     }
 
     function validUserAdminNotification() {
@@ -258,13 +328,23 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow create: if notBlocked() &&
         isValidOrderCreate();
+      // `resource == null` (the document doesn't exist yet) is allowed for
+      // any signed-in user because there is no data to protect - it only
+      // lets a client's own order-creation retry check "did my earlier
+      // attempt already succeed?" (order ids are random, unguessable
+      // client-generated UUIDs, so this isn't a practical enumeration
+      // surface). Once the document has data, the normal ownership check
+      // below applies exactly as before.
       allow read: if signedIn() &&
         (
+          resource == null ||
           resource.data.userId == request.auth.uid ||
           isAdmin() ||
           isAssignedDeliveryBoy(resource.data)
         );
-      allow update: if isAdmin() || isValidCustomerCancellation();
+      allow update: if (isAdmin() && isValidAdminOrderUpdate()) ||
+        isValidCustomerCancellation() ||
+        isValidCustomerPaymentReceiptUpload();
       allow delete: if isAdmin();
     }
 

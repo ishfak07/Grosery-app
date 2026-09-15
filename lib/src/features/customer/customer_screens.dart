@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
@@ -16,6 +17,9 @@ import '../../core/constants/app_constants.dart';
 import '../../core/i18n/app_localizations.dart';
 import '../../core/i18n/language_codes.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/home_backdrop.dart';
+import '../../core/utils/bilingual_text.dart';
+import '../../core/utils/category_grouping.dart';
 import '../../core/utils/phone_utils.dart';
 import '../../core/utils/validators.dart';
 import '../../core/widgets/common_widgets.dart';
@@ -389,6 +393,83 @@ class _CustomerSectionHeader extends StatelessWidget {
   }
 }
 
+/// A small category heading shown above a group of items belonging to the
+/// same admin-created category (shop), used wherever cart/checkout items are
+/// grouped by category. [shopName] is admin-entered data, not a translatable
+/// UI string, so it is rendered as-is (matching how shop names are shown
+/// elsewhere in this file, e.g. [_ShopCard]).
+class _CategorySectionLabel extends StatelessWidget {
+  const _CategorySectionLabel(
+      {required this.shopName, required this.itemCount});
+
+  final String shopName;
+  final int itemCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: _customerPrimary,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              shopName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _customerInk,
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Text(
+            '$itemCount ${context.t(itemCount == 1 ? 'item' : 'items')}',
+            style: const TextStyle(
+              color: _customerMuted,
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A small "Category: X" caption shown under the Photo List / Manual List
+/// preview when that submission was tagged with a category (see
+/// [AppState.photoListShopName]/[AppState.manualListShopName]).
+class _CategoryCaption extends StatelessWidget {
+  const _CategoryCaption({required this.shopName});
+
+  final String shopName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        '${context.t('Category')}: $shopName',
+        style: const TextStyle(
+          color: _customerMuted,
+          fontWeight: FontWeight.w700,
+          fontSize: 11,
+        ),
+      ),
+    );
+  }
+}
+
 class _ShimmerBox extends StatefulWidget {
   const _ShimmerBox({
     this.width,
@@ -558,6 +639,30 @@ Color _statusAccent(String status) {
   }
 }
 
+const _homeMethodIcons = <String, IconData>{
+  OrderCategoryMethod.methodItems: Icons.shopping_bag_outlined,
+  OrderCategoryMethod.methodPhoto: Icons.document_scanner_outlined,
+  OrderCategoryMethod.methodManual: Icons.edit_note,
+};
+
+const _homeMethodTitles = <String, String>{
+  OrderCategoryMethod.methodItems: 'Items',
+  OrderCategoryMethod.methodPhoto: 'Photo list',
+  OrderCategoryMethod.methodManual: 'Manual list',
+};
+
+const _homeMethodSubtitles = <String, String>{
+  OrderCategoryMethod.methodItems: 'Pick the items you need.',
+  OrderCategoryMethod.methodPhoto: 'Send list photo',
+  OrderCategoryMethod.methodManual: 'Type your shopping list',
+};
+
+const _homeMethodAccents = <String, Color>{
+  OrderCategoryMethod.methodItems: _customerPrimary,
+  OrderCategoryMethod.methodPhoto: _customerBlue,
+  OrderCategoryMethod.methodManual: _customerAccent,
+};
+
 class CustomerHomeScreen extends StatelessWidget {
   const CustomerHomeScreen({super.key});
 
@@ -568,93 +673,86 @@ class CustomerHomeScreen extends StatelessWidget {
     if (profile == null) {
       return const _CustomerLogoutTransition();
     }
+    final selectedCategory = appState.liveSelectedHomeCategory;
+    // A category the admin limited (a pharmacy set to photo/manual only, say)
+    // must not surface the methods it disallows anywhere on Home, not just on
+    // the method-selection screen.
+    final allowedMethods =
+        selectedCategory?.allowedMethods ?? Shop.allShoppingMethods;
+    final allowsItems =
+        allowedMethods.contains(OrderCategoryMethod.methodItems);
+    final categoryHours =
+        selectedCategory?.effectiveHours(appState.shopHoursSettings) ??
+            appState.shopHoursSettings;
+    final categoryClosed = !categoryHours.isOpenAt(DateTime.now());
     return Scaffold(
-      extendBody: true,
       backgroundColor: _customerBackground,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: _CustomerBackdrop(
-              child: AppRefreshIndicator(
-                child: _CustomerScrollView(
-                  padding: const EdgeInsets.fromLTRB(0, 10, 0, 108),
-                  safeAreaTop: true,
-                  children: [
-                    FirebaseSetupBanner(appState: appState),
-                    _HomeHeader(
-                      profile: profile,
-                      cartCount: appState.cartCount,
-                    ),
-                    const SizedBox(height: 14),
-                    _HomeSearchCallout(
-                      onTap: () => Navigator.of(context).push(
-                        _CustomerPageRoute(
-                          builder: (_) => const ProductListScreen(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const _HomeOffersCarousel(),
-                    const SizedBox(height: 18),
-                    _HomeActionGrid(
-                      actions: [
-                        _HomeActionSpec(
-                          icon: Icons.shopping_bag_outlined,
-                          title: 'Items',
-                          subtitle: 'Pick the items you need.',
-                          accent: _customerPrimary,
-                          onTap: () => Navigator.of(context).push(
-                            _CustomerPageRoute(
-                              builder: (_) => const ShopListScreen(),
-                            ),
-                          ),
-                        ),
-                        _HomeActionSpec(
-                          icon: Icons.document_scanner_outlined,
-                          title: 'Photo list',
-                          subtitle: 'Send list photo',
-                          accent: _customerBlue,
-                          featured: true,
-                          onTap: () => Navigator.of(context).push(
-                            _CustomerPageRoute(
-                              builder: (_) => const UploadBillScreen(),
-                            ),
-                          ),
-                        ),
-                        _HomeActionSpec(
-                          icon: Icons.edit_note,
-                          title: 'Manual list',
-                          subtitle: 'Type your grocery list',
-                          accent: _customerAccent,
-                          onTap: () => Navigator.of(context).push(
-                            _CustomerPageRoute(
-                              builder: (_) => const ManualListScreen(),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    _HomeFreshPicksHeader(
-                      onAction: () => Navigator.of(context).push(
-                        _CustomerPageRoute(
-                          builder: (_) => const ProductListScreen(),
-                        ),
-                      ),
-                    ),
-                    const _RecentProductsGrid(),
-                  ],
-                ),
+      body: HomeBackdrop(
+        child: AppRefreshIndicator(
+          child: _CustomerScrollView(
+            padding: const EdgeInsets.fromLTRB(0, 10, 0, 128),
+            safeAreaTop: true,
+            children: [
+              FirebaseSetupBanner(appState: appState),
+              _HomeHeader(
+                profile: profile,
+                cartCount: appState.cartCount,
               ),
-            ),
+              if (allowsItems) ...[
+                const SizedBox(height: 14),
+                _HomeSearchCallout(
+                  categoryName: selectedCategory?.shopName,
+                  onTap: () {
+                    _openShoppingMethod(
+                      context,
+                      passedShop: selectedCategory,
+                      method: OrderCategoryMethod.methodItems,
+                    );
+                  },
+                ),
+              ],
+              const SizedBox(height: 16),
+              const _HomeOffersCarousel(),
+              const SizedBox(height: 18),
+              const _HomeCategorySelector(),
+              if (categoryClosed && selectedCategory != null) ...[
+                const SizedBox(height: 14),
+                _CategoryClosedNotice(hours: categoryHours),
+              ],
+              const SizedBox(height: 16),
+              _HomeActionGrid(
+                actions: [
+                  for (final method in allowedMethods)
+                    _HomeActionSpec(
+                      icon: _homeMethodIcons[method]!,
+                      title: _homeMethodTitles[method]!,
+                      subtitle: _homeMethodSubtitles[method]!,
+                      accent: _homeMethodAccents[method]!,
+                      featured: method == OrderCategoryMethod.methodPhoto,
+                      onTap: () => _openShoppingMethod(
+                        context,
+                        passedShop: selectedCategory,
+                        method: method,
+                      ),
+                    ),
+                ],
+              ),
+              if (allowsItems) ...[
+                const SizedBox(height: 24),
+                _HomeFreshPicksHeader(
+                  onAction: () {
+                    _openShoppingMethod(
+                      context,
+                      passedShop: selectedCategory,
+                      method: OrderCategoryMethod.methodItems,
+                    );
+                  },
+                ),
+                const _RecentProductsGrid(),
+              ],
+            ],
           ),
-          const Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _CustomerBottomNavigation(selectedIndex: 0),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -938,9 +1036,10 @@ class _HomeHeaderPill extends StatelessWidget {
 }
 
 class _HomeSearchCallout extends StatelessWidget {
-  const _HomeSearchCallout({required this.onTap});
+  const _HomeSearchCallout({required this.onTap, this.categoryName});
 
   final VoidCallback onTap;
+  final String? categoryName;
 
   @override
   Widget build(BuildContext context) {
@@ -985,7 +1084,12 @@ class _HomeSearchCallout extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      context.t('Search groceries '),
+                      (categoryName == null || categoryName!.isEmpty)
+                          ? context.t('Search products ')
+                          : context.t(
+                              'Search {category}',
+                              values: {'category': categoryName!},
+                            ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -1092,7 +1196,7 @@ class _HomePromoBanner extends StatelessWidget {
                           const SizedBox(height: 14),
                           Text(
                             context.t(
-                              'Fresh groceries, photo lists, and COD in one smooth order.',
+                              'Everyday essentials, photo lists, and COD in one smooth order.',
                             ),
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
@@ -1157,15 +1261,12 @@ class _HomeOffersCarousel extends StatefulWidget {
 
 class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
   static const _autoPlayInterval = Duration(seconds: 4);
-  static const _pageAnimationDuration = Duration(milliseconds: 260);
-  static const _swipeDistanceThreshold = 36.0;
-  static const _swipeVelocityThreshold = 220.0;
+  static const _pageAnimationDuration = Duration(milliseconds: 620);
 
+  final _pageController = PageController();
   Timer? _autoPlayTimer;
-  var _page = 0;
+  var _activeIndex = 0;
   var _offerCount = 0;
-  var _dragDistance = 0.0;
-  var _isForward = true;
   late final Stream<List<Offer>> _offersStream;
 
   @override
@@ -1177,6 +1278,7 @@ class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
   @override
   void dispose() {
     _stopAutoPlay();
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -1198,12 +1300,7 @@ class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
           return const _HomePromoBanner();
         }
         _syncOfferCount(offers.length);
-        final activePage = _page < 0
-            ? 0
-            : _page >= offers.length
-                ? offers.length - 1
-                : _page;
-        final activeOffer = offers[activePage];
+        final activeIndex = _activeIndex.clamp(0, offers.length - 1);
         return LayoutBuilder(
           builder: (context, constraints) {
             final height = constraints.maxWidth < 380 ? 190.0 : 214.0;
@@ -1211,82 +1308,65 @@ class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
               children: [
                 SizedBox(
                   height: height,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onHorizontalDragStart: offers.length > 1
-                        ? (_) {
-                            _stopAutoPlay();
-                            _dragDistance = 0;
-                          }
-                        : null,
-                    onHorizontalDragUpdate: offers.length > 1
-                        ? (details) {
-                            _dragDistance += details.primaryDelta ?? 0;
-                          }
-                        : null,
-                    onHorizontalDragEnd:
-                        offers.length > 1 ? _handleOfferDragEnd : null,
-                    onHorizontalDragCancel:
-                        offers.length > 1 ? _handleOfferDragCancel : null,
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: AnimatedSwitcher(
-                            duration: _pageAnimationDuration,
-                            switchInCurve: Curves.easeOutCubic,
-                            switchOutCurve: Curves.easeOutCubic,
-                            transitionBuilder: (child, animation) {
-                              final offset = _isForward ? 0.08 : -0.08;
-                              return FadeTransition(
-                                opacity: animation,
-                                child: SlideTransition(
-                                  position: Tween<Offset>(
-                                    begin: Offset(offset, 0),
-                                    end: Offset.zero,
-                                  ).animate(animation),
-                                  child: child,
-                                ),
-                              );
-                            },
-                            child: _HomeOfferBanner(
-                              key: ValueKey(activeOffer.offerId),
-                              offer: activeOffer,
-                              onTap: () => Navigator.of(context).push(
-                                _CustomerPageRoute(
-                                  builder: (_) =>
-                                      OfferDetailsScreen(offer: activeOffer),
-                                ),
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (notification) {
+                      if (offers.length <= 1) {
+                        return false;
+                      }
+                      if (notification is ScrollStartNotification &&
+                          notification.dragDetails != null) {
+                        _stopAutoPlay();
+                      } else if (notification is ScrollEndNotification) {
+                        _startAutoPlay();
+                      }
+                      return false;
+                    },
+                    child: PageView.builder(
+                      controller: _pageController,
+                      itemCount: offers.length,
+                      onPageChanged: (index) {
+                        setState(() => _activeIndex = index);
+                      },
+                      itemBuilder: (context, index) {
+                        return AnimatedBuilder(
+                          animation: _pageController,
+                          builder: (context, child) {
+                            var page = _activeIndex.toDouble();
+                            if (_pageController.hasClients &&
+                                _pageController.position.haveDimensions) {
+                              page = _pageController.page ?? page;
+                            }
+                            final delta = (page - index).clamp(-1.0, 1.0);
+                            final proximity = 1 - delta.abs();
+                            final scale = 0.90 + (proximity * 0.10);
+                            final opacity = 0.55 + (proximity * 0.45);
+                            return Transform.scale(
+                              scale: scale,
+                              child: Opacity(opacity: opacity, child: child),
+                            );
+                          },
+                          child: _HomeOfferBanner(
+                            key: ValueKey(offers[index].offerId),
+                            offer: offers[index],
+                            onTap: () => Navigator.of(context).push(
+                              _CustomerPageRoute(
+                                builder: (_) =>
+                                    OfferDetailsScreen(offer: offers[index]),
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ),
                 ),
                 if (offers.length > 1) ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      for (var index = 0; index < offers.length; index++)
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => _showOfferAt(index),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            width: activePage == index ? 18 : 7,
-                            height: 7,
-                            margin: const EdgeInsets.symmetric(horizontal: 5),
-                            decoration: BoxDecoration(
-                              color: activePage == index
-                                  ? _customerPrimary
-                                  : _customerLine,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                    ],
+                  const SizedBox(height: 12),
+                  _OfferProgressIndicator(
+                    count: offers.length,
+                    activeIndex: activeIndex,
+                    interval: _autoPlayInterval,
+                    onDotTap: _showOfferAt,
                   ),
                 ],
               ],
@@ -1307,23 +1387,36 @@ class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
     } else {
       _startAutoPlay();
     }
-    if (_page < offerCount || offerCount == 0) {
+    if (_activeIndex < offerCount || offerCount == 0) {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      setState(() => _page = 0);
+      setState(() => _activeIndex = 0);
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(0);
+      }
     });
   }
 
   void _startAutoPlay() {
     _autoPlayTimer?.cancel();
-    _autoPlayTimer = Timer.periodic(
-      _autoPlayInterval,
-      (_) => _showNextOffer(),
-    );
+    if (_offerCount <= 1) {
+      return;
+    }
+    _autoPlayTimer = Timer.periodic(_autoPlayInterval, (_) {
+      if (!mounted || !_pageController.hasClients || _offerCount <= 1) {
+        return;
+      }
+      final next = (_activeIndex + 1) % _offerCount;
+      _pageController.animateToPage(
+        next,
+        duration: _pageAnimationDuration,
+        curve: Curves.easeInOutCubic,
+      );
+    });
   }
 
   void _stopAutoPlay() {
@@ -1331,60 +1424,128 @@ class _HomeOffersCarouselState extends State<_HomeOffersCarousel> {
     _autoPlayTimer = null;
   }
 
-  void _handleOfferDragEnd(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
-    if (velocity <= -_swipeVelocityThreshold ||
-        _dragDistance <= -_swipeDistanceThreshold) {
-      _showNextOffer();
-    } else if (velocity >= _swipeVelocityThreshold ||
-        _dragDistance >= _swipeDistanceThreshold) {
-      _showPreviousOffer();
+  void _showOfferAt(int index) {
+    if (!mounted || _offerCount == 0 || index == _activeIndex) {
+      return;
     }
-    _dragDistance = 0;
+    final boundedIndex = index.clamp(0, _offerCount - 1);
+    _stopAutoPlay();
+    if (_pageController.hasClients) {
+      _pageController.animateToPage(
+        boundedIndex,
+        duration: _pageAnimationDuration,
+        curve: Curves.easeInOutCubic,
+      );
+    }
     if (_offerCount > 1) {
       _startAutoPlay();
     }
-  }
-
-  void _handleOfferDragCancel() {
-    _dragDistance = 0;
-    if (_offerCount > 1) {
-      _startAutoPlay();
-    }
-  }
-
-  void _showNextOffer() {
-    if (!mounted || _offerCount <= 1) {
-      return;
-    }
-    _showOfferAt((_page + 1) % _offerCount);
-  }
-
-  void _showPreviousOffer() {
-    if (!mounted || _offerCount <= 1) {
-      return;
-    }
-    _showOfferAt((_page - 1 + _offerCount) % _offerCount);
-  }
-
-  void _showOfferAt(int page) {
-    if (!mounted || _offerCount == 0 || page == _page) {
-      return;
-    }
-    final boundedPage = page < 0
-        ? 0
-        : page >= _offerCount
-            ? _offerCount - 1
-            : page;
-    setState(() {
-      _isForward =
-          boundedPage > _page || (_page == _offerCount - 1 && boundedPage == 0);
-      _page = boundedPage;
-    });
   }
 }
 
-class _HomeOfferBanner extends StatelessWidget {
+/// Instagram-Stories-style segmented progress bar: the active segment fills
+/// smoothly over the autoplay interval, past segments stay full, and
+/// upcoming ones stay empty — a much clearer, livelier read of carousel
+/// progress than static dots.
+class _OfferProgressIndicator extends StatefulWidget {
+  const _OfferProgressIndicator({
+    required this.count,
+    required this.activeIndex,
+    required this.interval,
+    required this.onDotTap,
+  });
+
+  final int count;
+  final int activeIndex;
+  final Duration interval;
+  final ValueChanged<int> onDotTap;
+
+  @override
+  State<_OfferProgressIndicator> createState() =>
+      _OfferProgressIndicatorState();
+}
+
+class _OfferProgressIndicatorState extends State<_OfferProgressIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.interval)
+      ..forward();
+  }
+
+  @override
+  void didUpdateWidget(covariant _OfferProgressIndicator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.activeIndex != widget.activeIndex) {
+      _controller
+        ..duration = widget.interval
+        ..forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var index = 0; index < widget.count; index++)
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => widget.onDotTap(index),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: Container(
+                  width: 22,
+                  height: 5,
+                  color: _customerLine,
+                  child: AnimatedBuilder(
+                    animation: _controller,
+                    builder: (context, _) {
+                      final value = index < widget.activeIndex
+                          ? 1.0
+                          : index > widget.activeIndex
+                              ? 0.0
+                              : _controller.value;
+                      return Align(
+                        alignment: Alignment.centerLeft,
+                        child: FractionallySizedBox(
+                          widthFactor: value,
+                          heightFactor: 1,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  _customerPrimary.withValues(alpha: 0.85),
+                                  _customerPrimary,
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _HomeOfferBanner extends StatefulWidget {
   const _HomeOfferBanner({
     super.key,
     required this.offer,
@@ -1395,13 +1556,37 @@ class _HomeOfferBanner extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_HomeOfferBanner> createState() => _HomeOfferBannerState();
+}
+
+class _HomeOfferBannerState extends State<_HomeOfferBanner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _kenBurnsController;
+
+  @override
+  void initState() {
+    super.initState();
+    _kenBurnsController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 9),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _kenBurnsController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final appState = context.watch<AppState>();
-    final languageCode = appState.effectiveLanguageCode;
-    final title = offer.localizedTitle(languageCode);
-    final caption = offer.localizedCaption(languageCode);
-    final hasTitle = title.trim().isNotEmpty;
-    final hasCaption = caption.trim().isNotEmpty;
+    final offer = widget.offer;
+    final titleEnglish = offer.title.trim();
+    final titleTamil = offer.tamilTitle.trim();
+    final captionEnglish = offer.caption.trim();
+    final captionTamil = offer.tamilCaption.trim();
+    final hasTitle = titleEnglish.isNotEmpty || titleTamil.isNotEmpty;
+    final hasCaption = captionEnglish.isNotEmpty || captionTamil.isNotEmpty;
     final dateLabel = _offerDateLabel(offer);
     final radius = BorderRadius.circular(8);
     return _Pressable(
@@ -1421,11 +1606,18 @@ class _HomeOfferBanner extends StatelessWidget {
           borderRadius: radius,
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            onTap: onTap,
+            onTap: widget.onTap,
             child: Stack(
               fit: StackFit.expand,
               children: [
-                ProductImage(url: offer.imageUrl, radius: 8),
+                AnimatedBuilder(
+                  animation: _kenBurnsController,
+                  builder: (context, child) => Transform.scale(
+                    scale: 1 + (_kenBurnsController.value * 0.035),
+                    child: child,
+                  ),
+                  child: ProductImage(url: offer.imageUrl, radius: 8),
+                ),
                 DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: radius,
@@ -1481,28 +1673,35 @@ class _HomeOfferBanner extends StatelessWidget {
                       ),
                       const Spacer(),
                       if (hasTitle)
-                        Text(
-                          title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                        BilingualLines(
+                          english: titleEnglish,
+                          tamil: titleTamil,
+                          maxLinesEach: 1,
+                          gap: 1,
                           style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0,
+                                        height: 1.06,
+                                      ) ??
+                                  const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w900,
-                                    letterSpacing: 0,
-                                    height: 1.06,
                                   ),
                         ),
-                      if (hasTitle && hasCaption) const SizedBox(height: 6),
+                      if (hasTitle && hasCaption) const SizedBox(height: 4),
                       if (hasCaption)
-                        Text(
-                          caption,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                        BilingualLines(
+                          english: captionEnglish,
+                          tamil: captionTamil,
+                          maxLinesEach: 1,
+                          gap: 1,
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.9),
                             fontWeight: FontWeight.w700,
-                            height: 1.24,
+                            fontSize: 12,
+                            height: 1.2,
                           ),
                         ),
                       if (dateLabel != null) ...[
@@ -1576,12 +1775,12 @@ class OfferDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final appState = context.watch<AppState>();
-    final languageCode = appState.effectiveLanguageCode;
-    final title = offer.localizedTitle(languageCode);
-    final caption = offer.localizedCaption(languageCode);
-    final hasTitle = title.trim().isNotEmpty;
-    final hasCaption = caption.trim().isNotEmpty;
+    final titleEnglish = offer.title.trim();
+    final titleTamil = offer.tamilTitle.trim();
+    final captionEnglish = offer.caption.trim();
+    final captionTamil = offer.tamilCaption.trim();
+    final hasTitle = titleEnglish.isNotEmpty || titleTamil.isNotEmpty;
+    final hasCaption = captionEnglish.isNotEmpty || captionTamil.isNotEmpty;
     final dateLabel = _offerDateLabel(offer);
     return _CustomerScaffold(
       title: 'Offer details',
@@ -1593,13 +1792,20 @@ class OfferDetailsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           if (hasTitle)
-            Text(
-              title,
+            BilingualLines(
+              english: titleEnglish,
+              tamil: titleTamil,
+              maxLinesEach: 3,
+              gap: 4,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: _customerInk,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
+                        height: 1.12,
+                      ) ??
+                  const TextStyle(
                     color: _customerInk,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: 0,
-                    height: 1.12,
                   ),
             ),
           if (dateLabel != null) ...[
@@ -1626,8 +1832,12 @@ class OfferDetailsScreen extends StatelessWidget {
           ],
           if (hasCaption) ...[
             const SizedBox(height: 14),
-            Text(
-              caption,
+            BilingualLines(
+              english: captionEnglish,
+              tamil: captionTamil,
+              maxLinesEach: 20,
+              overflow: TextOverflow.visible,
+              gap: 6,
               style: const TextStyle(
                 color: _customerInk,
                 fontWeight: FontWeight.w600,
@@ -1657,147 +1867,167 @@ String? _offerDateLabel(Offer offer) {
   return 'Until ${formatter.format(endDate!)}';
 }
 
-class _CustomerBottomNavigation extends StatelessWidget {
-  const _CustomerBottomNavigation({required this.selectedIndex});
+class CustomerShell extends StatefulWidget {
+  const CustomerShell({super.key});
+
+  @override
+  State<CustomerShell> createState() => _CustomerShellState();
+}
+
+class _CustomerShellState extends State<CustomerShell> {
+  var _index = 0;
+
+  static const _tabs = <Widget>[
+    CustomerHomeScreen(),
+    OrderHistoryScreen(),
+    SupportScreen(),
+    ProfileScreen(),
+  ];
+
+  void _onSelect(int index) {
+    if (index == _index) {
+      return;
+    }
+    HapticFeedback.selectionClick();
+    setState(() => _index = index);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: IndexedStack(index: _index, children: _tabs),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: _CustomerNavBar(
+            selectedIndex: _index,
+            onSelected: _onSelect,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CustomerNavBar extends StatelessWidget {
+  const _CustomerNavBar({
+    required this.selectedIndex,
+    required this.onSelected,
+  });
 
   final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  /// Translucent so the page shows faintly through the frosted bar. Also
+  /// used for the ring around the selected item so it matches the bar where
+  /// the two overlap.
+  static const _barColor = Color(0xB0FFFFFF);
 
   @override
   Widget build(BuildContext context) {
     final items = [
-      _CustomerNavItemData(
+      _NavBarItemSpec(
         icon: Icons.home_outlined,
-        selectedIcon: Icons.home,
+        selectedIcon: Icons.home_rounded,
         label: context.t('Home'),
       ),
-      _CustomerNavItemData(
+      _NavBarItemSpec(
         icon: Icons.receipt_long_outlined,
-        selectedIcon: Icons.receipt_long,
+        selectedIcon: Icons.receipt_long_rounded,
         label: context.t('Orders'),
       ),
-      _CustomerNavItemData(
+      _NavBarItemSpec(
         icon: Icons.support_agent_outlined,
-        selectedIcon: Icons.support_agent,
+        selectedIcon: Icons.support_agent_rounded,
         label: context.t('Support'),
       ),
-      _CustomerNavItemData(
+      _NavBarItemSpec(
         icon: Icons.person_outline,
-        selectedIcon: Icons.person,
+        selectedIcon: Icons.person_rounded,
         label: context.t('Profile'),
       ),
     ];
 
-    const pillRadius = 32.0;
-
     return SafeArea(
       top: false,
-      minimum: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-      child: Material(
-        type: MaterialType.transparency,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(pillRadius),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF10231A).withValues(alpha: 0.12),
-                blurRadius: 28,
-                offset: const Offset(0, 10),
-              ),
-              BoxShadow(
-                color: _customerPrimary.withValues(alpha: 0.08),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(pillRadius),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(pillRadius),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withValues(alpha: 0.72),
-                      _customerPrimaryLight.withValues(alpha: 0.52),
-                    ],
-                  ),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.55),
-                    width: 1.1,
-                  ),
-                ),
-                child: SizedBox(
-                  height: 68,
-                  child: Stack(
-                    alignment: Alignment.center,
+      minimum: const EdgeInsets.fromLTRB(24, 0, 24, 30),
+      child: SizedBox(
+        height: 82,
+        child: Stack(
+          alignment: Alignment.bottomCenter,
+          clipBehavior: Clip.none,
+          children: [
+            SizedBox(
+              height: 64,
+              // The frosted pill is a separate layer behind the items rather
+              // than their parent, because clipping it for the blur would
+              // also cut off the selected item's circle where it lifts above
+              // the bar.
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Positioned.fill(child: _FrostedNavBarSurface()),
+                  Row(
                     children: [
-                      AnimatedAlign(
-                        duration: const Duration(milliseconds: 360),
-                        curve: Curves.easeOutBack,
-                        alignment: Alignment(
-                          -1 + (selectedIndex * 2 / (items.length - 1)),
-                          0,
-                        ),
-                        child: FractionallySizedBox(
-                          widthFactor: 1 / items.length,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 7,
-                            ),
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(24),
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Colors.white.withValues(alpha: 0.94),
-                                    const Color(0xFFDDF1E5)
-                                        .withValues(alpha: 0.88),
-                                  ],
-                                ),
-                                border: Border.all(
-                                  color: _customerPrimary.withValues(
-                                    alpha: 0.14,
-                                  ),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: _customerPrimary.withValues(
-                                      alpha: 0.14,
-                                    ),
-                                    blurRadius: 14,
-                                    offset: const Offset(0, 6),
-                                  ),
-                                ],
-                              ),
-                            ),
+                      for (var index = 0; index < items.length; index++)
+                        Expanded(
+                          child: _CustomerNavBarItem(
+                            data: items[index],
+                            selected: index == selectedIndex,
+                            barColor: _barColor,
+                            onTap: () => onSelected(index),
                           ),
                         ),
-                      ),
-                      Row(
-                        children: [
-                          for (var index = 0; index < items.length; index++)
-                            Expanded(
-                              child: _CustomerGlassNavItem(
-                                data: items[index],
-                                selected: index == selectedIndex,
-                                onTap: () => _selectDestination(
-                                  context,
-                                  index,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
                     ],
                   ),
-                ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The translucent, blurred pill behind the nav bar items.
+class _FrostedNavBarSurface extends StatelessWidget {
+  const _FrostedNavBarSurface();
+
+  @override
+  Widget build(BuildContext context) {
+    final shape = BorderRadius.circular(32);
+    return DecoratedBox(
+      // Shadow sits outside the clip; clipping it would erase it.
+      decoration: BoxDecoration(
+        borderRadius: shape,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF10231A).withValues(alpha: 0.16),
+            blurRadius: 30,
+            offset: const Offset(0, 14),
+          ),
+          BoxShadow(
+            color: const Color(0xFF10231A).withValues(alpha: 0.06),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: shape,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: _CustomerNavBar._barColor,
+              borderRadius: shape,
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.55),
               ),
             ),
           ),
@@ -1805,26 +2035,10 @@ class _CustomerBottomNavigation extends StatelessWidget {
       ),
     );
   }
-
-  void _selectDestination(BuildContext context, int index) {
-    if (index == selectedIndex && index == 0) {
-      return;
-    }
-    final routes = [
-      null,
-      const OrderHistoryScreen(),
-      const SupportScreen(),
-      const ProfileScreen(),
-    ];
-    final route = routes[index];
-    if (route != null) {
-      Navigator.of(context).push(_CustomerPageRoute(builder: (_) => route));
-    }
-  }
 }
 
-class _CustomerNavItemData {
-  const _CustomerNavItemData({
+class _NavBarItemSpec {
+  const _NavBarItemSpec({
     required this.icon,
     required this.selectedIcon,
     required this.label,
@@ -1835,15 +2049,17 @@ class _CustomerNavItemData {
   final String label;
 }
 
-class _CustomerGlassNavItem extends StatelessWidget {
-  const _CustomerGlassNavItem({
+class _CustomerNavBarItem extends StatelessWidget {
+  const _CustomerNavBarItem({
     required this.data,
     required this.selected,
+    required this.barColor,
     required this.onTap,
   });
 
-  final _CustomerNavItemData data;
+  final _NavBarItemSpec data;
   final bool selected;
+  final Color barColor;
   final VoidCallback onTap;
 
   @override
@@ -1856,76 +2072,70 @@ class _CustomerGlassNavItem extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(24),
-          splashColor: _customerPrimary.withValues(alpha: 0.08),
-          highlightColor: Colors.white.withValues(alpha: 0.18),
-          child: TweenAnimationBuilder<double>(
-            tween: Tween<double>(end: selected ? 1 : 0),
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOutCubic,
-            builder: (context, value, child) {
-              final color = Color.lerp(
-                _customerMuted,
-                _customerPrimary,
-                value,
-              )!;
-              return Transform.translate(
-                offset: Offset(0, -2 * value),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Transform.scale(
-                      scale: 1 + (0.15 * value),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 220),
-                        switchInCurve: Curves.easeOutBack,
-                        switchOutCurve: Curves.easeInCubic,
-                        transitionBuilder: (child, animation) {
-                          return FadeTransition(
-                            opacity: animation,
-                            child: ScaleTransition(
-                              scale: Tween<double>(
-                                begin: 0.82,
-                                end: 1,
-                              ).animate(animation),
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: Icon(
-                          selected ? data.selectedIcon : data.icon,
-                          key: ValueKey('${data.label}-$selected'),
-                          color: color,
-                          size: 24,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeOutCubic,
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 11.5,
-                        height: 1,
-                        fontWeight:
-                            selected ? FontWeight.w900 : FontWeight.w700,
-                        letterSpacing: 0,
-                      ),
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 220),
-                        opacity: selected ? 1 : 0.72,
-                        child: Text(
-                          data.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                  ],
+          customBorder: const CircleBorder(),
+          child: SizedBox(
+            height: 64,
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                  opacity: selected ? 0 : 1,
+                  child: Icon(
+                    data.icon,
+                    color: _customerMuted,
+                    size: 24,
+                  ),
                 ),
-              );
-            },
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(end: selected ? 1 : 0),
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, child) {
+                    if (value <= 0.01) {
+                      return const SizedBox.shrink();
+                    }
+                    return Opacity(
+                      opacity: value,
+                      child: Transform.translate(
+                        offset: Offset(0, -16 * value),
+                        child: Transform.scale(
+                          scale: 0.55 + (0.45 * value),
+                          child: child,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF1E8355), _customerPrimary],
+                      ),
+                      border: Border.all(color: barColor, width: 4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _customerPrimary.withValues(alpha: 0.45),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      data.selectedIcon,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1966,7 +2176,7 @@ class _HomeFreshPicksHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  context.t('Fresh picks'),
+                  context.t('New arrivals'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -2020,16 +2230,27 @@ class _RecentProductsGrid extends StatefulWidget {
 }
 
 class _RecentProductsGridState extends State<_RecentProductsGrid> {
-  late final Stream<List<Product>> _productsStream;
+  String? _streamShopId;
+  late Stream<List<Product>> _productsStream;
 
   @override
   void initState() {
     super.initState();
-    _productsStream = context.read<AppState>().firestoreService.watchProducts();
+    final appState = context.read<AppState>();
+    _streamShopId = appState.selectedHomeCategory?.shopId;
+    _productsStream =
+        appState.firestoreService.watchRecentProducts(shopId: _streamShopId);
   }
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final currentShopId = appState.selectedHomeCategory?.shopId;
+    if (currentShopId != _streamShopId) {
+      _streamShopId = currentShopId;
+      _productsStream =
+          appState.firestoreService.watchRecentProducts(shopId: currentShopId);
+    }
     return StreamBuilder<List<Product>>(
       stream: _productsStream,
       builder: (context, snapshot) {
@@ -2038,7 +2259,7 @@ class _RecentProductsGridState extends State<_RecentProductsGrid> {
             message: _friendlyDataError(snapshot.error),
           );
         }
-        final products = (snapshot.data ?? const <Product>[]).take(6).toList();
+        final products = snapshot.data ?? const <Product>[];
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const _ProductGridSkeleton();
         }
@@ -2092,6 +2313,116 @@ class _HomeActionSpec {
   final Color accent;
   final VoidCallback onTap;
   final bool featured;
+}
+
+const _homeCategoryPalette = <Color>[
+  Color(0xFF176B45), // green
+  Color(0xFFC0392B), // red
+  Color(0xFF1B6FB5), // blue
+  Color(0xFFE07A1F), // orange
+  Color(0xFF7B3FA0), // purple
+  Color(0xFF0F8A80), // teal
+  Color(0xFF8A5A2B), // brown
+  Color(0xFFC2185B), // pink
+];
+
+const _homeCategoryNamedAccents = <String, Color>{
+  'grocer': Color(0xFF176B45),
+  'meat': Color(0xFFC0392B),
+  'fish': Color(0xFFC0392B),
+  'pharmac': Color(0xFF1B6FB5),
+  'medic': Color(0xFF1B6FB5),
+  'vegetab': Color(0xFF4C8B2B),
+  'fruit': Color(0xFFE07A1F),
+  'bakery': Color(0xFF8A5A2B),
+  'dairy': Color(0xFF3F51B5),
+  'beverage': Color(0xFF7B3FA0),
+  'drink': Color(0xFF7B3FA0),
+  'household': Color(0xFF0F8A80),
+};
+
+/// Gives every home category chip its own accent colour so the selected chip
+/// is easy to tell apart. Falls back to a stable palette slot when the shop
+/// name is not one of the known categories.
+Color _homeCategoryAccent(String shopName, int index) {
+  final name = shopName.toLowerCase();
+  for (final entry in _homeCategoryNamedAccents.entries) {
+    if (name.contains(entry.key)) {
+      return entry.value;
+    }
+  }
+  return _homeCategoryPalette[index % _homeCategoryPalette.length];
+}
+
+class _HomeCategorySelector extends StatelessWidget {
+  const _HomeCategorySelector();
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    return StreamBuilder<List<Shop>>(
+      stream: appState.firestoreService.watchShops(activeOnly: true),
+      builder: (context, snapshot) {
+        final shops = snapshot.data ?? const <Shop>[];
+        if (shops.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final selected = appState.selectedHomeCategory;
+        if (selected == null) {
+          final defaultShop = shops.firstWhere(
+            (shop) => shop.shopName.toLowerCase().contains('grocer'),
+            orElse: () => shops.first,
+          );
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (appState.selectedHomeCategory == null) {
+              appState.setSelectedHomeCategory(defaultShop);
+            }
+          });
+        }
+        return SizedBox(
+          height: 40,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: shops.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final shop = shops[index];
+              final isSelected = selected?.shopId == shop.shopId;
+              final accent = _homeCategoryAccent(shop.shopName, index);
+              final isClosed = !shop
+                  .effectiveHours(appState.shopHoursSettings)
+                  .isOpenAt(DateTime.now());
+              return ChoiceChip(
+                avatar: isClosed
+                    ? Icon(
+                        Icons.access_time,
+                        size: 14,
+                        color: isSelected ? Colors.white : _customerDanger,
+                      )
+                    : null,
+                label: Text(shop.shopName),
+                selected: isSelected,
+                onSelected: (_) => appState.setSelectedHomeCategory(shop),
+                labelStyle: TextStyle(
+                  color: isSelected ? Colors.white : _customerInk,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                ),
+                selectedColor: accent,
+                backgroundColor: Colors.white,
+                side: BorderSide(
+                  color: isSelected ? accent : _customerLine,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _HomeActionGrid extends StatelessWidget {
@@ -2505,7 +2836,8 @@ class ShopListScreen extends StatelessWidget {
                     shop: shops[index],
                     onTap: () => Navigator.of(context).push(
                       _CustomerPageRoute(
-                        builder: (_) => ProductListScreen(shop: shops[index]),
+                        builder: (_) =>
+                            CategoryMethodSelectionScreen(shop: shops[index]),
                       ),
                     ),
                   ),
@@ -2520,6 +2852,374 @@ class ShopListScreen extends StatelessWidget {
   }
 }
 
+class CategoryMethodSelectionScreen extends StatelessWidget {
+  const CategoryMethodSelectionScreen({super.key, required this.shop});
+
+  final Shop shop;
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final selectedMethod = appState.selectedMethodForCategory(shop.shopId);
+    final hours = shop.effectiveHours(appState.shopHoursSettings);
+    final isOpen = hours.isOpenAt(DateTime.now());
+    return _CustomerScaffold(
+      title: shop.shopName,
+      body: _CustomerScrollView(
+        children: [
+          _CustomerCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  shop.shopName,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: _customerInk,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
+                      ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  context.t('Select shopping method'),
+                  style: const TextStyle(
+                    color: _customerMuted,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (!isOpen) ...[
+            const SizedBox(height: 14),
+            _CategoryClosedNotice(hours: hours),
+          ],
+          for (final method in shop.allowedMethods) ...[
+            const SizedBox(height: 10),
+            _MethodOptionTile(
+              icon: _methodIcons[method]!,
+              title: _methodTitles[method]!,
+              subtitle: _methodSubtitles[method]!,
+              method: method,
+              groupValue: selectedMethod,
+              onTap: () => _openShoppingMethod(
+                context,
+                passedShop: shop,
+                method: method,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+const _methodIcons = <String, IconData>{
+  OrderCategoryMethod.methodItems: Icons.shopping_basket_outlined,
+  OrderCategoryMethod.methodPhoto: Icons.document_scanner_outlined,
+  OrderCategoryMethod.methodManual: Icons.edit_note,
+};
+
+const _methodTitles = <String, String>{
+  OrderCategoryMethod.methodItems: 'Select Items',
+  OrderCategoryMethod.methodPhoto: 'Photo List',
+  OrderCategoryMethod.methodManual: 'Manual List',
+};
+
+const _methodSubtitles = <String, String>{
+  OrderCategoryMethod.methodItems: 'Choose products from the catalog.',
+  OrderCategoryMethod.methodPhoto: 'Upload one list photo for this category.',
+  OrderCategoryMethod.methodManual:
+      'Type the items and quantities for this category.',
+};
+
+/// Banner shown on a category that is closed by its own hours while the rest
+/// of the shop is still taking orders.
+class _CategoryClosedNotice extends StatelessWidget {
+  const _CategoryClosedNotice({required this.hours});
+
+  final ShopHoursSettings hours;
+
+  @override
+  Widget build(BuildContext context) {
+    final message = hours.isTemporarilyClosed
+        ? (hours.temporaryClosureReason.trim().isEmpty
+            ? context.t('This category is not accepting orders right now.')
+            : hours.temporaryClosureReason.trim())
+        : context.t(
+            'This category is closed. Please come back at {time}.',
+            values: {'time': hours.openingTimeLabel},
+          );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _customerDanger.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _customerDanger.withValues(alpha: 0.32)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.access_time, color: _customerDanger, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.t('Closed right now'),
+                  style: const TextStyle(
+                    color: _customerDanger,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    color: _customerMuted,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MethodOptionTile extends StatelessWidget {
+  const _MethodOptionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.method,
+    required this.groupValue,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String method;
+  final String? groupValue;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = groupValue == method;
+    return _CustomerCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          Icon(
+            selected
+                ? Icons.radio_button_checked
+                : Icons.radio_button_unchecked,
+            color: selected ? _customerPrimary : _customerMuted,
+          ),
+          const SizedBox(width: 4),
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: selected ? _customerPrimaryLight : const Color(0xFFF4F8F5),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: selected ? _customerPrimary : _customerLine,
+              ),
+            ),
+            child: Icon(
+              icon,
+              color: selected ? _customerPrimary : _customerMuted,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.t(title),
+                  style: const TextStyle(
+                    color: _customerInk,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  context.t(subtitle),
+                  style: const TextStyle(
+                    color: _customerMuted,
+                    fontWeight: FontWeight.w600,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The first category in the current draft (cart items, photo lists, manual
+/// lists) that is closed right now, or null when everything is orderable.
+Shop? _firstClosedDraftCategory(AppState appState) {
+  final shopIds = <String>{
+    for (final item in appState.cartItems) item.shopId.trim(),
+    for (final entry in appState.photoLists) entry.shopId.trim(),
+    for (final entry in appState.manualLists) entry.shopId.trim(),
+  };
+  for (final shopId in shopIds) {
+    final category = appState.categoryById(shopId);
+    if (category != null && !appState.isCategoryOpenNow(shopId)) {
+      return category;
+    }
+  }
+  return null;
+}
+
+Future<void> _openShoppingMethod(
+  BuildContext context, {
+  required Shop? passedShop,
+  required String method,
+}) async {
+  if (passedShop == null) {
+    await Navigator.of(context).push(
+      _CustomerPageRoute(builder: (_) => const ShopListScreen()),
+    );
+    return;
+  }
+  final appState = context.read<AppState>();
+  // Prefer the live category record over the caller's snapshot so an admin
+  // edit made mid-session is honoured immediately.
+  final shop = appState.categoryById(passedShop.shopId) ?? passedShop;
+  if (!shop.allowsMethod(method)) {
+    showSnack(
+      context,
+      context.tNow(
+        '{category} does not accept {method} orders.',
+        values: {
+          'category': shop.displayName,
+          'method': context.tNow(AppState.shoppingMethodLabel(method)),
+        },
+      ),
+    );
+    return;
+  }
+  final hours = shop.effectiveHours(appState.shopHoursSettings);
+  if (!hours.isOpenAt(DateTime.now())) {
+    await showShopClosedDialog(context, hours, categoryName: shop.displayName);
+    return;
+  }
+  appState.setSelectedHomeCategory(shop);
+  final currentMethod = appState.selectedMethodForCategory(shop.shopId);
+  if (currentMethod != null && currentMethod != method) {
+    final confirmed = await _confirmChangeShoppingMethod(
+      context,
+      categoryName: shop.shopName,
+      currentMethod: currentMethod,
+      newMethod: method,
+    );
+    if (!confirmed || !context.mounted) {
+      return;
+    }
+    await appState.changeCategoryMethod(shopId: shop.shopId, method: method);
+  }
+  if (!context.mounted) {
+    return;
+  }
+  await Navigator.of(context).push(
+    _CustomerPageRoute(
+      builder: (_) {
+        switch (method) {
+          case OrderCategoryMethod.methodPhoto:
+            return const UploadBillScreen();
+          case OrderCategoryMethod.methodManual:
+            return const ManualListScreen();
+          default:
+            return ProductListScreen(shop: shop);
+        }
+      },
+    ),
+  );
+}
+
+Future<bool> _confirmChangeShoppingMethod(
+  BuildContext context, {
+  required String categoryName,
+  required String currentMethod,
+  required String newMethod,
+}) async {
+  showSnack(
+    context,
+    '$categoryName category already uses ${AppState.shoppingMethodLabel(currentMethod)}. Change the shopping method to continue.',
+  );
+  return showAppConfirmDialog(
+    context,
+    title: context.tNow('Change shopping method?'),
+    message: context.tNow(
+      'Changing this category to {method} will remove its current data.',
+      values: {'method': AppState.shoppingMethodLabel(newMethod)},
+    ),
+    confirmLabel: context.tNow('Change'),
+    icon: Icons.swap_horiz_rounded,
+    confirmIcon: Icons.swap_horiz,
+  );
+}
+
+Future<bool> _addProductWithMethodGuard(
+  BuildContext context,
+  AppState appState,
+  Product product,
+) async {
+  try {
+    await appState.addToCart(product);
+    return true;
+  } on CategoryMethodNotAllowedException catch (error) {
+    if (context.mounted) {
+      showSnack(
+        context,
+        context.tNow(
+          '{category} does not accept {method} orders.',
+          values: {
+            'category': error.categoryName,
+            'method': context.tNow(error.methodLabel),
+          },
+        ),
+      );
+    }
+    return false;
+  } on CategoryMethodConflictException catch (error) {
+    if (!context.mounted) {
+      return false;
+    }
+    final confirmed = await _confirmChangeShoppingMethod(
+      context,
+      categoryName: error.categoryName,
+      currentMethod: error.currentMethod,
+      newMethod: error.requestedMethod,
+    );
+    if (!confirmed || !context.mounted) {
+      return false;
+    }
+    await appState.changeCategoryMethod(
+      shopId: product.shopId,
+      method: OrderCategoryMethod.methodItems,
+    );
+    await appState.addToCart(product);
+    return true;
+  }
+}
+
 class _ShopCard extends StatelessWidget {
   const _ShopCard({
     required this.shop,
@@ -2531,6 +3231,9 @@ class _ShopCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hours =
+        shop.effectiveHours(context.watch<AppState>().shopHoursSettings);
+    final isClosed = !hours.isOpenAt(DateTime.now());
     return _CustomerCard(
       onTap: onTap,
       padding: const EdgeInsets.all(14),
@@ -2540,12 +3243,14 @@ class _ShopCard extends StatelessWidget {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: _customerPrimaryLight,
+              color: isClosed
+                  ? _customerDanger.withValues(alpha: 0.10)
+                  : _customerPrimaryLight,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.category_outlined,
-              color: _customerPrimary,
+              color: isClosed ? _customerDanger : _customerPrimary,
             ),
           ),
           const SizedBox(width: 12),
@@ -2574,6 +3279,35 @@ class _ShopCard extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                if (isClosed) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.access_time,
+                        size: 13,
+                        color: _customerDanger,
+                      ),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          hours.isTemporarilyClosed
+                              ? context.t('Closed right now')
+                              : context.t(
+                                  'Opens at {time}',
+                                  values: {'time': hours.openingTimeLabel},
+                                ),
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _customerDanger,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -2653,7 +3387,12 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   controller: _search,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    hintText: context.t('Search products'),
+                    hintText: widget.shop == null
+                        ? context.t('Search products')
+                        : context.t(
+                            'Search {category}',
+                            values: {'category': widget.shop!.shopName},
+                          ),
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: _search.text.isEmpty
                         ? const Icon(Icons.tune)
@@ -2690,13 +3429,9 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   );
                 }
                 final query = _search.text.trim().toLowerCase();
-                final languageCode = appState.effectiveLanguageCode;
                 final products = (snapshot.data ?? const <Product>[]).where(
                   (product) {
-                    final displayName =
-                        product.localizedName(languageCode).toLowerCase();
                     return query.isEmpty ||
-                        displayName.contains(query) ||
                         product.name.toLowerCase().contains(query) ||
                         product.nameTamil.toLowerCase().contains(query) ||
                         product.shopName.toLowerCase().contains(query);
@@ -2769,8 +3504,8 @@ class ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final languageCode = appState.effectiveLanguageCode;
-    final productName = product.localizedName(languageCode);
+    final nameEnglish = product.name.trim();
+    final nameTamil = product.nameTamil.trim();
     return _CustomerCard(
       padding: EdgeInsets.zero,
       onTap: () => Navigator.of(context).push(
@@ -2803,10 +3538,9 @@ class ProductCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  productName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                BilingualLines(
+                  english: nameEnglish,
+                  tamil: nameTamil,
                   style: const TextStyle(
                     color: _customerInk,
                     fontWeight: FontWeight.w900,
@@ -2854,9 +3588,15 @@ class ProductCard extends StatelessWidget {
                   child: FilledButton.icon(
                     onPressed: product.isAvailable
                         ? () async {
-                            await appState.addToCart(product);
+                            final added = await _addProductWithMethodGuard(
+                              context,
+                              appState,
+                              product,
+                            );
                             if (context.mounted) {
-                              showCartConfirmation(context);
+                              if (added) {
+                                showCartConfirmation(context);
+                              }
                             }
                           }
                         : null,
@@ -2978,7 +3718,7 @@ class ProductImage extends StatelessWidget {
       ),
       child: Center(
         child: Icon(
-          Icons.local_grocery_store_outlined,
+          Icons.shopping_bag_outlined,
           color: _customerPrimary,
           size: 42,
         ),
@@ -3019,7 +3759,7 @@ class ProductImage extends StatelessWidget {
               _ShimmerBox(radius: 0),
               Center(
                 child: Icon(
-                  Icons.local_grocery_store_outlined,
+                  Icons.shopping_bag_outlined,
                   color: _customerPrimary,
                   size: 36,
                 ),
@@ -3064,11 +3804,12 @@ class _ProductDetailsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final languageCode = context.watch<AppState>().effectiveLanguageCode;
-    final productName = product.localizedName(languageCode);
-    final productDescription = product.localizedDescription(languageCode);
+    final nameEnglish = product.name.trim();
+    final nameTamil = product.nameTamil.trim();
+    final descriptionEnglish = product.description.trim();
+    final descriptionTamil = product.descriptionTamil.trim();
     return _CustomerScaffold(
-      title: productName,
+      title: BilingualText.label(nameEnglish, nameTamil),
       body: _CustomerScrollView(
         children: [
           _CustomerCard(
@@ -3091,13 +3832,20 @@ class _ProductDetailsView extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  productName,
+                BilingualLines(
+                  english: nameEnglish,
+                  tamil: nameTamil,
+                  maxLinesEach: 2,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            color: _customerInk,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0,
+                          ) ??
+                      const TextStyle(
                         color: _customerInk,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 0,
                       ),
+                  gap: 4,
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -3173,18 +3921,30 @@ class _ProductDetailsView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  productDescription.isEmpty
-                      ? context.t(
-                          'No description added yet. You can still add it to your cart and confirm details at checkout.',
-                        )
-                      : productDescription,
-                  style: const TextStyle(
-                    color: _customerMuted,
-                    fontWeight: FontWeight.w600,
-                    height: 1.45,
+                if (descriptionEnglish.isEmpty && descriptionTamil.isEmpty)
+                  Text(
+                    context.t(
+                      'No description added yet. You can still add it to your cart and confirm details at checkout.',
+                    ),
+                    style: const TextStyle(
+                      color: _customerMuted,
+                      fontWeight: FontWeight.w600,
+                      height: 1.45,
+                    ),
+                  )
+                else
+                  BilingualLines(
+                    english: descriptionEnglish,
+                    tamil: descriptionTamil,
+                    maxLinesEach: 20,
+                    overflow: TextOverflow.visible,
+                    gap: 6,
+                    style: const TextStyle(
+                      color: _customerMuted,
+                      fontWeight: FontWeight.w600,
+                      height: 1.45,
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -3198,9 +3958,16 @@ class _ProductDetailsView extends StatelessWidget {
           icon: product.isAvailable ? Icons.add_shopping_cart : Icons.block,
           onPressed: product.isAvailable
               ? () async {
-                  await context.read<AppState>().addToCart(product);
+                  final appState = context.read<AppState>();
+                  final added = await _addProductWithMethodGuard(
+                    context,
+                    appState,
+                    product,
+                  );
                   if (context.mounted) {
-                    showCartConfirmation(context);
+                    if (added) {
+                      showCartConfirmation(context);
+                    }
                   }
                 }
               : null,
@@ -3284,6 +4051,7 @@ class CartScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final items = appState.cartItems;
+    final cartGroups = items.groupByShop();
     final hasCheckoutDraft =
         items.isNotEmpty || appState.hasBillImage || appState.hasManualList;
     final canCheckout = hasCheckoutDraft && appState.meetsMinimumOrderValue;
@@ -3322,40 +4090,81 @@ class CartScreen extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 16),
-                if (items.isNotEmpty)
+                if (items.isNotEmpty) ...[
                   const _CustomerSectionHeader(
                     title: 'Items in cart',
                     subtitle: 'Adjust quantities before checkout',
                   ),
-                for (var index = 0; index < items.length; index++) ...[
-                  _FadeSlideIn(
-                    index: index,
-                    child: _CartItemTile(item: items[index]),
-                  ),
-                  if (index != items.length - 1) const SizedBox(height: 10),
+                  for (var g = 0; g < cartGroups.length; g++) ...[
+                    _CategorySectionLabel(
+                      shopName: cartGroups[g].shopName,
+                      itemCount: cartGroups[g].items.length,
+                    ),
+                    for (var i = 0; i < cartGroups[g].items.length; i++) ...[
+                      _FadeSlideIn(
+                        index: cartGroups
+                                .take(g)
+                                .fold<int>(0, (n, gr) => n + gr.items.length) +
+                            i,
+                        child: _CartItemTile(item: cartGroups[g].items[i]),
+                      ),
+                      if (i != cartGroups[g].items.length - 1)
+                        const SizedBox(height: 10),
+                    ],
+                    if (g != cartGroups.length - 1) const SizedBox(height: 14),
+                  ],
                 ],
                 if (appState.hasBillImage) ...[
                   if (items.isNotEmpty) const SizedBox(height: 16),
                   const _CustomerSectionHeader(
-                    title: 'Attached list',
-                    subtitle: 'Admin will review this with your order',
+                    title: 'Attached lists',
+                    subtitle: 'Admin will review these with your order',
                   ),
-                  _BillImagePreview(path: appState.billImagePath!),
-                  const SizedBox(height: 10),
+                  for (final entry
+                      in appState.photoLists.sortedByCategory()) ...[
+                    if (entry.shopName.isNotEmpty)
+                      _CategorySectionLabel(
+                          shopName: entry.shopName, itemCount: 1),
+                    _BillImagePreview(
+                      path: entry.imagePath,
+                      onEdit: () => _editDraftList(
+                        context,
+                        appState,
+                        shopId: entry.shopId,
+                        shopName: entry.shopName,
+                        screen: const UploadBillScreen(),
+                      ),
+                      onRemove: () => appState.removePhotoList(entry.shopId),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   const _AttachedListPriceNotice(),
                 ],
                 if (appState.hasManualList) ...[
                   if (items.isNotEmpty || appState.hasBillImage)
                     const SizedBox(height: 16),
                   const _CustomerSectionHeader(
-                    title: 'Manual list',
-                    subtitle: 'Admin will review this with your order',
+                    title: 'Manual lists',
+                    subtitle: 'Admin will review these with your order',
                   ),
-                  _ManualListPreview(
-                    text: appState.manualListText,
-                    onRemove: () => appState.setManualListText(''),
-                  ),
-                  const SizedBox(height: 10),
+                  for (final entry
+                      in appState.manualLists.sortedByCategory()) ...[
+                    if (entry.shopName.isNotEmpty)
+                      _CategorySectionLabel(
+                          shopName: entry.shopName, itemCount: 1),
+                    _ManualListPreview(
+                      text: entry.text,
+                      onEdit: () => _editDraftList(
+                        context,
+                        appState,
+                        shopId: entry.shopId,
+                        shopName: entry.shopName,
+                        screen: const ManualListScreen(),
+                      ),
+                      onRemove: () => appState.removeManualList(entry.shopId),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   if (!appState.hasBillImage) const _AttachedListPriceNotice(),
                 ],
                 const SizedBox(height: 88),
@@ -3367,16 +4176,33 @@ class CartScreen extends StatelessWidget {
         hasBillImage: appState.hasBillImage,
         hasManualList: appState.hasManualList,
         onClearCart: () => _confirmClearCheckoutDraft(context),
-        onUploadPhoto: () => Navigator.of(context).push(
-          _CustomerPageRoute(builder: (_) => const UploadBillScreen()),
+        onUploadPhoto: () => _openShoppingMethod(
+          context,
+          passedShop: appState.liveSelectedHomeCategory,
+          method: OrderCategoryMethod.methodPhoto,
         ),
-        onTypeList: () => Navigator.of(context).push(
-          _CustomerPageRoute(builder: (_) => const ManualListScreen()),
+        onTypeList: () => _openShoppingMethod(
+          context,
+          passedShop: appState.liveSelectedHomeCategory,
+          method: OrderCategoryMethod.methodManual,
         ),
         onCheckout: () async {
-          final shopHours = context.read<AppState>().shopHoursSettings;
+          final state = context.read<AppState>();
+          final shopHours = state.shopHoursSettings;
           if (!shopHours.isOpenAt(DateTime.now())) {
             await showShopClosedDialog(context, shopHours);
+            return;
+          }
+          final closedCategory = _firstClosedDraftCategory(state);
+          if (closedCategory != null) {
+            if (!context.mounted) {
+              return;
+            }
+            await showShopClosedDialog(
+              context,
+              state.effectiveHoursForCategory(closedCategory.shopId),
+              categoryName: closedCategory.displayName,
+            );
             return;
           }
           if (!context.mounted) {
@@ -3391,34 +4217,17 @@ class CartScreen extends StatelessWidget {
   }
 
   Future<void> _confirmClearCheckoutDraft(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              title: Text(context.t('Clear cart')),
-              content: Text(
-                context.t(
-                  'Remove all cart items, attached photo, and manual list?',
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: Text(context.t('Cancel')),
-                ),
-                FilledButton.icon(
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  icon: const Icon(Icons.delete_sweep_outlined),
-                  label: Text(context.t('Clear')),
-                ),
-              ],
-            );
-          },
-        ) ??
-        false;
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: context.tNow('Clear cart'),
+      message: context.tNow(
+        'Remove all cart items, attached photo, and manual list?',
+      ),
+      confirmLabel: context.tNow('Clear'),
+      icon: Icons.delete_sweep_outlined,
+      confirmIcon: Icons.delete_sweep_outlined,
+      isDestructive: true,
+    );
     if (!confirmed || !context.mounted) {
       return;
     }
@@ -3427,6 +4236,35 @@ class CartScreen extends StatelessWidget {
       showSnack(context, 'Cart cleared.');
     }
   }
+}
+
+/// Opens [screen] (Photo List or Manual List) scoped to a specific
+/// category, by first selecting that category on Home so the target
+/// screen's [AppState.currentPhotoList]/[AppState.currentManualList] reads
+/// the right entry — reuses the same selection mechanism the Home category
+/// selector already drives, instead of adding new routing.
+Future<void> _editDraftList(
+  BuildContext context,
+  AppState appState, {
+  required String shopId,
+  required String shopName,
+  required Widget screen,
+}) {
+  appState.setSelectedHomeCategory(
+    shopId.isEmpty
+        ? null
+        : Shop(
+            shopId: shopId,
+            shopName: shopName,
+            address: '',
+            phone: '',
+            isActive: true,
+            createdAt: DateTime.now(),
+          ),
+  );
+  return Navigator.of(context).push(
+    _CustomerPageRoute(builder: (_) => screen),
+  );
 }
 
 class _CartActionBar extends StatelessWidget {
@@ -3751,9 +4589,9 @@ class _CartItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final itemName = item.localizedName(appState.effectiveLanguageCode);
     final unitPrice = appState.livePriceFor(item);
     final lineTotal = appState.lineTotalFor(item);
+    final isAvailable = appState.isCartItemAvailable(item);
     return _CustomerCard(
       padding: const EdgeInsets.all(10),
       child: Row(
@@ -3768,15 +4606,36 @@ class _CartItemTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  itemName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                BilingualLines(
+                  english: item.name,
+                  tamil: item.nameTamil,
                   style: const TextStyle(
                     color: _customerInk,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
+                if (!isAvailable) ...[
+                  const SizedBox(height: 3),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.block,
+                        size: 13,
+                        color: _customerDanger,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        context.t('No longer available'),
+                        style: const TextStyle(
+                          color: _customerDanger,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 4),
                 Text(
                   '${unitPrice.money} / ${context.t(item.unit)}',
@@ -3846,9 +4705,10 @@ class _CartItemTile extends StatelessWidget {
 }
 
 class _UploadHeaderScene extends StatefulWidget {
-  const _UploadHeaderScene({required this.hasImage});
+  const _UploadHeaderScene({required this.hasImage, this.categoryName});
 
   final bool hasImage;
+  final String? categoryName;
 
   @override
   State<_UploadHeaderScene> createState() => _UploadHeaderSceneState();
@@ -3882,7 +4742,7 @@ class _UploadHeaderSceneState extends State<_UploadHeaderScene>
           final sweep = -0.85 + (_controller.value * 1.7);
           final float = math.sin(_controller.value * math.pi * 2) * 5;
           return Container(
-            height: 216,
+            height: 236,
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
@@ -3969,13 +4829,21 @@ class _UploadHeaderSceneState extends State<_UploadHeaderScene>
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        context.t('Send your grocery list photo'),
+                        (widget.categoryName ?? '').isNotEmpty
+                            ? context.t(
+                                'Send your {category} list photo',
+                                values: {'category': widget.categoryName},
+                              )
+                            : context.t('Send your list photo'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style:
                             Theme.of(context).textTheme.headlineSmall?.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 0,
                                   height: 1.02,
+                                  fontSize: 22,
                                 ),
                       ),
                       const SizedBox(height: 10),
@@ -3983,7 +4851,7 @@ class _UploadHeaderSceneState extends State<_UploadHeaderScene>
                         context.t(
                           'We will read your list, price the items, and update your bill.',
                         ),
-                        maxLines: 3,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.84),
@@ -4642,6 +5510,10 @@ class UploadBillScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    final currentPhoto = appState.currentPhotoList;
+    final hasImage = currentPhoto != null;
+    final categoryName = appState.selectedHomeCategory?.shopName;
+
     Future<void> choosePhoto() async {
       final imageFile = await pickImageFromGallery();
       if (imageFile == null) {
@@ -4650,7 +5522,13 @@ class UploadBillScreen extends StatelessWidget {
       if (!context.mounted) {
         return;
       }
-      await appState.setBillImagePath(imageFile.path);
+      try {
+        await appState.setBillImagePath(imageFile.path);
+      } on CategoryMethodConflictException catch (error) {
+        if (context.mounted) {
+          showSnack(context, error.toString());
+        }
+      }
     }
 
     Future<void> takePhoto() async {
@@ -4661,7 +5539,13 @@ class UploadBillScreen extends StatelessWidget {
       if (!context.mounted) {
         return;
       }
-      await appState.setBillImagePath(imageFile.path);
+      try {
+        await appState.setBillImagePath(imageFile.path);
+      } on CategoryMethodConflictException catch (error) {
+        if (context.mounted) {
+          showSnack(context, error.toString());
+        }
+      }
     }
 
     return _CustomerScaffold(
@@ -4670,17 +5554,23 @@ class UploadBillScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
         children: [
           _UploadHeaderScene(
-            hasImage: appState.hasBillImage,
+            hasImage: hasImage,
+            categoryName: categoryName,
           ),
+          if ((categoryName ?? '').isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _CategoryCaption(shopName: categoryName!),
+          ],
           const SizedBox(height: 16),
-          const _ImportantOrderNoticeCard(
-            message:
-                'Please include multiple grocery items in your photo list. Orders containing only one or very few items may be rejected by the admin.',
+          _ImportantOrderNoticeCard(
+            message: (categoryName ?? '').isNotEmpty
+                ? 'Please include multiple $categoryName items in your photo list. Orders containing only one or very few items may be rejected by the admin.'
+                : 'Please include multiple items in your photo list. Orders containing only one or very few items may be rejected by the admin.',
           ),
           const SizedBox(height: 16),
           _UploadPhotoStage(
-            hasImage: appState.hasBillImage,
-            path: appState.billImagePath,
+            hasImage: hasImage,
+            path: currentPhoto?.imagePath,
             onPick: choosePhoto,
           ),
           const SizedBox(height: 16),
@@ -4691,13 +5581,13 @@ class UploadBillScreen extends StatelessWidget {
           const SizedBox(height: 12),
           _FadeSlideIn(
             index: 3,
-            child: _UploadInfoPanel(hasImage: appState.hasBillImage),
+            child: _UploadInfoPanel(hasImage: hasImage),
           ),
-          SizedBox(height: appState.hasBillImage ? 126 : 74),
+          SizedBox(height: hasImage ? 126 : 74),
         ],
       ),
       bottomNavigationBar: _UploadActionBar(
-        hasImage: appState.hasBillImage,
+        hasImage: hasImage,
         onGallery: choosePhoto,
         onCamera: takePhoto,
         onRemove: () => appState.setBillImagePath(null),
@@ -4730,7 +5620,7 @@ class _ManualListScreenState extends State<ManualListScreen> {
   void initState() {
     super.initState();
     _appState = context.read<AppState>();
-    final initialText = _appState.manualListText;
+    final initialText = _appState.currentManualList?.text ?? '';
     _list = TextEditingController(text: initialText);
     _lastSavedText = initialText;
     _list.addListener(_handleListChanged);
@@ -4750,10 +5640,15 @@ class _ManualListScreenState extends State<ManualListScreen> {
   @override
   Widget build(BuildContext context) {
     final hasList = _list.text.trim().isNotEmpty;
+    final categoryName = _appState.selectedHomeCategory?.shopName;
     return _CustomerScaffold(
       title: 'Manual list',
       body: _CustomerScrollView(
         children: [
+          if ((categoryName ?? '').isNotEmpty) ...[
+            _CategoryCaption(shopName: categoryName!),
+            const SizedBox(height: 8),
+          ],
           _CustomerCard(
             child: Row(
               children: [
@@ -4772,9 +5667,14 @@ class _ManualListScreenState extends State<ManualListScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    context.t(
-                      'Type your grocery items with quantities. Admin will review the list and update your final bill.',
-                    ),
+                    (categoryName ?? '').isNotEmpty
+                        ? context.t(
+                            'Type your {category} items with quantities. Admin will review the list and update your final bill.',
+                            values: {'category': categoryName},
+                          )
+                        : context.t(
+                            'Type your items with quantities. Admin will review the list and update your final bill.',
+                          ),
                     style: const TextStyle(
                       color: _customerMuted,
                       fontWeight: FontWeight.w700,
@@ -4786,9 +5686,10 @@ class _ManualListScreenState extends State<ManualListScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          const _ImportantOrderNoticeCard(
-            message:
-                'Please include multiple grocery items in your manual list. Orders containing only one or very few items may be rejected by the admin.',
+          _ImportantOrderNoticeCard(
+            message: (categoryName ?? '').isNotEmpty
+                ? 'Please include multiple $categoryName items in your manual list. Orders containing only one or very few items may be rejected by the admin.'
+                : 'Please include multiple items in your manual list. Orders containing only one or very few items may be rejected by the admin.',
           ),
           const SizedBox(height: 16),
           _CustomerCard(
@@ -4799,11 +5700,16 @@ class _ManualListScreenState extends State<ManualListScreen> {
               minLines: 9,
               maxLines: 14,
               decoration: InputDecoration(
-                labelText: context.t('Grocery list'),
+                labelText: (categoryName ?? '').isNotEmpty
+                    ? context.t(
+                        '{category} list',
+                        values: {'category': categoryName},
+                      )
+                    : context.t('Shopping list'),
                 alignLabelWithHint: true,
                 prefixIcon: const Icon(Icons.playlist_add),
                 hintText: context.t(
-                  'Example:\n2 kg rice\n1 packet baking powder\n6 eggs',
+                  'Example:\nItem name - 2 kg\nItem name - 1 packet\nItem name - 6 pieces',
                 ),
               ),
             ),
@@ -4880,7 +5786,13 @@ class _ManualListScreenState extends State<ManualListScreen> {
 
   Future<void> _continueToCheckout() async {
     if (_list.text.trim().isEmpty) {
-      showSnack(context, 'Type at least one grocery item.');
+      final categoryName = _appState.selectedHomeCategory?.shopName;
+      showSnack(
+        context,
+        (categoryName ?? '').isNotEmpty
+            ? 'Type at least one $categoryName item.'
+            : 'Type at least one item.',
+      );
       return;
     }
     _saveDebounce?.cancel();
@@ -4895,9 +5807,11 @@ class _ManualListScreenState extends State<ManualListScreen> {
 }
 
 class _BillImagePreview extends StatelessWidget {
-  const _BillImagePreview({required this.path});
+  const _BillImagePreview({required this.path, this.onEdit, this.onRemove});
 
   final String path;
+  final VoidCallback? onEdit;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -4917,6 +5831,35 @@ class _BillImagePreview extends StatelessWidget {
               ),
             ),
           ),
+          if (onEdit != null || onRemove != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Row(
+                children: [
+                  if (onEdit != null)
+                    TextButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined, size: 16),
+                      label: Text(context.t('Edit')),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                    ),
+                  if (onRemove != null)
+                    TextButton.icon(
+                      onPressed: onRemove,
+                      icon: const Icon(Icons.delete_outline, size: 16),
+                      label: Text(context.t('Remove')),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        foregroundColor: const Color(0xFFC83A2B),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
@@ -4956,10 +5899,12 @@ class _BillImagePreview extends StatelessWidget {
 class _ManualListPreview extends StatelessWidget {
   const _ManualListPreview({
     required this.text,
+    this.onEdit,
     this.onRemove,
   });
 
   final String text;
+  final VoidCallback? onEdit;
   final VoidCallback? onRemove;
 
   @override
@@ -4986,13 +5931,19 @@ class _ManualListPreview extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  context.t('Typed grocery list'),
+                  context.t('Typed list'),
                   style: const TextStyle(
                     color: _customerInk,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
+              if (onEdit != null)
+                IconButton(
+                  tooltip: context.t('Edit list'),
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined),
+                ),
               if (onRemove != null)
                 IconButton(
                   tooltip: context.t('Remove list'),
@@ -5102,16 +6053,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             const SizedBox(height: 14),
             _CheckoutOrderReview(
               items: appState.cartItems,
-              billImagePath: appState.billImagePath,
-              manualListText: appState.manualListText,
+              photoLists: appState.photoLists,
+              manualLists: appState.manualLists,
               onEditItems: () => Navigator.of(context).push(
                 _CustomerPageRoute(builder: (_) => const CartScreen()),
               ),
-              onEditPhotoList: () => Navigator.of(context).push(
-                _CustomerPageRoute(builder: (_) => const UploadBillScreen()),
+              onEditPhotoList: (entry) => _editDraftList(
+                context,
+                appState,
+                shopId: entry.shopId,
+                shopName: entry.shopName,
+                screen: const UploadBillScreen(),
               ),
-              onEditManualList: () => Navigator.of(context).push(
-                _CustomerPageRoute(builder: (_) => const ManualListScreen()),
+              onEditManualList: (entry) => _editDraftList(
+                context,
+                appState,
+                shopId: entry.shopId,
+                shopName: entry.shopName,
+                screen: const ManualListScreen(),
               ),
             ),
             const SizedBox(height: 14),
@@ -5153,7 +6112,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           subtitle: Text(
                             context.t(
                               paymentSettings.bankTransferEnabled
-                                  ? 'Transfer to the store account and upload your receipt.'
+                                  ? 'Place the order now, then upload your receipt after the final bill is updated.'
                                   : 'Temporarily unavailable.',
                             ),
                           ),
@@ -5266,11 +6225,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (paymentMethod != _paymentMethod) {
       setState(() => _paymentMethod = paymentMethod);
     }
-    if (paymentMethod == AppConstants.paymentMethodBankTransfer &&
-        (_receiptImagePath == null || _receiptImagePath!.isEmpty)) {
-      showSnack(context, 'Upload the bank transfer receipt before checkout.');
-      return;
-    }
     setState(() => _isSubmitting = true);
     try {
       final order = await appState.createOrder(
@@ -5290,7 +6244,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
     } catch (error) {
       if (mounted) {
-        if (_isShopClosedError(error)) {
+        if (error is CategoryClosedException) {
+          await showShopClosedDialog(
+            context,
+            error.hours,
+            categoryName: error.categoryName,
+          );
+        } else if (error is CategoryMethodNotAllowedException) {
+          showSnack(
+            context,
+            context.tNow(
+              '{category} does not accept {method} orders.',
+              values: {
+                'category': error.categoryName,
+                'method': context.tNow(error.methodLabel),
+              },
+            ),
+          );
+        } else if (_isShopClosedError(error)) {
           await _showShopClosedDialog(
               context.read<AppState>().shopHoursSettings);
         } else if (error is MinimumOrderNotMetException) {
@@ -5302,6 +6273,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 'amount': AppConstants.formatRupees(error.remainingAmount),
               },
             ),
+          );
+        } else if (error is CartItemsUnavailableException) {
+          showSnack(
+            context,
+            error.unavailableItemNames.length == 1
+                ? context.tNow(
+                    '{name} is no longer available. Remove it from your '
+                    'cart to continue.',
+                    values: {'name': error.unavailableItemNames.single},
+                  )
+                : context.tNow(
+                    'These items are no longer available: {names}. Remove '
+                    'them from your cart to continue.',
+                    values: {
+                      'names': error.unavailableItemNames.join(', '),
+                    },
+                  ),
           );
         } else {
           showSnack(context, error.toString());
@@ -5347,8 +6335,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 /// order placement).
 Future<void> showShopClosedDialog(
   BuildContext context,
-  ShopHoursSettings settings,
-) {
+  ShopHoursSettings settings, {
+  String? categoryName,
+}) {
   return showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
@@ -5356,7 +6345,10 @@ Future<void> showShopClosedDialog(
     barrierColor: Colors.black.withValues(alpha: 0.46),
     transitionDuration: const Duration(milliseconds: 300),
     pageBuilder: (context, animation, secondaryAnimation) {
-      return _ShopClosedDialog(settings: settings);
+      return _ShopClosedDialog(
+        settings: settings,
+        categoryName: categoryName,
+      );
     },
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(
@@ -5382,9 +6374,15 @@ Future<void> showShopClosedDialog(
 }
 
 class _ShopClosedDialog extends StatelessWidget {
-  const _ShopClosedDialog({required this.settings});
+  const _ShopClosedDialog({required this.settings, this.categoryName});
 
   final ShopHoursSettings settings;
+
+  /// Set when only one category is closed (it runs on its own hours), so the
+  /// copy names it instead of implying the whole shop is shut.
+  final String? categoryName;
+
+  bool get _isCategoryScoped => (categoryName ?? '').trim().isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -5461,9 +6459,11 @@ class _ShopClosedDialog extends StatelessWidget {
                         ),
                         const SizedBox(height: 18),
                         Text(
-                          settings.isTemporarilyClosed
-                              ? context.tNow('Shop Temporarily Closed')
-                              : context.tNow('Ordering closed'),
+                          _isCategoryScoped
+                              ? categoryName!.trim()
+                              : settings.isTemporarilyClosed
+                                  ? context.tNow('Shop Temporarily Closed')
+                                  : context.tNow('Ordering closed'),
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: _customerInk,
@@ -5474,14 +6474,25 @@ class _ShopClosedDialog extends StatelessWidget {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          settings.isTemporarilyClosed
-                              ? context.tNow(
-                                  'We are currently unable to accept new orders.',
-                                )
-                              : settings.closedMessage.replaceFirst(
-                                  'Shop is closed.',
-                                  'Ordering is closed.',
-                                ),
+                          _isCategoryScoped
+                              ? (settings.isTemporarilyClosed
+                                  ? context.tNow(
+                                      'This category is not accepting orders right now.',
+                                    )
+                                  : context.tNow(
+                                      'This category is closed. Please come back at {time}.',
+                                      values: {
+                                        'time': settings.openingTimeLabel,
+                                      },
+                                    ))
+                              : settings.isTemporarilyClosed
+                                  ? context.tNow(
+                                      'We are currently unable to accept new orders.',
+                                    )
+                                  : settings.closedMessage.replaceFirst(
+                                      'Shop is closed.',
+                                      'Ordering is closed.',
+                                    ),
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: _customerMuted,
@@ -5608,25 +6619,25 @@ class _ShopClosedDialog extends StatelessWidget {
 class _CheckoutOrderReview extends StatelessWidget {
   const _CheckoutOrderReview({
     required this.items,
-    required this.billImagePath,
-    required this.manualListText,
+    required this.photoLists,
+    required this.manualLists,
     required this.onEditItems,
     required this.onEditPhotoList,
     required this.onEditManualList,
   });
 
   final List<CartItem> items;
-  final String? billImagePath;
-  final String manualListText;
+  final List<DraftPhotoList> photoLists;
+  final List<DraftManualList> manualLists;
   final VoidCallback onEditItems;
-  final VoidCallback onEditPhotoList;
-  final VoidCallback onEditManualList;
+  final ValueChanged<DraftPhotoList> onEditPhotoList;
+  final ValueChanged<DraftManualList> onEditManualList;
 
   @override
   Widget build(BuildContext context) {
-    final languageCode = context.watch<AppState>().effectiveLanguageCode;
-    final hasPhotoList = billImagePath != null && billImagePath!.isNotEmpty;
-    final hasManualList = manualListText.trim().isNotEmpty;
+    final hasPhotoList = photoLists.isNotEmpty;
+    final hasManualList = manualLists.isNotEmpty;
+    final groups = items.groupByShop();
     return _CustomerCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -5672,27 +6683,41 @@ class _CheckoutOrderReview extends StatelessWidget {
               onEdit: onEditItems,
             ),
             const SizedBox(height: 6),
-            for (var index = 0; index < items.length; index++) ...[
-              _CheckoutItemRow(
-                item: items[index],
-                languageCode: languageCode,
+            for (var g = 0; g < groups.length; g++) ...[
+              _CategorySectionLabel(
+                shopName: groups[g].shopName,
+                itemCount: groups[g].items.length,
               ),
-              if (index != items.length - 1) const Divider(height: 14),
+              for (var i = 0; i < groups[g].items.length; i++) ...[
+                _CheckoutItemRow(
+                  item: groups[g].items[i],
+                ),
+                if (i != groups[g].items.length - 1) const Divider(height: 14),
+              ],
+              if (g != groups.length - 1) const SizedBox(height: 10),
             ],
           ],
           if (hasPhotoList) ...[
             if (items.isNotEmpty) const Divider(height: 22),
-            _CheckoutPhotoListReview(
-              imagePath: billImagePath!,
-              onEdit: onEditPhotoList,
-            ),
+            for (final entry in photoLists.sortedByCategory()) ...[
+              _CheckoutPhotoListReview(
+                imagePath: entry.imagePath,
+                onEdit: () => onEditPhotoList(entry),
+                shopName: entry.shopName,
+              ),
+              const SizedBox(height: 10),
+            ],
           ],
           if (hasManualList) ...[
             if (items.isNotEmpty || hasPhotoList) const Divider(height: 22),
-            _CheckoutManualListReview(
-              text: manualListText,
-              onEdit: onEditManualList,
-            ),
+            for (final entry in manualLists.sortedByCategory()) ...[
+              _CheckoutManualListReview(
+                text: entry.text,
+                onEdit: () => onEditManualList(entry),
+                shopName: entry.shopName,
+              ),
+              const SizedBox(height: 10),
+            ],
           ],
           if (items.isEmpty && !hasPhotoList && !hasManualList)
             Text(
@@ -5758,11 +6783,9 @@ class _CheckoutReviewHeader extends StatelessWidget {
 class _CheckoutItemRow extends StatelessWidget {
   const _CheckoutItemRow({
     required this.item,
-    required this.languageCode,
   });
 
   final CartItem item;
-  final String languageCode;
 
   @override
   Widget build(BuildContext context) {
@@ -5782,10 +6805,10 @@ class _CheckoutItemRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                item.localizedName(languageCode),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              BilingualLines(
+                english: item.name,
+                tamil: item.nameTamil,
+                maxLinesEach: 2,
                 style: const TextStyle(
                   color: _customerInk,
                   fontWeight: FontWeight.w900,
@@ -5821,10 +6844,12 @@ class _CheckoutPhotoListReview extends StatelessWidget {
   const _CheckoutPhotoListReview({
     required this.imagePath,
     required this.onEdit,
+    this.shopName,
   });
 
   final String imagePath;
   final VoidCallback onEdit;
+  final String? shopName;
 
   @override
   Widget build(BuildContext context) {
@@ -5867,6 +6892,10 @@ class _CheckoutPhotoListReview extends StatelessWidget {
                   fontSize: 12,
                 ),
               ),
+              if ((shopName ?? '').isNotEmpty) ...[
+                const SizedBox(height: 4),
+                _CategoryCaption(shopName: shopName!),
+              ],
             ],
           ),
         ),
@@ -5888,10 +6917,12 @@ class _CheckoutManualListReview extends StatelessWidget {
   const _CheckoutManualListReview({
     required this.text,
     required this.onEdit,
+    this.shopName,
   });
 
   final String text;
   final VoidCallback onEdit;
+  final String? shopName;
 
   @override
   Widget build(BuildContext context) {
@@ -5920,6 +6951,7 @@ class _CheckoutManualListReview extends StatelessWidget {
             ),
           ],
         ),
+        if ((shopName ?? '').isNotEmpty) _CategoryCaption(shopName: shopName!),
         const SizedBox(height: 6),
         Container(
           width: double.infinity,
@@ -6246,7 +7278,7 @@ class _ReceiptUploadSection extends StatelessWidget {
             ),
             child: Text(
               context.t(
-                'Upload the bank slip or transfer screenshot before placing the order.',
+                'Optional now. You can upload the bank slip or transfer screenshot after the final bill is updated.',
               ),
               style: const TextStyle(color: Color(0xFF66736B)),
             ),
@@ -6336,7 +7368,7 @@ class OrderSuccessScreen extends StatelessWidget {
                 Text(
                   isBankTransfer
                       ? context.t(
-                          'Your bank transfer order is pending admin receipt review.',
+                          'Your bank transfer order is pending admin review. Upload the receipt after the final bill is updated.',
                         )
                       : context.t('Your COD order is pending admin review.'),
                   textAlign: TextAlign.center,
@@ -6414,6 +7446,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
             );
           }
           return _CustomerScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 128),
             children: [
               _OrderHistoryHeading(
                 filter: _selectedFilter,
@@ -6931,6 +7964,10 @@ class _ActiveOrderTrackingView extends StatelessWidget {
           const _CustomerSectionHeader(title: 'Bill details'),
           _OrderBillBreakdown(order: order),
         ],
+        if (_shouldShowPaymentReceiptUpload(order)) ...[
+          const SizedBox(height: 16),
+          _CustomerPaymentReceiptUploadCard(order: order),
+        ],
         const SizedBox(height: 16),
         _TrackingSteps(status: order.orderStatus),
         if (order.hasAssignedDeliveryContact) ...[
@@ -7010,30 +8047,19 @@ class _CustomerOrderCancellationSectionState
     if (_isCancelling) {
       return;
     }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(dialogContext.t('Cancel order?')),
-          content: Text(
-            dialogContext.t(
-              'Are you sure you want to cancel this order? This action cannot be undone.',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: Text(dialogContext.t('Keep order')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: Text(dialogContext.t('Cancel order')),
-            ),
-          ],
-        );
-      },
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: context.tNow('Cancel order?'),
+      message: context.tNow(
+        'Are you sure you want to cancel this order? This action cannot be undone.',
+      ),
+      cancelLabel: context.tNow('Keep order'),
+      confirmLabel: context.tNow('Cancel order'),
+      icon: Icons.remove_shopping_cart_outlined,
+      confirmIcon: Icons.close_rounded,
+      isDestructive: true,
     );
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
 
@@ -7202,6 +8228,10 @@ class _DeliveredOrderCompletionView extends StatelessWidget {
           subtitle: 'Final bill summary',
         ),
         _DeliveredBillBreakdown(order: order),
+        if (_shouldShowPaymentReceiptUpload(order)) ...[
+          const SizedBox(height: 12),
+          _CustomerPaymentReceiptUploadCard(order: order),
+        ],
         const SizedBox(height: 12),
         _DeliveredOrderSnapshot(order: order),
         if (order.hasAssignedDeliveryContact) ...[
@@ -7334,7 +8364,7 @@ class _DeliveredSuccessHero extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text(
                   context.t(
-                    'Your groceries have been delivered successfully. We hope everything reached you safely.',
+                    'Your order has been delivered successfully. We hope everything reached you safely.',
                   ),
                   textAlign: TextAlign.center,
                   style: TextStyle(
@@ -8278,6 +9308,21 @@ class _RejectedOrderCompletionView extends StatelessWidget {
   }
 }
 
+/// Maps a stored `order.cancellationReason` code (an internal identifier,
+/// never meant for display) to customer-facing text (F14 fix). Only
+/// `'customer_cancelled_within_window'` is ever written today — everything
+/// else (including a future admin-initiated reason, or any value this
+/// screen doesn't recognize) safely falls back to a generic message rather
+/// than leaking the raw internal code into the UI.
+String _cancellationReasonMessage(BuildContext context, String reasonCode) {
+  switch (reasonCode) {
+    case 'customer_cancelled_within_window':
+      return context.t('Cancelled by customer within the order window.');
+    default:
+      return context.t('This order was cancelled.');
+  }
+}
+
 class _CancelledOrderCompletionView extends StatelessWidget {
   const _CancelledOrderCompletionView({required this.order});
 
@@ -8310,7 +9355,8 @@ class _CancelledOrderCompletionView extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    context.t('Cancelled by customer within the order window.'),
+                    _cancellationReasonMessage(
+                        context, order.cancellationReason),
                     style: const TextStyle(
                       color: _customerInk,
                       fontWeight: FontWeight.w800,
@@ -8476,36 +9522,64 @@ class _OrderContentSections extends StatelessWidget {
     if (order.items.isNotEmpty) {
       addSectionGap();
       children.add(const _CustomerSectionHeader(title: 'Items'));
-      for (var index = 0; index < order.items.length; index++) {
-        children.add(_OrderItemRow(item: order.items[index]));
-        if (index != order.items.length - 1) {
-          children.add(const SizedBox(height: 8));
+      final groups = order.items.groupByShop();
+      for (var g = 0; g < groups.length; g++) {
+        children.add(
+          _CategorySectionLabel(
+            shopName: groups[g].shopName,
+            itemCount: groups[g].items.length,
+          ),
+        );
+        for (var i = 0; i < groups[g].items.length; i++) {
+          children.add(_OrderItemRow(item: groups[g].items[i]));
+          if (i != groups[g].items.length - 1) {
+            children.add(const SizedBox(height: 8));
+          }
+        }
+        if (g != groups.length - 1) {
+          children.add(const SizedBox(height: 10));
         }
       }
     }
 
     if (order.hasManualList) {
       addSectionGap();
-      children.add(const _CustomerSectionHeader(title: 'Manual list'));
-      children.add(_ManualListPreview(text: order.effectiveManualListText));
+      children.add(const _CustomerSectionHeader(title: 'Manual lists'));
+      for (final list in order.manualLists.sortedByCategory()) {
+        if (list.shopName.isNotEmpty) {
+          children.add(
+            _CategorySectionLabel(shopName: list.shopName, itemCount: 1),
+          );
+        }
+        children.add(_ManualListPreview(text: list.text));
+        children.add(const SizedBox(height: 10));
+      }
     }
 
     if (order.hasUpload) {
       addSectionGap();
-      children.add(const _CustomerSectionHeader(title: 'Uploaded list'));
+      children.add(const _CustomerSectionHeader(title: 'Uploaded lists'));
       if (showAttachedListPriceNotice) {
         children.add(const _AttachedListPriceNotice());
         children.add(const SizedBox(height: 10));
       }
-      children.add(
-        _CustomerCard(
-          padding: EdgeInsets.zero,
-          child: AspectRatio(
-            aspectRatio: 1.4,
-            child: ProductImage(url: order.uploadedImageUrl, radius: 8),
+      for (final list in order.photoLists.sortedByCategory()) {
+        if (list.shopName.isNotEmpty) {
+          children.add(
+            _CategorySectionLabel(shopName: list.shopName, itemCount: 1),
+          );
+        }
+        children.add(
+          _CustomerCard(
+            padding: EdgeInsets.zero,
+            child: AspectRatio(
+              aspectRatio: 1.4,
+              child: ProductImage(url: list.imageUrl, radius: 8),
+            ),
           ),
-        ),
-      );
+        );
+        children.add(const SizedBox(height: 10));
+      }
     }
 
     if (order.hasPaymentReceipt) {
@@ -8532,6 +9606,135 @@ class _OrderContentSections extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: children,
     );
+  }
+}
+
+class _CustomerPaymentReceiptUploadCard extends StatefulWidget {
+  const _CustomerPaymentReceiptUploadCard({required this.order});
+
+  final OrderModel order;
+
+  @override
+  State<_CustomerPaymentReceiptUploadCard> createState() =>
+      _CustomerPaymentReceiptUploadCardState();
+}
+
+class _CustomerPaymentReceiptUploadCardState
+    extends State<_CustomerPaymentReceiptUploadCard> {
+  String? _receiptImagePath;
+  var _isUploading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.receipt_long_outlined, color: _customerAccent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.t('Upload payment receipt'),
+                      style: const TextStyle(
+                        color: _customerInk,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      context.t(
+                        'Attach your bank slip or transfer screenshot for the final bill.',
+                      ),
+                      style: const TextStyle(
+                        color: _customerMuted,
+                        fontWeight: FontWeight.w700,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _ReceiptUploadSection(
+            imagePath: _receiptImagePath,
+            onGallery: _pickReceiptFromGallery,
+            onCamera: _takeReceiptPhoto,
+            onRemove: _isUploading
+                ? () {}
+                : () => setState(() => _receiptImagePath = null),
+          ),
+          const SizedBox(height: 12),
+          PrimaryActionButton(
+            label: 'Submit receipt',
+            icon: Icons.cloud_upload_outlined,
+            isLoading: _isUploading,
+            onPressed: _isUploading || _receiptImagePath == null
+                ? null
+                : _submitReceipt,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickReceiptFromGallery() async {
+    if (_isUploading) {
+      return;
+    }
+    final imageFile = await pickImageFromGallery();
+    if (imageFile == null || !mounted) {
+      return;
+    }
+    setState(() => _receiptImagePath = imageFile.path);
+  }
+
+  Future<void> _takeReceiptPhoto() async {
+    if (_isUploading) {
+      return;
+    }
+    final imageFile = await takePhotoFromCamera();
+    if (imageFile == null || !mounted) {
+      return;
+    }
+    setState(() => _receiptImagePath = imageFile.path);
+  }
+
+  Future<void> _submitReceipt() async {
+    if (_isUploading) {
+      return;
+    }
+    final imagePath = _receiptImagePath;
+    if (imagePath == null || imagePath.isEmpty) {
+      showSnack(context, 'Select the bank transfer receipt first.');
+      return;
+    }
+    setState(() => _isUploading = true);
+    try {
+      await context.read<AppState>().uploadOrderPaymentReceipt(
+            order: widget.order,
+            imagePath: imagePath,
+          );
+      if (mounted) {
+        setState(() => _receiptImagePath = null);
+        showSnack(context, 'Payment receipt uploaded.');
+      }
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploading = false);
+      }
+    }
   }
 }
 
@@ -8654,6 +9857,17 @@ bool _shouldShowFinalBillBreakdown(OrderModel order) {
       (order.hasShoppingList && order.listAmountsReviewed);
 }
 
+bool _shouldShowPaymentReceiptUpload(OrderModel order) {
+  const receiptUploadStatuses = <String>{
+    'Bill Updated',
+    'Out for Delivery',
+    'Delivered',
+  };
+  return order.paymentMethod == AppConstants.paymentMethodBankTransfer &&
+      !order.hasPaymentReceipt &&
+      receiptUploadStatuses.contains(order.orderStatus);
+}
+
 bool _shouldShowAttachedListPriceNotice(OrderModel order) {
   return order.hasShoppingList && !_shouldShowFinalBillBreakdown(order);
 }
@@ -8694,7 +9908,6 @@ class _OrderItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final languageCode = context.watch<AppState>().effectiveLanguageCode;
     return _CustomerCard(
       padding: const EdgeInsets.all(12),
       child: Row(
@@ -8719,10 +9932,9 @@ class _OrderItemRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  item.localizedName(languageCode),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                BilingualLines(
+                  english: item.name,
+                  tamil: item.nameTamil,
                   style: const TextStyle(
                     color: _customerInk,
                     fontWeight: FontWeight.w900,
@@ -9482,7 +10694,7 @@ class _NotificationsDeleteAllAction extends StatelessWidget {
       child: TextButton.icon(
         onPressed: () => _confirmDeleteAllNotifications(context),
         icon: const Icon(Icons.delete_sweep_outlined, size: 18),
-        label: const Text('Delete All'),
+        label: Text(context.t('Delete All')),
         style: TextButton.styleFrom(
           backgroundColor: Colors.white,
           foregroundColor: _customerDanger,
@@ -9495,34 +10707,19 @@ class _NotificationsDeleteAllAction extends StatelessWidget {
 }
 
 Future<void> _confirmDeleteAllNotifications(BuildContext context) async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) {
-      return AlertDialog(
-        title: const Text('Delete all notifications?'),
-        content: const Text(
-          'This permanently deletes every saved notification from the database. '
-          'This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: _customerDanger,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            icon: const Icon(Icons.delete_forever),
-            label: const Text('Delete all'),
-          ),
-        ],
-      );
-    },
+  final confirmed = await showAppConfirmDialog(
+    context,
+    title: context.tNow('Delete all notifications?'),
+    message: context.tNow(
+      'This permanently deletes every saved notification from the '
+      'database. This action cannot be undone.',
+    ),
+    confirmLabel: context.tNow('Delete all'),
+    icon: Icons.delete_forever_rounded,
+    confirmIcon: Icons.delete_forever,
+    isDestructive: true,
   );
-  if (confirmed != true || !context.mounted) {
+  if (!confirmed || !context.mounted) {
     return;
   }
 
@@ -9578,6 +10775,7 @@ class _SupportScreenState extends State<SupportScreen> {
     return _CustomerScaffold(
       title: 'Support',
       body: _CustomerScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 128),
         children: [
           _CustomerCard(
             child: Column(
@@ -10128,6 +11326,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: Form(
         key: _formKey,
         child: _CustomerScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 128),
           children: [
             _ProfileHeader(profile: profile),
             const SizedBox(height: 16),
@@ -10169,6 +11368,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 16),
             _CustomerCard(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.t('Follow us'),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(
+                      Icons.chat_rounded,
+                      color: Color(0xFF25D366),
+                    ),
+                    title: Text(context.t('Join our WhatsApp channel')),
+                    subtitle: Text(
+                      context.t('Get offers and updates on WhatsApp.'),
+                    ),
+                    trailing: const Icon(Icons.open_in_new),
+                    onTap: () => _openUrl(AppConstants.whatsappChannelUrl),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(
+                      Icons.facebook,
+                      color: Color(0xFF1877F2),
+                    ),
+                    title: Text(context.t('Like our Facebook page')),
+                    subtitle: Text(
+                      context.t('Follow us on Facebook for the latest news.'),
+                    ),
+                    trailing: const Icon(Icons.open_in_new),
+                    onTap: () => _openUrl(AppConstants.facebookPageUrl),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _CustomerCard(
+              child: Column(
                 children: [
                   ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -10176,9 +11417,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Icons.privacy_tip_outlined,
                       color: _customerPrimary,
                     ),
-                    title: const Text('Privacy policy'),
-                    subtitle: const Text(
-                      'See how account, order, and image data is handled.',
+                    title: Text(context.t('Privacy policy')),
+                    subtitle: Text(
+                      context.t(
+                        'See how account, order, and image data is handled.',
+                      ),
                     ),
                     trailing: const Icon(Icons.open_in_new),
                     onTap: () => _openUrl(AppConstants.privacyPolicyUrl),
@@ -10190,12 +11433,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Icons.delete_forever_outlined,
                       color: _customerDanger,
                     ),
-                    title: const Text(
-                      'Delete account',
-                      style: TextStyle(color: _customerDanger),
+                    title: Text(
+                      context.t('Delete account'),
+                      style: const TextStyle(color: _customerDanger),
                     ),
-                    subtitle: const Text(
-                      'Permanently remove your account and personal data.',
+                    subtitle: Text(
+                      context.t(
+                        'Permanently remove your account and personal data.',
+                      ),
                     ),
                     onTap: _deleteAccount,
                   ),
@@ -10338,17 +11583,19 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Permanently delete account?'),
+      title: Text(context.t('Permanently delete account?')),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Your profile, support messages, notifications, and uploaded '
-              'personal images will be removed. Closed order records are '
-              'anonymized for accounting. Active orders must be completed or '
-              'cancelled first.',
+            Text(
+              context.t(
+                'Your profile, support messages, notifications, and '
+                'uploaded personal images will be removed. Closed order '
+                'records are anonymized for accounting. Active orders must '
+                'be completed or cancelled first.',
+              ),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -10357,7 +11604,7 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
               autofocus: true,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                labelText: 'Password',
+                labelText: context.t('Password'),
                 suffixIcon: IconButton(
                   onPressed: () {
                     setState(() => _obscurePassword = !_obscurePassword);
@@ -10372,7 +11619,7 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
               value: _confirmed,
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('I understand this cannot be undone.'),
+              title: Text(context.t('I understand this cannot be undone.')),
               onChanged: (value) {
                 setState(() => _confirmed = value ?? false);
               },
@@ -10383,14 +11630,14 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Keep account'),
+          child: Text(context.t('Keep account')),
         ),
         FilledButton(
           style: FilledButton.styleFrom(backgroundColor: _customerDanger),
           onPressed: !_confirmed || _password.text.isEmpty
               ? null
               : () => Navigator.of(context).pop(_password.text),
-          child: const Text('Delete permanently'),
+          child: Text(context.t('Delete permanently')),
         ),
       ],
     );

@@ -5,11 +5,14 @@ const assert = require("node:assert/strict");
 
 const {
   PASSWORD_RESET_APPROVAL_TTL_MS,
+  PASSWORD_RESET_REQUEST_COOLDOWN_MS,
   isApprovalExpired,
   effectivePasswordResetStatus,
   isActivePasswordResetRequest,
+  isPasswordResetRequestThrottled,
   passwordResetApprovalExpiresAtMillis,
   passwordResetStatusMessage,
+  resetRequestCompletionStatus,
 } = require("../lib/passwordReset");
 
 const NOW = 1_700_000_000_000;
@@ -59,4 +62,92 @@ test("passwordResetStatusMessage covers every known status plus a pending fallba
   assert.match(passwordResetStatusMessage("expired"), /Submit a new reset request/);
   assert.match(passwordResetStatusMessage("pending"), /Waiting for admin approval/);
   assert.match(passwordResetStatusMessage("unknown"), /Waiting for admin approval/);
+});
+
+// resetRequestCompletionStatus gates completeApprovedPasswordReset (F1 fix):
+// completion must be bound to the exact request document's own status/
+// expiry/account fields, never to a phone-number lookup of "the latest
+// approved request".
+test("resetRequestCompletionStatus: a valid, unexpired, linked approval is ready", () => {
+  assert.equal(
+    resetRequestCompletionStatus("approved", NOW + 1000, "uid-1", NOW),
+    "ready",
+  );
+});
+
+test("resetRequestCompletionStatus: pending/rejected requests are not approved", () => {
+  assert.equal(
+    resetRequestCompletionStatus("pending", undefined, "uid-1", NOW),
+    "not_approved",
+  );
+  assert.equal(
+    resetRequestCompletionStatus("rejected", undefined, "uid-1", NOW),
+    "not_approved",
+  );
+});
+
+test("resetRequestCompletionStatus: an expired approval is rejected even with a valid account", () => {
+  assert.equal(
+    resetRequestCompletionStatus("approved", NOW - 1, "uid-1", NOW),
+    "expired",
+  );
+});
+
+test("resetRequestCompletionStatus: an already-completed request cannot be replayed", () => {
+  assert.equal(
+    resetRequestCompletionStatus("completed", NOW + 1000, "uid-1", NOW),
+    "already_completed",
+  );
+});
+
+test("resetRequestCompletionStatus: an approved request missing its account link is rejected", () => {
+  assert.equal(
+    resetRequestCompletionStatus("approved", NOW + 1000, "", NOW),
+    "missing_account",
+  );
+  assert.equal(
+    resetRequestCompletionStatus("approved", NOW + 1000, undefined, NOW),
+    "missing_account",
+  );
+});
+
+// isPasswordResetRequestThrottled backs the F6 rate-limit fix in
+// requestPasswordReset.
+test("isPasswordResetRequestThrottled: no previous request is never throttled", () => {
+  assert.equal(isPasswordResetRequestThrottled(undefined, NOW), false);
+  assert.equal(isPasswordResetRequestThrottled(0, NOW), false);
+});
+
+test("isPasswordResetRequestThrottled: a request created just now is throttled", () => {
+  assert.equal(isPasswordResetRequestThrottled(NOW, NOW), true);
+  assert.equal(
+    isPasswordResetRequestThrottled(NOW - 1000, NOW),
+    true,
+  );
+});
+
+test("isPasswordResetRequestThrottled: clears once the cooldown window has fully elapsed", () => {
+  assert.equal(
+    isPasswordResetRequestThrottled(NOW - PASSWORD_RESET_REQUEST_COOLDOWN_MS + 1, NOW),
+    true,
+  );
+  assert.equal(
+    isPasswordResetRequestThrottled(NOW - PASSWORD_RESET_REQUEST_COOLDOWN_MS, NOW),
+    false,
+  );
+  assert.equal(
+    isPasswordResetRequestThrottled(NOW - PASSWORD_RESET_REQUEST_COOLDOWN_MS - 1, NOW),
+    false,
+  );
+});
+
+test("resetRequestCompletionStatus: only depends on the request's own fields, not any other request", () => {
+  // Two different requests (e.g. two different phone numbers) are
+  // evaluated purely from their own status/expiry/account - there is no
+  // shared or cross-request state, so a requestId can never "borrow"
+  // another request's approval.
+  const requestA = resetRequestCompletionStatus("approved", NOW + 1000, "uid-a", NOW);
+  const requestB = resetRequestCompletionStatus("pending", undefined, "uid-b", NOW);
+  assert.equal(requestA, "ready");
+  assert.equal(requestB, "not_approved");
 });

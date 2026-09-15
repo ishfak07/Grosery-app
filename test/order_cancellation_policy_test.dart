@@ -238,8 +238,11 @@ void main() {
 
       expect(
         rules,
-        contains(
-            'allow update: if isAdmin() || isValidCustomerCancellation();'),
+        contains('allow update: if (isAdmin() && isValidAdminOrderUpdate())'),
+      );
+      expect(
+        rules,
+        contains('isValidCustomerCancellation();'),
       );
       expect(
           rules, contains("request.resource.data.orderStatus == 'Cancelled'"));
@@ -263,6 +266,58 @@ void main() {
       expect(
         rules,
         contains('request.resource.data.updatedAt == request.time'),
+      );
+    });
+
+    test(
+        'firestore rules reserve the Cancelled transition for '
+        "isValidCustomerCancellation() - an admin's own direct write can "
+        'never set it (F9)', () {
+      final rules = File('firestore.rules').readAsStringSync();
+
+      expect(rules, contains('function adminOrderStatusValues()'));
+      final statusValuesStart =
+          rules.indexOf('function adminOrderStatusValues()');
+      // Just the array literal itself (up to its closing `];`) - not any
+      // surrounding prose/comments, which are free to mention 'Cancelled'
+      // while explaining why it's excluded.
+      final statusValuesArrayEnd = rules.indexOf('];', statusValuesStart) + 2;
+      final adminStatusValuesBlock =
+          rules.substring(statusValuesStart, statusValuesArrayEnd);
+      expect(adminStatusValuesBlock, isNot(contains("'Cancelled'")));
+
+      expect(rules, contains('function isValidAdminOrderUpdate()'));
+      final adminUpdateBlock = rules.substring(
+        rules.indexOf('function isValidAdminOrderUpdate()'),
+      );
+      // Identity/history can't be reassigned by an admin's direct write,
+      // and the resulting status/paymentStatus/financial fields must stay
+      // within known-valid values.
+      expect(
+        adminUpdateBlock,
+        contains('request.resource.data.userId == resource.data.userId'),
+      );
+      expect(
+        adminUpdateBlock,
+        contains(
+          'request.resource.data.createdAt == resource.data.createdAt',
+        ),
+      );
+      expect(
+        adminUpdateBlock,
+        contains(
+            'request.resource.data.orderStatus in adminOrderStatusValues()'),
+      );
+      expect(
+        adminUpdateBlock,
+        contains("request.resource.data.totalAmount >= 0"),
+      );
+
+      // The orders update rule itself must require isValidAdminOrderUpdate()
+      // on the admin branch - not admin status alone.
+      expect(
+        rules,
+        contains('allow update: if (isAdmin() && isValidAdminOrderUpdate())'),
       );
     });
   });

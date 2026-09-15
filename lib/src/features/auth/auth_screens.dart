@@ -343,7 +343,7 @@ class SplashScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                     Text(
                       context.t(
-                        'Local groceries, lists, pickup, and COD delivery.',
+                        'Local shopping, lists, pickup, and COD delivery.',
                       ),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
@@ -384,7 +384,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _OnboardingItem(
       Icons.storefront,
       'Everything you need in one place',
-      'Browse our carefully selected products and enjoy a simple grocery shopping experience.',
+      'Browse our carefully selected products and enjoy a simple shopping experience.',
     ),
     _OnboardingItem(
       Icons.receipt_long,
@@ -647,7 +647,7 @@ class _LoginScreenState extends State<LoginScreen> {
         FirebaseSetupBanner(appState: appState),
         const _AuthHeroPanel(
           icon: Icons.shopping_bag_outlined,
-          title: 'Fresh groceries are waiting',
+          title: 'Your next order is waiting',
           message:
               'Login with your phone and password to reorder, track deliveries, and send shopping lists.',
         ),
@@ -711,6 +711,7 @@ class _LoginScreenState extends State<LoginScreen> {
               MaterialPageRoute(
                 builder: (_) => ResetPasswordScreen(
                   phone: appState.passwordResetTracker!.phone,
+                  requestId: appState.passwordResetTracker!.requestId,
                 ),
               ),
             ),
@@ -893,7 +894,8 @@ _ResetTrackerVisuals _resetTrackerVisuals(PasswordResetStatusResult status) {
       color: Color(0xFF6B7280),
       background: Color(0xFFF1F2F4),
       statusLabel: 'Expired',
-      message: 'This password reset approval has expired. Please submit a new request.',
+      message:
+          'This password reset approval has expired. Please submit a new request.',
     );
   }
   if (status.isCompleted) {
@@ -902,7 +904,8 @@ _ResetTrackerVisuals _resetTrackerVisuals(PasswordResetStatusResult status) {
       color: _authPrimary,
       background: _authPrimaryLight,
       statusLabel: 'Completed',
-      message: 'Password updated successfully. Please sign in with your new password.',
+      message:
+          'Password updated successfully. Please sign in with your new password.',
     );
   }
   return const _ResetTrackerVisuals(
@@ -1041,7 +1044,7 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
       children: [
         const _AuthHeroPanel(
           icon: Icons.person_add_alt,
-          title: 'Your grocery profile',
+          title: 'Your shopping profile',
           message:
               'Add your delivery details once and checkout faster on every order.',
         ),
@@ -1142,9 +1145,19 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
 }
 
 class ResetPasswordScreen extends StatefulWidget {
-  const ResetPasswordScreen({super.key, required this.phone});
+  const ResetPasswordScreen({
+    super.key,
+    required this.phone,
+    required this.requestId,
+  });
 
   final String phone;
+
+  /// The exact approved reset request this screen completes. Completion is
+  /// always bound to this id - never re-derived from [phone] - so it can
+  /// only ever finish the specific request the customer's own tracker
+  /// pointed them at.
+  final String requestId;
 
   @override
   State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
@@ -1322,7 +1335,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     try {
       final appState = context.read<AppState>();
       await appState.authService.completeApprovedPasswordReset(
-        phone: widget.phone,
+        requestId: widget.requestId,
         newPassword: _password.text,
       );
       await appState.login(phone: widget.phone, password: _password.text);

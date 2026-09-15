@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/bilingual_text.dart';
+import '../../core/utils/category_grouping.dart';
 import '../../core/widgets/common_widgets.dart';
 import '../../models/models.dart';
 import '../../services/shop_order_pdf_service.dart';
@@ -39,6 +41,7 @@ class _AdminOrderSheetScreenState extends State<AdminOrderSheetScreen> {
     final order = widget.order;
     final catalogQuantity =
         order.items.fold<int>(0, (sum, item) => sum + item.quantity);
+    final catalogGroups = order.items.groupByShop();
     return Scaffold(
       backgroundColor: _sheetBackground,
       appBar: AppBar(
@@ -57,6 +60,25 @@ class _AdminOrderSheetScreenState extends State<AdminOrderSheetScreen> {
             order: order,
             catalogQuantity: catalogQuantity,
           ),
+          if (order.categories.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _SheetSection(
+              number: '*',
+              title: 'Category methods',
+              subtitle: '${order.categories.length} category method(s)',
+              icon: Icons.rule_outlined,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final entry in order.categories.indexed) ...[
+                    _SheetCategoryMethod(category: entry.$2),
+                    if (entry.$1 != order.categories.length - 1)
+                      const Divider(height: 18),
+                  ],
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           _SheetSection(
             number: '1',
@@ -71,15 +93,26 @@ class _AdminOrderSheetScreenState extends State<AdminOrderSheetScreen> {
                   )
                 : Column(
                     children: [
-                      for (var index = 0;
-                          index < order.items.length;
-                          index++) ...[
-                        _CatalogOrderItem(
-                          index: index + 1,
-                          item: order.items[index],
+                      for (var g = 0; g < catalogGroups.length; g++) ...[
+                        _SheetCategoryLabel(
+                          shopName: catalogGroups[g].shopName,
+                          itemCount: catalogGroups[g].items.length,
                         ),
-                        if (index != order.items.length - 1)
-                          const Divider(height: 18),
+                        for (var i = 0;
+                            i < catalogGroups[g].items.length;
+                            i++) ...[
+                          _CatalogOrderItem(
+                            index: catalogGroups.take(g).fold<int>(
+                                    0, (n, gr) => n + gr.items.length) +
+                                i +
+                                1,
+                            item: catalogGroups[g].items[i],
+                          ),
+                          if (i != catalogGroups[g].items.length - 1)
+                            const Divider(height: 18),
+                        ],
+                        if (g != catalogGroups.length - 1)
+                          const Divider(height: 22),
                       ],
                     ],
                   ),
@@ -89,19 +122,33 @@ class _AdminOrderSheetScreenState extends State<AdminOrderSheetScreen> {
             number: '2',
             title: 'Shopping-list photo',
             subtitle: order.hasUpload
-                ? 'Customer uploaded list'
+                ? '${order.photoLists.length} photo(s) uploaded'
                 : 'No photo provided',
             icon: Icons.image_outlined,
             child: order.hasUpload
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: AspectRatio(
-                      aspectRatio: 1.1,
-                      child: ProductImage(
-                        url: order.uploadedImageUrl,
-                        radius: 0,
-                      ),
-                    ),
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final entry
+                          in order.photoLists.sortedByCategory().indexed) ...[
+                        if (entry.$2.shopName.isNotEmpty) ...[
+                          _SheetCategoryCaption(shopName: entry.$2.shopName),
+                          const SizedBox(height: 8),
+                        ],
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: AspectRatio(
+                            aspectRatio: 1.1,
+                            child: ProductImage(
+                              url: entry.$2.imageUrl,
+                              radius: 0,
+                            ),
+                          ),
+                        ),
+                        if (entry.$1 != order.photoLists.length - 1)
+                          const SizedBox(height: 14),
+                      ],
+                    ],
                   )
                 : const _SheetEmpty(
                     message: 'No shopping-list photo was uploaded.',
@@ -120,16 +167,26 @@ class _AdminOrderSheetScreenState extends State<AdminOrderSheetScreen> {
                     message: 'No typed manual-list items were added.',
                   )
                 : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      for (var index = 0;
-                          index < order.manualListLines.length;
-                          index++) ...[
-                        _ManualOrderItem(
-                          index: index + 1,
-                          text: order.manualListLines[index],
-                        ),
-                        if (index != order.manualListLines.length - 1)
+                      for (final entry
+                          in order.manualLists.sortedByCategory().indexed) ...[
+                        if (entry.$2.shopName.isNotEmpty) ...[
+                          _SheetCategoryCaption(shopName: entry.$2.shopName),
                           const SizedBox(height: 8),
+                        ],
+                        for (var index = 0;
+                            index < entry.$2.lines.length;
+                            index++) ...[
+                          _ManualOrderItem(
+                            index: index + 1,
+                            text: entry.$2.lines[index],
+                          ),
+                          if (index != entry.$2.lines.length - 1)
+                            const SizedBox(height: 8),
+                        ],
+                        if (entry.$1 != order.manualLists.length - 1)
+                          const SizedBox(height: 14),
                       ],
                     ],
                   ),
@@ -243,6 +300,54 @@ class _AdminOrderSheetScreenState extends State<AdminOrderSheetScreen> {
         setState(() => _isSharing = false);
       }
     }
+  }
+}
+
+class _SheetCategoryMethod extends StatelessWidget {
+  const _SheetCategoryMethod({required this.category});
+
+  final OrderCategoryMethod category;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = <String>[
+      if (category.hasPhotoList) 'Images: ${category.photoList!.images.length}',
+      if (category.hasSelectedItems)
+        'Products: ${category.selectedItems.length}',
+      if (category.hasManualList)
+        'Manual lines: ${category.manualList!.lines.length}',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          category.displayCategoryName,
+          style: const TextStyle(
+            color: _sheetInk,
+            fontWeight: FontWeight.w900,
+            fontSize: 15,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          'Method: ${category.methodLabel}',
+          style: const TextStyle(
+            color: _sheetPrimary,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        if (details.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            details.join('  |  '),
+            style: const TextStyle(
+              color: _sheetMuted,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }
 
@@ -487,6 +592,71 @@ class _SheetSection extends StatelessWidget {
   }
 }
 
+class _SheetCategoryLabel extends StatelessWidget {
+  const _SheetCategoryLabel({required this.shopName, required this.itemCount});
+
+  final String shopName;
+  final int itemCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: _sheetPrimary,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              shopName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _sheetInk,
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Text(
+            '$itemCount item${itemCount == 1 ? '' : 's'}',
+            style: const TextStyle(
+              color: _sheetMuted,
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SheetCategoryCaption extends StatelessWidget {
+  const _SheetCategoryCaption({required this.shopName});
+
+  final String shopName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'Category: $shopName',
+      style: const TextStyle(
+        color: _sheetMuted,
+        fontWeight: FontWeight.w700,
+        fontSize: 11,
+      ),
+    );
+  }
+}
+
 class _CatalogOrderItem extends StatelessWidget {
   const _CatalogOrderItem({required this.index, required this.item});
 
@@ -525,23 +695,15 @@ class _CatalogOrderItem extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                item.name,
+              BilingualLines(
+                english: item.name,
+                tamil: item.nameTamil,
                 style: const TextStyle(
                   color: _sheetInk,
                   fontWeight: FontWeight.w900,
                   fontSize: 15,
                 ),
               ),
-              if (item.shopName.trim().isNotEmpty)
-                Text(
-                  item.shopName,
-                  style: const TextStyle(
-                    color: _sheetMuted,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                ),
               const SizedBox(height: 3),
               Text(
                 '${item.quantity} x ${item.price.money} / ${item.unit}',

@@ -5,8 +5,10 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/constants/app_constants.dart';
 import '../../core/i18n/app_localizations.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/bilingual_text.dart';
 import '../../core/widgets/common_widgets.dart';
 import '../../models/models.dart';
 import '../../state/app_state.dart';
@@ -1090,7 +1092,17 @@ class _DeliveryOrderCardState extends State<_DeliveryOrderCard> {
   @override
   Widget build(BuildContext context) {
     final order = widget.order;
-    final canDeliver = order.orderStatus == 'Out for Delivery';
+    // COD is cash collected in hand at the door, so it must actually be
+    // collected before the order can be closed out as delivered - a bank
+    // transfer already has its proof (the uploaded receipt) by the time it
+    // reaches this screen, so it's never blocked by this check. This is a
+    // client-side convenience only; markAssignedOrderDelivered enforces the
+    // same rule server-side regardless of what this button allows.
+    final codPaymentPending =
+        order.paymentMethod == AppConstants.paymentMethodCod &&
+            order.paymentStatus != 'collected';
+    final canDeliver =
+        order.orderStatus == 'Out for Delivery' && !codPaymentPending;
     final canCollectPayment = !_isClosedOrder(order) &&
         order.assignedDeliveryBoyId.isNotEmpty &&
         order.paymentStatus != 'collected';
@@ -1191,6 +1203,15 @@ class _DeliveryOrderCardState extends State<_DeliveryOrderCard> {
               ),
             ],
           ),
+          if (codPaymentPending && order.orderStatus == 'Out for Delivery') ...[
+            const SizedBox(height: 10),
+            _DeliveryNotice(
+              icon: Icons.payments_outlined,
+              message: context.tNow(
+                'Collect the COD payment above before marking this order delivered.',
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
@@ -1578,8 +1599,9 @@ class _DeliveryItemRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                item.name,
+              BilingualLines(
+                english: item.name,
+                tamil: item.nameTamil,
                 style: const TextStyle(
                   color: _deliveryInk,
                   fontWeight: FontWeight.w900,

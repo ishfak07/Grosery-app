@@ -81,6 +81,28 @@ class ImageUploadService {
     // Kept for older call sites. Current uploads stay in Cloudinary.
   }
 
+  /// Best-effort cleanup for images that finished uploading to Cloudinary
+  /// but whose order was never actually created (checkout failed on a
+  /// later step — an unavailable item, a network drop, etc.). Queues the
+  /// given public ids into the same server-side cleanup pipeline account
+  /// deletion uses, rather than deleting them synchronously here, so this
+  /// survives the app being killed right after the failure. Never throws —
+  /// a failure to report an orphan for later cleanup should not surface as
+  /// a checkout error on top of whatever actually failed.
+  static Future<void> reportOrphanedUploads(List<String> publicIds) async {
+    final ids = publicIds.where((id) => id.trim().isNotEmpty).toList();
+    if (ids.isEmpty) {
+      return;
+    }
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('reportOrphanedUpload')
+          .call({'publicIds': ids});
+    } catch (_) {
+      // Best-effort only — see doc comment above.
+    }
+  }
+
   static String uploadTypeForDiagnostics({
     required String folder,
     required String fileName,

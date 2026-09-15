@@ -6,6 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import '../core/utils/category_grouping.dart';
 import '../models/models.dart';
 
 class ShopOrderPdfService {
@@ -19,8 +20,8 @@ class ShopOrderPdfService {
 
   static Future<Uint8List> build(OrderModel order) async {
     final imageUrls = <String>{
-      if (order.uploadedImageUrl.trim().isNotEmpty)
-        order.uploadedImageUrl.trim(),
+      for (final list in order.photoLists)
+        if (list.imageUrl.trim().isNotEmpty) list.imageUrl.trim(),
       for (final item in order.items)
         if (item.imageUrl.trim().isNotEmpty) item.imageUrl.trim(),
     };
@@ -138,38 +139,29 @@ class ShopOrderPdfService {
           if (order.items.isEmpty)
             _emptyMessage('No catalog cart items in this order.')
           else
-            ...order.items.asMap().entries.map(
-                  (entry) => _catalogItem(
-                    entry.key + 1,
-                    entry.value,
-                    images[entry.value.imageUrl.trim()],
-                  ),
-                ),
+            ..._groupedCatalogItems(order, images),
           pw.SizedBox(height: 18),
           _sectionTitle(
-            '2. Uploaded shopping-list photo',
-            order.hasUpload ? 'Attached' : 'Not provided',
+            '2. Uploaded shopping-list photo(s)',
+            order.hasUpload
+                ? '${order.photoLists.length} photo(s)'
+                : 'Not provided',
           ),
           pw.SizedBox(height: 8),
           if (!order.hasUpload)
             _emptyMessage('No shopping-list photo was uploaded.')
           else
-            _photoList(
-              order.uploadedImageUrl,
-              images[order.uploadedImageUrl.trim()],
-            ),
+            ..._groupedPhotoLists(order, images),
           pw.SizedBox(height: 18),
           _sectionTitle(
-            '3. Typed manual list',
+            '3. Typed manual list(s)',
             '${order.manualListLines.length} lines',
           ),
           pw.SizedBox(height: 8),
           if (order.manualListLines.isEmpty)
             _emptyMessage('No typed manual-list items were added.')
           else
-            ...order.manualListLines.asMap().entries.map(
-                  (entry) => _manualItem(entry.key + 1, entry.value),
-                ),
+            ..._groupedManualLists(order),
           if (order.customerNotes.trim().isNotEmpty) ...[
             pw.SizedBox(height: 18),
             _sectionTitle('Customer note', ''),
@@ -280,6 +272,93 @@ class ShopOrderPdfService {
     );
   }
 
+  static List<pw.Widget> _groupedCatalogItems(
+    OrderModel order,
+    Map<String, Uint8List> images,
+  ) {
+    final widgets = <pw.Widget>[];
+    var runningIndex = 0;
+    final groups = order.items.groupByShop();
+    for (var g = 0; g < groups.length; g++) {
+      final group = groups[g];
+      widgets.add(_categoryHeading(group.shopName, group.items.length));
+      widgets.add(pw.SizedBox(height: 6));
+      for (final item in group.items) {
+        runningIndex += 1;
+        widgets.add(_catalogItem(
+          runningIndex,
+          item,
+          images[item.imageUrl.trim()],
+        ));
+      }
+      if (g != groups.length - 1) {
+        widgets.add(pw.SizedBox(height: 8));
+      }
+    }
+    return widgets;
+  }
+
+  static List<pw.Widget> _groupedPhotoLists(
+    OrderModel order,
+    Map<String, Uint8List> images,
+  ) {
+    final widgets = <pw.Widget>[];
+    final lists = order.photoLists.sortedByCategory();
+    for (var i = 0; i < lists.length; i++) {
+      final list = lists[i];
+      if (list.shopName.isNotEmpty) {
+        widgets.add(_categoryHeading(list.shopName, 1));
+        widgets.add(pw.SizedBox(height: 6));
+      }
+      widgets.add(_photoList(list.imageUrl, images[list.imageUrl.trim()]));
+      if (i != lists.length - 1) {
+        widgets.add(pw.SizedBox(height: 12));
+      }
+    }
+    return widgets;
+  }
+
+  static List<pw.Widget> _groupedManualLists(OrderModel order) {
+    final widgets = <pw.Widget>[];
+    var runningIndex = 0;
+    final lists = order.manualLists.sortedByCategory();
+    for (var i = 0; i < lists.length; i++) {
+      final list = lists[i];
+      if (list.shopName.isNotEmpty) {
+        widgets.add(_categoryHeading(list.shopName, list.lines.length));
+        widgets.add(pw.SizedBox(height: 6));
+      }
+      for (final line in list.lines) {
+        runningIndex += 1;
+        widgets.add(_manualItem(runningIndex, line));
+      }
+      if (i != lists.length - 1) {
+        widgets.add(pw.SizedBox(height: 8));
+      }
+    }
+    return widgets;
+  }
+
+  static pw.Widget _categoryHeading(String shopName, int count) {
+    return pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        pw.Text(
+          shopName,
+          style: pw.TextStyle(
+            fontSize: 11,
+            fontWeight: pw.FontWeight.bold,
+            color: PdfColors.green900,
+          ),
+        ),
+        pw.Text(
+          '$count item${count == 1 ? '' : 's'}',
+          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+        ),
+      ],
+    );
+  }
+
   static pw.Widget _catalogItem(
     int index,
     OrderItem item,
@@ -304,6 +383,18 @@ class ShopOrderPdfService {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
+                if (item.nameTamil.trim().isNotEmpty &&
+                    item.nameTamil.trim() != item.name.trim()) ...[
+                  pw.Text(
+                    item.nameTamil,
+                    style: pw.TextStyle(
+                      fontSize: 11,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.grey900,
+                    ),
+                  ),
+                  pw.SizedBox(height: 1),
+                ],
                 pw.Text(
                   item.name,
                   style: pw.TextStyle(
@@ -312,16 +403,6 @@ class ShopOrderPdfService {
                     color: PdfColors.grey900,
                   ),
                 ),
-                if (item.shopName.trim().isNotEmpty) ...[
-                  pw.SizedBox(height: 2),
-                  pw.Text(
-                    'Category: ${item.shopName}',
-                    style: const pw.TextStyle(
-                      color: PdfColors.grey600,
-                      fontSize: 8,
-                    ),
-                  ),
-                ],
                 pw.SizedBox(height: 3),
                 pw.Text(
                   '${item.quantity} x ${_money(item.price)} / ${item.unit}',

@@ -154,6 +154,16 @@ class ShopHoursSettings {
       ? 'Shop is temporarily closed.'
       : 'Shop is closed. Please come back at $openingTimeLabel.';
 
+  /// [closedMessage] worded for a single category rather than the whole
+  /// shop, used when a category runs on its own hours (see
+  /// [Shop.hoursOverride]).
+  String closedMessageFor(String categoryName) {
+    final label = categoryName.trim().isEmpty ? 'This category' : categoryName;
+    return isTemporarilyClosed
+        ? '$label is temporarily closed.'
+        : '$label is closed. Please come back at $openingTimeLabel.';
+  }
+
   /// True when customers should be able to place new orders right now.
   /// The manual [isTemporarilyClosed] switch overrides the normal daily
   /// opening/closing time window whenever it is on.
@@ -654,7 +664,17 @@ class Shop {
     required this.phone,
     required this.isActive,
     required this.createdAt,
+    this.allowedMethods = allShoppingMethods,
+    this.hoursOverride,
   });
+
+  /// Every shopping method a category can offer, in the order the customer
+  /// UI presents them.
+  static const List<String> allShoppingMethods = <String>[
+    OrderCategoryMethod.methodItems,
+    OrderCategoryMethod.methodPhoto,
+    OrderCategoryMethod.methodManual,
+  ];
 
   final String shopId;
   final String shopName;
@@ -662,6 +682,63 @@ class Shop {
   final String phone;
   final bool isActive;
   final DateTime createdAt;
+
+  /// The shopping methods the admin allows for this category, a non-empty
+  /// subset of [allShoppingMethods] in that same order. A pharmacy category,
+  /// for example, can be limited to Photo List + Manual List so customers
+  /// never see an item catalog for it.
+  final List<String> allowedMethods;
+
+  /// Per-category opening hours that replace the global shop hours for this
+  /// category only. Null means the category follows the global hours.
+  final ShopHoursSettings? hoursOverride;
+
+  bool allowsMethod(String method) => allowedMethods.contains(method);
+
+  bool get hasMethodRestrictions =>
+      allowedMethods.length != allShoppingMethods.length;
+
+  bool get hasCustomHours => hoursOverride != null;
+
+  String get displayName =>
+      shopName.trim().isEmpty ? 'Uncategorized' : shopName.trim();
+
+  /// The hours that actually govern this category right now. A global
+  /// temporary closure is a master switch: it closes every category
+  /// regardless of overrides, so an admin can shut the whole shop with one
+  /// toggle without first clearing per-category hours.
+  ShopHoursSettings effectiveHours(ShopHoursSettings globalHours) {
+    if (globalHours.isTemporarilyClosed) {
+      return globalHours;
+    }
+    return hoursOverride ?? globalHours;
+  }
+
+  bool isOpenAt(DateTime value, ShopHoursSettings globalHours) =>
+      effectiveHours(globalHours).isOpenAt(value);
+
+  Shop copyWith({
+    String? shopName,
+    String? address,
+    String? phone,
+    bool? isActive,
+    List<String>? allowedMethods,
+    ShopHoursSettings? hoursOverride,
+    bool clearHoursOverride = false,
+  }) {
+    return Shop(
+      shopId: shopId,
+      shopName: shopName ?? this.shopName,
+      address: address ?? this.address,
+      phone: phone ?? this.phone,
+      isActive: isActive ?? this.isActive,
+      createdAt: createdAt,
+      allowedMethods:
+          allowedMethods == null ? this.allowedMethods : normalizeMethods(allowedMethods),
+      hoursOverride:
+          clearHoursOverride ? null : (hoursOverride ?? this.hoursOverride),
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -671,10 +748,13 @@ class Shop {
       'phone': phone,
       'isActive': isActive,
       'createdAt': _writeDate(createdAt),
+      'allowedMethods': allowedMethods,
+      'hoursOverride': hoursOverride?.toMap(),
     };
   }
 
   factory Shop.fromMap(Map<String, dynamic> map, String id) {
+    final rawHours = map['hoursOverride'];
     return Shop(
       shopId: map['shopId'] as String? ?? id,
       shopName: map['shopName'] as String? ?? '',
@@ -682,7 +762,29 @@ class Shop {
       phone: map['phone'] as String? ?? '',
       isActive: map['isActive'] as bool? ?? true,
       createdAt: _readDate(map['createdAt']),
+      allowedMethods: normalizeMethods(
+        (map['allowedMethods'] as List<dynamic>?)?.whereType<String>(),
+      ),
+      hoursOverride: rawHours is Map<String, dynamic>
+          ? ShopHoursSettings.fromMap(rawHours)
+          : null,
     );
+  }
+
+  /// Filters [methods] down to known methods in [allShoppingMethods] order,
+  /// falling back to all of them. Categories saved before this feature have
+  /// no `allowedMethods` field, and a category with nothing allowed would be
+  /// unusable — both mean "no restriction".
+  static List<String> normalizeMethods(Iterable<String>? methods) {
+    if (methods == null) {
+      return allShoppingMethods;
+    }
+    final requested = methods.map((method) => method.trim()).toSet();
+    final normalized = [
+      for (final method in allShoppingMethods)
+        if (requested.contains(method)) method,
+    ];
+    return normalized.isEmpty ? allShoppingMethods : normalized;
   }
 }
 
@@ -1134,6 +1236,279 @@ class OrderItem {
   }
 }
 
+/// A category (shop) tagged photo attached to an order, once uploaded.
+class OrderPhotoList {
+  const OrderPhotoList({
+    required this.shopId,
+    required this.shopName,
+    required this.imageUrl,
+    required this.imagePublicId,
+  });
+
+  /// Empty when no category was selected at attach time (pre-dates or skips
+  /// the Home category selector).
+  final String shopId;
+  final String shopName;
+  final String imageUrl;
+  final String imagePublicId;
+
+  Map<String, dynamic> toMap() {
+    return {
+      'shopId': shopId,
+      'shopName': shopName,
+      'imageUrl': imageUrl,
+      'imagePublicId': imagePublicId,
+    };
+  }
+
+  factory OrderPhotoList.fromMap(Map<String, dynamic> map) {
+    return OrderPhotoList(
+      shopId: map['shopId'] as String? ?? '',
+      shopName: map['shopName'] as String? ?? '',
+      imageUrl: map['imageUrl'] as String? ?? '',
+      imagePublicId: map['imagePublicId'] as String? ?? '',
+    );
+  }
+}
+
+/// A category (shop) tagged typed shopping list attached to an order.
+class OrderManualList {
+  const OrderManualList({
+    required this.shopId,
+    required this.shopName,
+    required this.text,
+  });
+
+  final String shopId;
+  final String shopName;
+  final String text;
+
+  List<String> get lines => text
+      .split(RegExp(r'\r?\n'))
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty)
+      .toList();
+
+  Map<String, dynamic> toMap() {
+    return {
+      'shopId': shopId,
+      'shopName': shopName,
+      'text': text,
+    };
+  }
+
+  factory OrderManualList.fromMap(Map<String, dynamic> map) {
+    return OrderManualList(
+      shopId: map['shopId'] as String? ?? '',
+      shopName: map['shopName'] as String? ?? '',
+      text: map['text'] as String? ?? '',
+    );
+  }
+}
+
+class OrderCategoryPhotoList {
+  const OrderCategoryPhotoList({required this.images});
+
+  final List<OrderPhotoList> images;
+
+  bool get isNotEmpty =>
+      images.any((image) => image.imageUrl.trim().isNotEmpty);
+
+  Map<String, dynamic> toMap() {
+    return {
+      'images': images.map((image) => image.toMap()).toList(),
+    };
+  }
+
+  factory OrderCategoryPhotoList.fromMap(Map<String, dynamic>? map) {
+    final images = (map?['images'] as List<dynamic>? ?? const <dynamic>[])
+        .whereType<Map<String, dynamic>>()
+        .map(OrderPhotoList.fromMap)
+        .toList();
+    return OrderCategoryPhotoList(images: images);
+  }
+}
+
+class OrderCategoryManualList {
+  const OrderCategoryManualList({required this.text});
+
+  final String text;
+
+  bool get isNotEmpty => text.trim().isNotEmpty;
+
+  List<String> get lines => text
+      .split(RegExp(r'\r?\n'))
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty)
+      .toList();
+
+  Map<String, dynamic> toMap() {
+    return {
+      'text': text,
+    };
+  }
+
+  factory OrderCategoryManualList.fromMap(Map<String, dynamic>? map) {
+    return OrderCategoryManualList(text: map?['text'] as String? ?? '');
+  }
+}
+
+class OrderCategoryMethod {
+  const OrderCategoryMethod({
+    required this.categoryId,
+    required this.categoryName,
+    required this.selectedMethod,
+    this.photoList,
+    this.manualList,
+    this.selectedItems = const <OrderItem>[],
+  });
+
+  static const methodPhoto = 'photo';
+  static const methodManual = 'manual';
+  static const methodItems = 'items';
+  static const methodLegacyMixed = 'legacyMixed';
+
+  final String categoryId;
+  final String categoryName;
+  final String selectedMethod;
+  final OrderCategoryPhotoList? photoList;
+  final OrderCategoryManualList? manualList;
+  final List<OrderItem> selectedItems;
+
+  String get methodLabel {
+    switch (selectedMethod) {
+      case methodPhoto:
+        return 'Photo List';
+      case methodManual:
+        return 'Manual List';
+      case methodItems:
+        return 'Item Selection';
+      case methodLegacyMixed:
+        return 'Legacy Mixed Methods';
+      default:
+        return selectedMethod;
+    }
+  }
+
+  bool get hasPhotoList => photoList?.isNotEmpty ?? false;
+  bool get hasManualList => manualList?.isNotEmpty ?? false;
+  bool get hasSelectedItems => selectedItems.isNotEmpty;
+  String get displayCategoryName =>
+      categoryName.trim().isEmpty ? 'Uncategorized' : categoryName.trim();
+
+  Map<String, dynamic> toMap() {
+    return {
+      'categoryId': categoryId,
+      'categoryName': categoryName,
+      'selectedMethod': selectedMethod,
+      'photoList': selectedMethod == methodPhoto ? photoList?.toMap() : null,
+      'manualList': selectedMethod == methodManual ? manualList?.toMap() : null,
+      'selectedItems': selectedMethod == methodItems
+          ? selectedItems.map((item) => item.toMap()).toList()
+          : <Map<String, dynamic>>[],
+    };
+  }
+
+  factory OrderCategoryMethod.fromMap(Map<String, dynamic> map) {
+    return OrderCategoryMethod(
+      categoryId: map['categoryId'] as String? ?? '',
+      categoryName: map['categoryName'] as String? ?? '',
+      selectedMethod: map['selectedMethod'] as String? ?? '',
+      photoList: map['photoList'] is Map<String, dynamic>
+          ? OrderCategoryPhotoList.fromMap(
+              map['photoList'] as Map<String, dynamic>,
+            )
+          : null,
+      manualList: map['manualList'] is Map<String, dynamic>
+          ? OrderCategoryManualList.fromMap(
+              map['manualList'] as Map<String, dynamic>,
+            )
+          : null,
+      selectedItems:
+          (map['selectedItems'] as List<dynamic>? ?? const <dynamic>[])
+              .whereType<Map<String, dynamic>>()
+              .map(OrderItem.fromMap)
+              .toList(),
+    );
+  }
+}
+
+/// A not-yet-submitted photo list draft held in [AppState], keyed to the
+/// category selected on Home when it was attached. Distinct from
+/// [OrderPhotoList]: this holds a local file path pre-upload, not a
+/// Cloudinary URL.
+class DraftPhotoList {
+  const DraftPhotoList({
+    required this.shopId,
+    required this.shopName,
+    required this.imagePath,
+  });
+
+  final String shopId;
+  final String shopName;
+  final String imagePath;
+
+  Map<String, dynamic> toMap() {
+    return {
+      'shopId': shopId,
+      'shopName': shopName,
+      'imagePath': imagePath,
+    };
+  }
+
+  factory DraftPhotoList.fromMap(Map<String, dynamic> map) {
+    return DraftPhotoList(
+      shopId: map['shopId'] as String? ?? '',
+      shopName: map['shopName'] as String? ?? '',
+      imagePath: map['imagePath'] as String? ?? '',
+    );
+  }
+
+  String toJson() => jsonEncode(toMap());
+
+  factory DraftPhotoList.fromJson(String source) {
+    return DraftPhotoList.fromMap(jsonDecode(source) as Map<String, dynamic>);
+  }
+}
+
+/// A not-yet-submitted manual list draft held in [AppState], keyed to the
+/// category selected on Home when it was typed. Distinct from
+/// [OrderManualList]: this is customer-local draft state, not a submitted
+/// order record.
+class DraftManualList {
+  const DraftManualList({
+    required this.shopId,
+    required this.shopName,
+    required this.text,
+  });
+
+  final String shopId;
+  final String shopName;
+  final String text;
+
+  Map<String, dynamic> toMap() {
+    return {
+      'shopId': shopId,
+      'shopName': shopName,
+      'text': text,
+    };
+  }
+
+  factory DraftManualList.fromMap(Map<String, dynamic> map) {
+    return DraftManualList(
+      shopId: map['shopId'] as String? ?? '',
+      shopName: map['shopName'] as String? ?? '',
+      text: map['text'] as String? ?? '',
+    );
+  }
+
+  String toJson() => jsonEncode(toMap());
+
+  factory DraftManualList.fromJson(String source) {
+    return DraftManualList.fromMap(jsonDecode(source) as Map<String, dynamic>);
+  }
+}
+
 class OrderModel {
   static const _manualListNotesHeader = 'Manual grocery list:';
   static final _manualListNotesHeaderPattern = RegExp(
@@ -1179,6 +1554,9 @@ class OrderModel {
     this.cancelledBy = '',
     this.cancellationReason = '',
     this.hasReliableCreatedAt = true,
+    this.photoLists = const <OrderPhotoList>[],
+    this.manualLists = const <OrderManualList>[],
+    this.categories = const <OrderCategoryMethod>[],
   });
 
   final String orderId;
@@ -1218,6 +1596,19 @@ class OrderModel {
   final String cancelledBy;
   final String cancellationReason;
   final bool hasReliableCreatedAt;
+
+  /// Category-tagged photo lists attached to this order — one per category
+  /// the customer had selected on Home when attaching a photo, so a
+  /// Groceries photo and a Vegetables photo can coexist. Empty for orders
+  /// placed before this existed; [uploadedImageUrl] alone is used instead
+  /// (see [fromMap]'s legacy-fallback synthesis).
+  final List<OrderPhotoList> photoLists;
+
+  /// Category-tagged typed shopping lists attached to this order — one per
+  /// category, mirroring [photoLists]. Empty for orders placed before this
+  /// existed; [manualListText] alone is used instead.
+  final List<OrderManualList> manualLists;
+  final List<OrderCategoryMethod> categories;
 
   /// True while this order still represents a live/current shopping or
   /// billing process — i.e. it has not reached a finalized status
@@ -1272,7 +1663,11 @@ class OrderModel {
     );
   }
 
-  bool get hasUpload => uploadedImageUrl.isNotEmpty;
+  /// True if [photoLists] has anything, or (for orders/instances that never
+  /// went through the [fromMap] legacy-fallback synthesis — e.g. directly
+  /// constructed, not yet round-tripped) the legacy [uploadedImageUrl] is
+  /// set.
+  bool get hasUpload => photoLists.isNotEmpty || uploadedImageUrl.isNotEmpty;
   String get customerNotes => _orderNotesWithoutManualList(orderNotes);
   String get effectiveManualListText {
     final cleanedManualListText = manualListText.trim();
@@ -1282,14 +1677,25 @@ class OrderModel {
     return _manualListTextFromNotes(orderNotes);
   }
 
-  bool get hasManualList => effectiveManualListText.isNotEmpty;
+  /// True if [manualLists] has anything, or (see [hasUpload]) the legacy
+  /// [effectiveManualListText] is set.
+  bool get hasManualList =>
+      manualLists.isNotEmpty || effectiveManualListText.isNotEmpty;
   double get splitSubtotal =>
       cartItemsAmount + photoListAmount + manualListAmount;
-  List<String> get manualListLines => effectiveManualListText
-      .split(RegExp(r'\r?\n'))
-      .map((line) => line.trim())
-      .where((line) => line.isNotEmpty)
-      .toList();
+
+  /// All typed lines across every category's manual list, flattened —
+  /// callers that only need "everything the customer typed" (e.g. shift
+  /// reporting) can keep using this instead of iterating [manualLists]. Falls
+  /// back to the legacy [effectiveManualListText] when [manualLists] is
+  /// empty (see [hasUpload]).
+  List<String> get manualListLines => manualLists.isNotEmpty
+      ? manualLists.expand((list) => list.lines).toList()
+      : effectiveManualListText
+          .split(RegExp(r'\r?\n'))
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .toList();
   bool get hasShoppingList => hasUpload || hasManualList;
   bool get hasPaymentReceipt => paymentReceiptImageUrl.isNotEmpty;
   bool get hasAssignedDeliveryContact =>
@@ -1367,6 +1773,9 @@ class OrderModel {
       cancelledBy: cancelledBy ?? this.cancelledBy,
       cancellationReason: cancellationReason ?? this.cancellationReason,
       hasReliableCreatedAt: hasReliableCreatedAt,
+      photoLists: photoLists,
+      manualLists: manualLists,
+      categories: categories,
     );
   }
 
@@ -1412,6 +1821,9 @@ class OrderModel {
       if (cancelledBy.isNotEmpty) 'cancelledBy': cancelledBy,
       if (cancellationReason.isNotEmpty)
         'cancellationReason': cancellationReason,
+      'photoLists': photoLists.map((list) => list.toMap()).toList(),
+      'manualLists': manualLists.map((list) => list.toMap()).toList(),
+      'categories': categories.map((category) => category.toMap()).toList(),
     };
   }
 
@@ -1457,6 +1869,48 @@ class OrderModel {
     final splitSubtotal = cartItemsAmount + photoListAmount + manualListAmount;
     final subtotal = hasSplitAmounts ? splitSubtotal : storedSubtotal;
     final createdAt = _readOptionalDate(map['createdAt']);
+    final storedPhotoLists = map['photoLists'] as List<dynamic>?;
+    final photoLists = storedPhotoLists != null
+        ? storedPhotoLists
+            .whereType<Map<String, dynamic>>()
+            .map(OrderPhotoList.fromMap)
+            .toList()
+        : (hasPhotoList
+            ? [
+                OrderPhotoList(
+                  shopId: '',
+                  shopName: '',
+                  imageUrl: uploadedImageUrl,
+                  imagePublicId: map['uploadedImagePublicId'] as String? ?? '',
+                ),
+              ]
+            : const <OrderPhotoList>[]);
+    final storedManualLists = map['manualLists'] as List<dynamic>?;
+    final manualLists = storedManualLists != null
+        ? storedManualLists
+            .whereType<Map<String, dynamic>>()
+            .map(OrderManualList.fromMap)
+            .toList()
+        : (hasManualList
+            ? [
+                OrderManualList(
+                  shopId: '',
+                  shopName: '',
+                  text: manualListText.trim(),
+                ),
+              ]
+            : const <OrderManualList>[]);
+    final storedCategories = map['categories'] as List<dynamic>?;
+    final categories = storedCategories != null
+        ? storedCategories
+            .whereType<Map<String, dynamic>>()
+            .map(OrderCategoryMethod.fromMap)
+            .toList()
+        : _categoriesFromLegacyFields(
+            items: items,
+            photoLists: photoLists,
+            manualLists: manualLists,
+          );
     return OrderModel(
       orderId: map['orderId'] as String? ?? id,
       userId: map['userId'] as String? ?? '',
@@ -1498,6 +1952,87 @@ class OrderModel {
       cancelledBy: map['cancelledBy'] as String? ?? '',
       cancellationReason: map['cancellationReason'] as String? ?? '',
       hasReliableCreatedAt: createdAt != null,
+      photoLists: photoLists,
+      manualLists: manualLists,
+      categories: categories,
+    );
+  }
+
+  static List<OrderCategoryMethod> _categoriesFromLegacyFields({
+    required List<OrderItem> items,
+    required List<OrderPhotoList> photoLists,
+    required List<OrderManualList> manualLists,
+  }) {
+    final order = <String>[];
+    final names = <String, String>{};
+    final itemBuckets = <String, List<OrderItem>>{};
+    final photoBuckets = <String, List<OrderPhotoList>>{};
+    final manualBuckets = <String, List<OrderManualList>>{};
+
+    void touch(String id, String name) {
+      if (!names.containsKey(id)) {
+        order.add(id);
+        names[id] = name;
+      } else if ((names[id] ?? '').trim().isEmpty && name.trim().isNotEmpty) {
+        names[id] = name;
+      }
+    }
+
+    for (final item in items) {
+      touch(item.shopId, item.shopName);
+      itemBuckets.putIfAbsent(item.shopId, () => <OrderItem>[]).add(item);
+    }
+    for (final list in photoLists) {
+      touch(list.shopId, list.shopName);
+      photoBuckets.putIfAbsent(list.shopId, () => <OrderPhotoList>[]).add(list);
+    }
+    for (final list in manualLists) {
+      touch(list.shopId, list.shopName);
+      manualBuckets
+          .putIfAbsent(list.shopId, () => <OrderManualList>[])
+          .add(list);
+    }
+
+    return [
+      for (final id in order)
+        _legacyCategoryMethod(
+          categoryId: id,
+          categoryName: names[id] ?? '',
+          items: itemBuckets[id] ?? const <OrderItem>[],
+          photos: photoBuckets[id] ?? const <OrderPhotoList>[],
+          manuals: manualBuckets[id] ?? const <OrderManualList>[],
+        ),
+    ];
+  }
+
+  static OrderCategoryMethod _legacyCategoryMethod({
+    required String categoryId,
+    required String categoryName,
+    required List<OrderItem> items,
+    required List<OrderPhotoList> photos,
+    required List<OrderManualList> manuals,
+  }) {
+    final methodCount = (items.isNotEmpty ? 1 : 0) +
+        (photos.isNotEmpty ? 1 : 0) +
+        (manuals.isNotEmpty ? 1 : 0);
+    final method = methodCount > 1
+        ? OrderCategoryMethod.methodLegacyMixed
+        : photos.isNotEmpty
+            ? OrderCategoryMethod.methodPhoto
+            : manuals.isNotEmpty
+                ? OrderCategoryMethod.methodManual
+                : OrderCategoryMethod.methodItems;
+    return OrderCategoryMethod(
+      categoryId: categoryId,
+      categoryName: categoryName,
+      selectedMethod: method,
+      photoList: photos.isEmpty ? null : OrderCategoryPhotoList(images: photos),
+      manualList: manuals.isEmpty
+          ? null
+          : OrderCategoryManualList(
+              text: manuals.map((list) => list.text.trim()).join('\n'),
+            ),
+      selectedItems: items,
     );
   }
 
@@ -2004,8 +2539,7 @@ class PasswordResetRequest {
           map['rejectedAt'] == null ? null : _readDate(map['rejectedAt']),
       completedAt:
           map['completedAt'] == null ? null : _readDate(map['completedAt']),
-      expiresAt:
-          map['expiresAt'] == null ? null : _readDate(map['expiresAt']),
+      expiresAt: map['expiresAt'] == null ? null : _readDate(map['expiresAt']),
     );
   }
 }

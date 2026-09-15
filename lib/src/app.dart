@@ -120,7 +120,7 @@ class _HomeGateState extends State<HomeGate> with WidgetsBindingObserver {
     if (appState.isDeliveryBoy) {
       return const DeliveryBoyDashboardScreen();
     }
-    return const CustomerHomeScreen();
+    return const CustomerShell();
   }
 }
 
