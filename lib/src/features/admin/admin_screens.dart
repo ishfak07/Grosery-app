@@ -7019,7 +7019,14 @@ class _AdminProductFormScreenState extends State<AdminProductFormScreen> {
         child: StreamBuilder<List<Shop>>(
           stream: appState.firestoreService.watchShops(activeOnly: true),
           builder: (context, snapshot) {
-            final shops = _uniqueShops(snapshot.data ?? const <Shop>[]);
+            // Wait for the category list before building the form. The first
+            // frame arrives with no data, and treating that as "no categories"
+            // would discard the product's own category and later fall back to
+            // the first one in the list.
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final shops = _uniqueShops(snapshot.data!);
             if (_selectedShopId != null &&
                 _shopForId(shops, _selectedShopId) == null) {
               _selectedShopId = null;
