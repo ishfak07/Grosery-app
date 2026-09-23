@@ -379,12 +379,28 @@ class AppState extends ChangeNotifier {
     }
     return categoryById(selected.shopId) ?? selected;
   }
+
   PaymentSettings get paymentSettings => _paymentSettings;
   bool get hasLoadedPaymentSettings => _hasLoadedPaymentSettings;
   PasswordResetStatusResult? get passwordResetTracker => _passwordResetTracker;
   bool get isCheckingPasswordResetTracker => _isCheckingPasswordResetTracker;
   int get cartCount =>
       _cartItems.fold<int>(0, (sum, item) => sum + item.quantity);
+
+  /// True when the customer has staged anything for an order: picked
+  /// products, an attached photo list, or a typed manual list. The cart
+  /// reminder on the customer screens keys off this, so a photo-only or
+  /// manual-only draft nudges just like a cart full of products.
+  bool get hasCartDraft =>
+      _cartItems.isNotEmpty ||
+      _photoLists.isNotEmpty ||
+      _manualLists.isNotEmpty;
+
+  /// What the cart badge counts: product quantities plus one per attached
+  /// photo list and typed manual list, so a photo-only draft still reads as
+  /// "1" instead of showing an empty cart.
+  int get cartBadgeCount =>
+      cartCount + _photoLists.length + _manualLists.length;
 
   /// The product's live catalog price for [item], or its locally cached
   /// [CartItem.price] when the product is no longer in the catalog (e.g.

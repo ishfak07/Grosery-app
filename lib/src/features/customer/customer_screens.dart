@@ -315,12 +315,18 @@ class _CustomerIconButton extends StatelessWidget {
     required this.tooltip,
     required this.onPressed,
     this.badgeCount = 0,
+    this.pulse = false,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback onPressed;
   final int badgeCount;
+
+  /// Keeps beating while there is something waiting behind the button (see
+  /// [_CartPulse]) — used by the cart button so a half-finished order is
+  /// hard to forget.
+  final bool pulse;
 
   @override
   Widget build(BuildContext context) {
@@ -330,16 +336,280 @@ class _CustomerIconButton extends StatelessWidget {
     }
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: IconButton.filledTonal(
-        tooltip: context.t(tooltip),
-        onPressed: onPressed,
-        style: IconButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: _customerInk,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          side: const BorderSide(color: _customerLine),
+      child: _CartPulse(
+        active: pulse,
+        bump: badgeCount,
+        child: IconButton.filledTonal(
+          tooltip: context.t(tooltip),
+          onPressed: onPressed,
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: _customerInk,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            side: const BorderSide(color: _customerLine),
+          ),
+          icon: child,
         ),
-        icon: child,
+      ),
+    );
+  }
+}
+
+/// A repeating "your cart still has something in it" nudge. While [active]
+/// is true the child beats twice, rests, then beats again, with a soft ring
+/// blooming out of it — a reminder that keeps coming back rather than one
+/// that fires once and is missed. [bump] restarts the beat immediately
+/// whenever it changes, so a freshly added item, photo list or manual list
+/// announces itself right away.
+class _CartPulse extends StatefulWidget {
+  const _CartPulse({
+    required this.child,
+    required this.active,
+    this.bump = 0,
+    this.ringColor = _customerAccent,
+    this.ringRadius = 12,
+    this.swell = 0.12,
+  });
+
+  final Widget child;
+  final bool active;
+  final int bump;
+  final Color ringColor;
+  final double ringRadius;
+
+  /// How far past its own size the child swells at the peak of a beat.
+  final double swell;
+
+  @override
+  State<_CartPulse> createState() => _CartPulseState();
+}
+
+class _CartPulseState extends State<_CartPulse>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CartPulse oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active != oldWidget.active) {
+      _sync();
+    } else if (widget.active && widget.bump != oldWidget.bump) {
+      // Something just landed in the cart: start the cycle over so the beat
+      // lands with the change instead of waiting out the current rest.
+      _controller
+        ..stop()
+        ..repeat();
+    }
+  }
+
+  void _sync() {
+    if (widget.active) {
+      _controller.repeat();
+    } else {
+      _controller
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// Two quick beats at the top of each cycle and then a rest — a heartbeat
+  /// rather than a constant throb, which reads as a reminder without nagging.
+  static double _beat(double t) {
+    double curve(double x) => math.sin(x * math.pi);
+    if (t < 0.13) {
+      return curve(t / 0.13);
+    }
+    if (t >= 0.17 && t < 0.30) {
+      return curve((t - 0.17) / 0.13) * 0.7;
+    }
+    return 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (!widget.active || reduceMotion) {
+      return widget.child;
+    }
+    return AnimatedBuilder(
+      animation: _controller,
+      child: widget.child,
+      builder: (context, child) {
+        final beat = _beat(_controller.value);
+        return Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            if (beat > 0)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Transform.scale(
+                    scale: 1 + beat * 0.55,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius:
+                            BorderRadius.circular(widget.ringRadius + 6),
+                        border: Border.all(
+                          color: widget.ringColor
+                              .withValues(alpha: (1 - beat) * 0.55),
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            Transform.scale(
+              scale: 1 + beat * widget.swell,
+              child: child,
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// The floating "your cart has items" reminder that rides above the page
+/// once the header cart button has scrolled out of sight. Hidden entirely
+/// while the cart is empty, so an empty cart leaves the screen as it was.
+class _CartReminderBar extends StatelessWidget {
+  const _CartReminderBar({
+    required this.visible,
+    this.bottomInset = 0,
+  });
+
+  final bool visible;
+  final double bottomInset;
+
+  /// What the reminder says is waiting — products first, then the photo and
+  /// manual drafts, which count as a cart even with no products in it.
+  static String _summary(BuildContext context, AppState appState) {
+    final items = appState.cartCount;
+    if (items > 0) {
+      return items == 1
+          ? context.t('1 item in your cart')
+          : context.t('{count} items in your cart', values: {'count': items});
+    }
+    if (appState.hasBillImage) {
+      return context.t('Photo list ready in your cart');
+    }
+    return context.t('Manual list ready in your cart');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final show = visible && appState.hasCartDraft;
+    return IgnorePointer(
+      ignoring: !show,
+      child: AnimatedSlide(
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        offset: show ? Offset.zero : const Offset(0, 0.6),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 220),
+          opacity: show ? 1 : 0,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 12),
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: _CartPulse(
+                  active: show,
+                  bump: appState.cartBadgeCount,
+                  ringRadius: 14,
+                  swell: 0.03,
+                  child: Material(
+                    color: _customerPrimary,
+                    borderRadius: BorderRadius.circular(14),
+                    clipBehavior: Clip.antiAlias,
+                    elevation: 10,
+                    shadowColor:
+                        const Color(0xFF10231A).withValues(alpha: 0.38),
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).push(
+                        _CustomerPageRoute(builder: (_) => const CartScreen()),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        child: Row(
+                          children: [
+                            Badge.count(
+                              count: appState.cartBadgeCount,
+                              backgroundColor: _customerAccent,
+                              child: const Icon(
+                                Icons.shopping_bag_rounded,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _summary(context, appState),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    context.t('Tap to review and order'),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.82),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(
+                              Icons.chevron_right_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -708,8 +978,28 @@ class _HomeCollapsible extends StatelessWidget {
   }
 }
 
-class CustomerHomeScreen extends StatelessWidget {
+class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
+
+  @override
+  State<CustomerHomeScreen> createState() => _CustomerHomeScreenState();
+}
+
+class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
+  /// True once the header — and with it the header's cart button — has
+  /// scrolled away, which is when the floating reminder takes over.
+  var _headerGone = false;
+
+  bool _onScroll(ScrollNotification notification) {
+    if (notification.depth != 0 || notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
+    final gone = notification.metrics.pixels > 150;
+    if (gone != _headerGone) {
+      setState(() => _headerGone = gone);
+    }
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -733,112 +1023,135 @@ class CustomerHomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: _customerBackground,
       body: HomeBackdrop(
-        child: AppRefreshIndicator(
-          child: _CustomerScrollView(
-            padding: const EdgeInsets.fromLTRB(0, 10, 0, 128),
-            safeAreaTop: true,
-            children: [
-              FirebaseSetupBanner(appState: appState),
-              _HomeHeader(
-                profile: profile,
-                cartCount: appState.cartCount,
-              ),
-              // Switching to a photo-only category (a pharmacy, say) removes
-              // the search bar and the fresh picks. Collapsing them instead of
-              // dropping them keeps the page from jumping under the finger.
-              _HomeCollapsible(
-                visible: allowsItems,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 14),
-                    _HomeSearchCallout(
-                      categoryName: selectedCategory?.shopName,
-                      onTap: () {
-                        _openShoppingMethod(
-                          context,
-                          passedShop: selectedCategory,
-                          method: OrderCategoryMethod.methodItems,
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              const _HomeOffersCarousel(),
-              const SizedBox(height: 18),
-              const _HomeCategorySelector(),
-              _HomeCollapsible(
-                visible: categoryClosed && selectedCategory != null,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 14),
-                    _CategoryClosedNotice(hours: categoryHours),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              // The tile set changes with the category, so cross-fade the old
-              // layout into the new one and let the height glide between them.
-              AnimatedSize(
-                duration: _homeSectionMotion,
-                curve: Curves.easeInOutCubic,
-                alignment: Alignment.topCenter,
-                child: AnimatedSwitcher(
-                  duration: _homeSectionMotion,
-                  switchInCurve: Curves.easeOut,
-                  switchOutCurve: Curves.easeIn,
-                  layoutBuilder: (current, previous) => Stack(
-                    alignment: Alignment.topCenter,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: AppRefreshIndicator(
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _onScroll,
+                  child: _CustomerScrollView(
+                    padding: const EdgeInsets.fromLTRB(0, 10, 0, 128),
+                    safeAreaTop: true,
                     children: [
-                      for (final child in previous)
-                        Positioned(left: 0, right: 0, top: 0, child: child),
-                      if (current != null) current,
-                    ],
-                  ),
-                  child: _HomeActionGrid(
-                    key: ValueKey(allowedMethods.join('|')),
-                    actions: [
-                      for (final method in allowedMethods)
-                        _HomeActionSpec(
-                          icon: _homeMethodIcons[method]!,
-                          title: _homeMethodTitles[method]!,
-                          subtitle: _homeMethodSubtitles[method]!,
-                          accent: _homeMethodAccents[method]!,
-                          featured: method == OrderCategoryMethod.methodPhoto,
-                          onTap: () => _openShoppingMethod(
-                            context,
-                            passedShop: selectedCategory,
-                            method: method,
+                      FirebaseSetupBanner(appState: appState),
+                      _HomeHeader(
+                        profile: profile,
+                        cartCount: appState.cartBadgeCount,
+                        cartPulse: appState.hasCartDraft,
+                      ),
+                      // Switching to a photo-only category (a pharmacy, say) removes
+                      // the search bar and the fresh picks. Collapsing them instead of
+                      // dropping them keeps the page from jumping under the finger.
+                      _HomeCollapsible(
+                        visible: allowsItems,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SizedBox(height: 14),
+                            _HomeSearchCallout(
+                              categoryName: selectedCategory?.shopName,
+                              onTap: () {
+                                _openShoppingMethod(
+                                  context,
+                                  passedShop: selectedCategory,
+                                  method: OrderCategoryMethod.methodItems,
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const _HomeOffersCarousel(),
+                      const SizedBox(height: 18),
+                      const _HomeCategorySelector(),
+                      _HomeCollapsible(
+                        visible: categoryClosed && selectedCategory != null,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SizedBox(height: 14),
+                            _CategoryClosedNotice(hours: categoryHours),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // The tile set changes with the category, so cross-fade the old
+                      // layout into the new one and let the height glide between them.
+                      AnimatedSize(
+                        duration: _homeSectionMotion,
+                        curve: Curves.easeInOutCubic,
+                        alignment: Alignment.topCenter,
+                        child: AnimatedSwitcher(
+                          duration: _homeSectionMotion,
+                          switchInCurve: Curves.easeOut,
+                          switchOutCurve: Curves.easeIn,
+                          layoutBuilder: (current, previous) => Stack(
+                            alignment: Alignment.topCenter,
+                            children: [
+                              for (final child in previous)
+                                Positioned(
+                                    left: 0, right: 0, top: 0, child: child),
+                              if (current != null) current,
+                            ],
+                          ),
+                          child: _HomeActionGrid(
+                            key: ValueKey(allowedMethods.join('|')),
+                            actions: [
+                              for (final method in allowedMethods)
+                                _HomeActionSpec(
+                                  icon: _homeMethodIcons[method]!,
+                                  title: _homeMethodTitles[method]!,
+                                  subtitle: _homeMethodSubtitles[method]!,
+                                  accent: _homeMethodAccents[method]!,
+                                  featured:
+                                      method == OrderCategoryMethod.methodPhoto,
+                                  onTap: () => _openShoppingMethod(
+                                    context,
+                                    passedShop: selectedCategory,
+                                    method: method,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
+                      ),
+                      _HomeCollapsible(
+                        visible: allowsItems,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SizedBox(height: 24),
+                            _HomeFreshPicksHeader(
+                              onAction: () {
+                                _openShoppingMethod(
+                                  context,
+                                  passedShop: selectedCategory,
+                                  method: OrderCategoryMethod.methodItems,
+                                );
+                              },
+                            ),
+                            const _RecentProductsGrid(),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
-              _HomeCollapsible(
-                visible: allowsItems,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 24),
-                    _HomeFreshPicksHeader(
-                      onAction: () {
-                        _openShoppingMethod(
-                          context,
-                          passedShop: selectedCategory,
-                          method: OrderCategoryMethod.methodItems,
-                        );
-                      },
-                    ),
-                    const _RecentProductsGrid(),
-                  ],
-                ),
+            ),
+            // Once the header's cart button is out of sight the reminder
+            // follows the customer down the page, above the nav bar.
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _CartReminderBar(
+                visible: _headerGone,
+                bottomInset: 96,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -849,10 +1162,12 @@ class _HomeHeader extends StatelessWidget {
   const _HomeHeader({
     required this.profile,
     required this.cartCount,
+    this.cartPulse = false,
   });
 
   final UserProfile profile;
   final int cartCount;
+  final bool cartPulse;
 
   @override
   Widget build(BuildContext context) {
@@ -1003,6 +1318,7 @@ class _HomeHeader extends StatelessWidget {
                           tooltip: 'Cart',
                           icon: Icons.shopping_bag_outlined,
                           badgeCount: cartCount,
+                          pulse: cartPulse,
                           onPressed: () => Navigator.of(context).push(
                             _CustomerPageRoute(
                               builder: (_) => const CartScreen(),
@@ -1047,12 +1363,16 @@ class _HomeHeaderActionButton extends StatelessWidget {
     required this.icon,
     required this.onPressed,
     this.badgeCount = 0,
+    this.pulse = false,
   });
 
   final String tooltip;
   final IconData icon;
   final VoidCallback onPressed;
   final int badgeCount;
+
+  /// See [_CustomerIconButton.pulse].
+  final bool pulse;
 
   @override
   Widget build(BuildContext context) {
@@ -1062,17 +1382,22 @@ class _HomeHeaderActionButton extends StatelessWidget {
     }
     return Tooltip(
       message: context.t(tooltip),
-      child: SizedBox(
-        width: 40,
-        height: 40,
-        child: Material(
-          color: Colors.white.withValues(alpha: 0.94),
-          borderRadius: BorderRadius.circular(8),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onPressed,
+      child: _CartPulse(
+        active: pulse,
+        bump: badgeCount,
+        ringColor: Colors.white,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Material(
+            color: Colors.white.withValues(alpha: 0.94),
             borderRadius: BorderRadius.circular(8),
-            child: Center(child: child),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onPressed,
+              borderRadius: BorderRadius.circular(8),
+              child: Center(child: child),
+            ),
           ),
         ),
       ),
@@ -4036,6 +4361,21 @@ class _ProductListScreenState extends State<ProductListScreen> {
   final _search = TextEditingController();
   late final Stream<List<Product>> _productsStream;
 
+  /// True once the customer has scrolled into the grid, which is when the
+  /// floating cart reminder joins them on the way down.
+  var _scrolled = false;
+
+  bool _onScroll(ScrollNotification notification) {
+    if (notification.depth != 0 || notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
+    final scrolled = notification.metrics.pixels > 120;
+    if (scrolled != _scrolled) {
+      setState(() => _scrolled = scrolled);
+    }
+    return false;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -4060,7 +4400,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
         _CustomerIconButton(
           tooltip: 'Cart',
           icon: Icons.shopping_bag_outlined,
-          badgeCount: appState.cartCount,
+          badgeCount: appState.cartBadgeCount,
+          pulse: appState.hasCartDraft,
           onPressed: () => Navigator.of(context).push(
             _CustomerPageRoute(builder: (_) => const CartScreen()),
           ),
@@ -4101,65 +4442,96 @@ class _ProductListScreenState extends State<ProductListScreen> {
             ),
           ),
           Expanded(
-            child: StreamBuilder<List<Product>>(
-              stream: _productsStream,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return RefreshableCenteredContent(
-                    child: _DataErrorState(
-                      message: _friendlyDataError(snapshot.error),
-                    ),
-                  );
-                }
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const RefreshableCenteredContent(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: _ProductGridSkeleton(),
-                    ),
-                  );
-                }
-                final query = _search.text.trim().toLowerCase();
-                final products = (snapshot.data ?? const <Product>[]).where(
-                  (product) {
-                    return query.isEmpty ||
-                        product.name.toLowerCase().contains(query) ||
-                        product.nameTamil.toLowerCase().contains(query) ||
-                        product.shopName.toLowerCase().contains(query);
-                  },
-                ).toList();
-                if (products.isEmpty) {
-                  return const RefreshableCenteredContent(
-                    child: EmptyState(
-                      icon: Icons.search_off,
-                      title: 'No products found',
-                      message: 'Try a different product name or category.',
-                    ),
-                  );
-                }
-                return LayoutBuilder(
-                  builder: (context, constraints) {
-                    final count = constraints.maxWidth >= 720 ? 3 : 2;
-                    return GridView.builder(
-                      physics: appRefreshScrollPhysics,
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
-                      itemCount: products.length,
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: count,
-                        childAspectRatio: 0.66,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                      ),
-                      itemBuilder: (context, index) {
-                        return _FadeSlideIn(
-                          index: index,
-                          child: ProductCard(product: products[index]),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: _onScroll,
+                    child: StreamBuilder<List<Product>>(
+                      stream: _productsStream,
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return RefreshableCenteredContent(
+                            child: _DataErrorState(
+                              message: _friendlyDataError(snapshot.error),
+                            ),
+                          );
+                        }
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const RefreshableCenteredContent(
+                            child: Padding(
+                              padding: EdgeInsets.all(16),
+                              child: _ProductGridSkeleton(),
+                            ),
+                          );
+                        }
+                        final query = _search.text.trim().toLowerCase();
+                        final products =
+                            (snapshot.data ?? const <Product>[]).where(
+                          (product) {
+                            return query.isEmpty ||
+                                product.name.toLowerCase().contains(query) ||
+                                product.nameTamil
+                                    .toLowerCase()
+                                    .contains(query) ||
+                                product.shopName.toLowerCase().contains(query);
+                          },
+                        ).toList();
+                        if (products.isEmpty) {
+                          return const RefreshableCenteredContent(
+                            child: EmptyState(
+                              icon: Icons.search_off,
+                              title: 'No products found',
+                              message:
+                                  'Try a different product name or category.',
+                            ),
+                          );
+                        }
+                        return LayoutBuilder(
+                          builder: (context, constraints) {
+                            final count = constraints.maxWidth >= 720 ? 3 : 2;
+                            return GridView.builder(
+                              physics: appRefreshScrollPhysics,
+                              // Leave room under the last row for the floating cart
+                              // reminder when one is riding above the grid.
+                              padding: EdgeInsets.fromLTRB(
+                                16,
+                                4,
+                                16,
+                                appState.hasCartDraft ? 96 : 18,
+                              ),
+                              itemCount: products.length,
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: count,
+                                childAspectRatio: 0.66,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12,
+                              ),
+                              itemBuilder: (context, index) {
+                                return _FadeSlideIn(
+                                  index: index,
+                                  child: ProductCard(product: products[index]),
+                                );
+                              },
+                            );
+                          },
                         );
                       },
-                    );
-                  },
-                );
-              },
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: SafeArea(
+                    top: false,
+                    child: _CartReminderBar(visible: _scrolled),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

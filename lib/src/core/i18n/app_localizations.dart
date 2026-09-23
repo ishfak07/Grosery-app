@@ -260,6 +260,11 @@ const _tamil = <String, String>{
       'பட்டியல் பொருட்களை சேர்க்கவும் அல்லது ஷாப்பிங் பட்டியல் புகைப்படத்தை பதிவேற்றவும்.',
   'Browse products': 'பொருட்களை பார்க்க',
   'Items in cart': 'கார்டில் உள்ள பொருட்கள்',
+  '1 item in your cart': 'உங்கள் கார்டில் 1 பொருள்',
+  '{count} items in your cart': 'உங்கள் கார்டில் {count} பொருட்கள்',
+  'Photo list ready in your cart': 'உங்கள் கார்டில் புகைப்பட பட்டியல் தயார்',
+  'Manual list ready in your cart': 'உங்கள் கார்டில் கைமுறை பட்டியல் தயார்',
+  'Tap to review and order': 'பார்வையிட்டு ஆர்டர் செய்ய தட்டவும்',
   'Adjust quantities before checkout': 'Checkoutக்கு முன் அளவுகளை மாற்றுங்கள்',
   'Attached list': 'இணைக்கப்பட்ட பட்டியல்',
   'Admin will review this with your order':
