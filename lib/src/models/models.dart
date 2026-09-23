@@ -666,6 +666,7 @@ class Shop {
     required this.createdAt,
     this.allowedMethods = allShoppingMethods,
     this.hoursOverride,
+    this.sortOrder,
   });
 
   /// Every shopping method a category can offer, in the order the customer
@@ -692,6 +693,13 @@ class Shop {
   /// Per-category opening hours that replace the global shop hours for this
   /// category only. Null means the category follows the global hours.
   final ShopHoursSettings? hoursOverride;
+
+  /// The admin's manual position for this category, set by dragging the
+  /// categories into order. Customers see the categories in this order.
+  /// Null means the category has never been dragged — those sort last, by
+  /// name, so a newly added category shows up at the end instead of jumping
+  /// into the middle of an arrangement the admin chose.
+  final int? sortOrder;
 
   bool allowsMethod(String method) => allowedMethods.contains(method);
 
@@ -725,6 +733,7 @@ class Shop {
     List<String>? allowedMethods,
     ShopHoursSettings? hoursOverride,
     bool clearHoursOverride = false,
+    int? sortOrder,
   }) {
     return Shop(
       shopId: shopId,
@@ -733,10 +742,12 @@ class Shop {
       phone: phone ?? this.phone,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt,
-      allowedMethods:
-          allowedMethods == null ? this.allowedMethods : normalizeMethods(allowedMethods),
+      allowedMethods: allowedMethods == null
+          ? this.allowedMethods
+          : normalizeMethods(allowedMethods),
       hoursOverride:
           clearHoursOverride ? null : (hoursOverride ?? this.hoursOverride),
+      sortOrder: sortOrder ?? this.sortOrder,
     );
   }
 
@@ -750,6 +761,9 @@ class Shop {
       'createdAt': _writeDate(createdAt),
       'allowedMethods': allowedMethods,
       'hoursOverride': hoursOverride?.toMap(),
+      // Left out entirely when unset, so editing a category through the
+      // dialog can never wipe the position the admin dragged it to.
+      if (sortOrder != null) 'sortOrder': sortOrder,
     };
   }
 
@@ -768,7 +782,26 @@ class Shop {
       hoursOverride: rawHours is Map<String, dynamic>
           ? ShopHoursSettings.fromMap(rawHours)
           : null,
+      sortOrder: (map['sortOrder'] as num?)?.toInt(),
     );
+  }
+
+  /// Orders categories the way both the admin list and the customer chips
+  /// show them: the admin's dragged arrangement first, then anything never
+  /// dragged, alphabetically.
+  static int compareForDisplay(Shop a, Shop b) {
+    final aOrder = a.sortOrder;
+    final bOrder = b.sortOrder;
+    if (aOrder != null && bOrder != null && aOrder != bOrder) {
+      return aOrder.compareTo(bOrder);
+    }
+    if (aOrder != null && bOrder == null) {
+      return -1;
+    }
+    if (aOrder == null && bOrder != null) {
+      return 1;
+    }
+    return a.shopName.toLowerCase().compareTo(b.shopName.toLowerCase());
   }
 
   /// Filters [methods] down to known methods in [allShoppingMethods] order,

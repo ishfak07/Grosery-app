@@ -663,6 +663,51 @@ const _homeMethodAccents = <String, Color>{
   OrderCategoryMethod.methodManual: _customerAccent,
 };
 
+/// How long the home page takes to settle when the selected category changes
+/// which sections apply.
+const Duration _homeSectionMotion = Duration(milliseconds: 280);
+
+/// Collapses a home section to nothing instead of ripping it out of the tree.
+/// The section slides up under a clip while it fades, so switching from a
+/// full-service category to a photo-only one (a pharmacy) reads as one smooth
+/// movement rather than the page snapping to a new height.
+///
+/// The child stays built for the length of the animation and is dropped once
+/// the section is fully closed, so hidden sections cost nothing.
+class _HomeCollapsible extends StatelessWidget {
+  const _HomeCollapsible({required this.visible, required this.child});
+
+  final bool visible;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: visible ? 1 : 0),
+      duration: _homeSectionMotion,
+      curve: visible ? Curves.easeOutCubic : Curves.easeInCubic,
+      child: child,
+      builder: (context, t, child) {
+        if (t == 0) {
+          return const SizedBox.shrink();
+        }
+        return ClipRect(
+          child: Align(
+            alignment: Alignment.topCenter,
+            heightFactor: t,
+            child: Opacity(
+              // Fade a little ahead of the collapse so the content is gone
+              // before the last sliver of height closes.
+              opacity: Curves.easeOut.transform(t),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class CustomerHomeScreen extends StatelessWidget {
   const CustomerHomeScreen({super.key});
 
@@ -698,58 +743,100 @@ class CustomerHomeScreen extends StatelessWidget {
                 profile: profile,
                 cartCount: appState.cartCount,
               ),
-              if (allowsItems) ...[
-                const SizedBox(height: 14),
-                _HomeSearchCallout(
-                  categoryName: selectedCategory?.shopName,
-                  onTap: () {
-                    _openShoppingMethod(
-                      context,
-                      passedShop: selectedCategory,
-                      method: OrderCategoryMethod.methodItems,
-                    );
-                  },
+              // Switching to a photo-only category (a pharmacy, say) removes
+              // the search bar and the fresh picks. Collapsing them instead of
+              // dropping them keeps the page from jumping under the finger.
+              _HomeCollapsible(
+                visible: allowsItems,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 14),
+                    _HomeSearchCallout(
+                      categoryName: selectedCategory?.shopName,
+                      onTap: () {
+                        _openShoppingMethod(
+                          context,
+                          passedShop: selectedCategory,
+                          method: OrderCategoryMethod.methodItems,
+                        );
+                      },
+                    ),
+                  ],
                 ),
-              ],
+              ),
               const SizedBox(height: 16),
               const _HomeOffersCarousel(),
               const SizedBox(height: 18),
               const _HomeCategorySelector(),
-              if (categoryClosed && selectedCategory != null) ...[
-                const SizedBox(height: 14),
-                _CategoryClosedNotice(hours: categoryHours),
-              ],
-              const SizedBox(height: 16),
-              _HomeActionGrid(
-                actions: [
-                  for (final method in allowedMethods)
-                    _HomeActionSpec(
-                      icon: _homeMethodIcons[method]!,
-                      title: _homeMethodTitles[method]!,
-                      subtitle: _homeMethodSubtitles[method]!,
-                      accent: _homeMethodAccents[method]!,
-                      featured: method == OrderCategoryMethod.methodPhoto,
-                      onTap: () => _openShoppingMethod(
-                        context,
-                        passedShop: selectedCategory,
-                        method: method,
-                      ),
-                    ),
-                ],
-              ),
-              if (allowsItems) ...[
-                const SizedBox(height: 24),
-                _HomeFreshPicksHeader(
-                  onAction: () {
-                    _openShoppingMethod(
-                      context,
-                      passedShop: selectedCategory,
-                      method: OrderCategoryMethod.methodItems,
-                    );
-                  },
+              _HomeCollapsible(
+                visible: categoryClosed && selectedCategory != null,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 14),
+                    _CategoryClosedNotice(hours: categoryHours),
+                  ],
                 ),
-                const _RecentProductsGrid(),
-              ],
+              ),
+              const SizedBox(height: 16),
+              // The tile set changes with the category, so cross-fade the old
+              // layout into the new one and let the height glide between them.
+              AnimatedSize(
+                duration: _homeSectionMotion,
+                curve: Curves.easeInOutCubic,
+                alignment: Alignment.topCenter,
+                child: AnimatedSwitcher(
+                  duration: _homeSectionMotion,
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+                  layoutBuilder: (current, previous) => Stack(
+                    alignment: Alignment.topCenter,
+                    children: [
+                      for (final child in previous)
+                        Positioned(left: 0, right: 0, top: 0, child: child),
+                      if (current != null) current,
+                    ],
+                  ),
+                  child: _HomeActionGrid(
+                    key: ValueKey(allowedMethods.join('|')),
+                    actions: [
+                      for (final method in allowedMethods)
+                        _HomeActionSpec(
+                          icon: _homeMethodIcons[method]!,
+                          title: _homeMethodTitles[method]!,
+                          subtitle: _homeMethodSubtitles[method]!,
+                          accent: _homeMethodAccents[method]!,
+                          featured: method == OrderCategoryMethod.methodPhoto,
+                          onTap: () => _openShoppingMethod(
+                            context,
+                            passedShop: selectedCategory,
+                            method: method,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              _HomeCollapsible(
+                visible: allowsItems,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 24),
+                    _HomeFreshPicksHeader(
+                      onAction: () {
+                        _openShoppingMethod(
+                          context,
+                          passedShop: selectedCategory,
+                          method: OrderCategoryMethod.methodItems,
+                        );
+                      },
+                    ),
+                    const _RecentProductsGrid(),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -2354,8 +2441,123 @@ Color _homeCategoryAccent(String shopName, int index) {
   return _homeCategoryPalette[index % _homeCategoryPalette.length];
 }
 
-class _HomeCategorySelector extends StatelessWidget {
+/// The home category rail. Chips scroll sideways, and a fading edge plus a
+/// tappable arrow on the right advertise that there is more to see; both
+/// disappear once the rail is scrolled to the end. "View all" opens every
+/// category in a sheet so a long list is never hidden behind a swipe.
+class _HomeCategorySelector extends StatefulWidget {
   const _HomeCategorySelector();
+
+  @override
+  State<_HomeCategorySelector> createState() => _HomeCategorySelectorState();
+}
+
+class _HomeCategorySelectorState extends State<_HomeCategorySelector> {
+  static const _railHeight = 40.0;
+  static const _fadeWidth = 44.0;
+
+  final ScrollController _controller = ScrollController();
+  bool _canScrollBack = false;
+  bool _canScrollForward = false;
+
+  /// Set once the customer has swiped the rail or used either control. The
+  /// attention animations exist only to make the hidden categories findable,
+  /// so they stop for good the moment that has worked.
+  bool _engaged = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_syncEdges);
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_syncEdges)
+      ..dispose();
+    super.dispose();
+  }
+
+  /// Recomputes which edge hints belong on screen. Called on every scroll and
+  /// once after each build, so the hints also settle when the category list
+  /// arrives from Firestore or the window is resized.
+  void _syncEdges() {
+    if (!mounted || !_controller.hasClients) {
+      return;
+    }
+    final position = _controller.position;
+    const tolerance = 1.0;
+    final back = position.pixels > position.minScrollExtent + tolerance;
+    final forward = position.pixels < position.maxScrollExtent - tolerance;
+    if (back != _canScrollBack || forward != _canScrollForward) {
+      setState(() {
+        _canScrollBack = back;
+        _canScrollForward = forward;
+      });
+    }
+  }
+
+  void _markEngaged() {
+    if (_engaged || !mounted) {
+      return;
+    }
+    setState(() => _engaged = true);
+  }
+
+  void _scrollForward() {
+    _markEngaged();
+    if (!_controller.hasClients) {
+      return;
+    }
+    final position = _controller.position;
+    final target = (position.pixels + position.viewportDimension * 0.8)
+        .clamp(position.minScrollExtent, position.maxScrollExtent);
+    _controller.animateTo(
+      target,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+    );
+  }
+
+  Future<void> _openAllCategories(List<Shop> shops) async {
+    _markEngaged();
+    final appState = context.read<AppState>();
+    final picked = await showModalBottomSheet<Shop>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: _customerSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => _AllCategoriesSheet(
+        shops: shops,
+        selectedShopId: appState.selectedHomeCategory?.shopId,
+        hoursSettings: appState.shopHoursSettings,
+      ),
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    appState.setSelectedHomeCategory(picked);
+    final index = shops.indexWhere((shop) => shop.shopId == picked.shopId);
+    if (index < 0) {
+      return;
+    }
+    // Bring the category the customer just picked into view on the rail.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_controller.hasClients) {
+        return;
+      }
+      final position = _controller.position;
+      final estimate = index * 110.0;
+      _controller.animateTo(
+        estimate.clamp(position.minScrollExtent, position.maxScrollExtent),
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOut,
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2374,59 +2576,548 @@ class _HomeCategorySelector extends StatelessWidget {
             orElse: () => shops.first,
           );
           WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) {
+              return;
+            }
             if (appState.selectedHomeCategory == null) {
               appState.setSelectedHomeCategory(defaultShop);
             }
           });
         }
-        return SizedBox(
-          height: 40,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: shops.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              final shop = shops[index];
-              final isSelected = selected?.shopId == shop.shopId;
-              final accent = _homeCategoryAccent(shop.shopName, index);
-              final isClosed = !shop
-                  .effectiveHours(appState.shopHoursSettings)
-                  .isOpenAt(DateTime.now());
-              return ChoiceChip(
-                avatar: isClosed
-                    ? Icon(
-                        Icons.access_time,
-                        size: 14,
-                        color: isSelected ? Colors.white : _customerDanger,
-                      )
-                    : null,
-                label: Text(shop.shopName),
-                selected: isSelected,
-                onSelected: (_) => appState.setSelectedHomeCategory(shop),
-                labelStyle: TextStyle(
-                  color: isSelected ? Colors.white : _customerInk,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
+        WidgetsBinding.instance.addPostFrameCallback((_) => _syncEdges());
+        final overflows = _canScrollBack || _canScrollForward;
+        final attract = overflows && !_engaged;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    context.t('Categories'),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: _customerInk,
+                    ),
+                  ),
                 ),
-                selectedColor: accent,
-                backgroundColor: Colors.white,
-                side: BorderSide(
-                  color: isSelected ? accent : _customerLine,
+                _ViewAllButton(
+                  label: context.t('View All'),
+                  // Pulses only while categories are still out of sight, and
+                  // on its own 2.6s cycle so it never beats in time with the
+                  // rail arrow.
+                  animate: attract,
+                  onTap: () => _openAllCategories(shops),
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: _railHeight,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: NotificationListener<UserScrollNotification>(
+                      onNotification: (_) {
+                        _markEngaged();
+                        return false;
+                      },
+                      child: ShaderMask(
+                        // Fades the chips themselves rather than painting a
+                        // coloured veil, so the hint works over the home
+                        // backdrop's pattern.
+                        shaderCallback: _edgeFadeShader,
+                        blendMode: BlendMode.dstIn,
+                        child: ListView.separated(
+                          controller: _controller,
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(
+                            parent: AlwaysScrollableScrollPhysics(),
+                          ),
+                          padding: EdgeInsets.only(
+                            right: _canScrollForward ? _fadeWidth : 0,
+                          ),
+                          itemCount: shops.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          itemBuilder: (context, index) {
+                            final shop = shops[index];
+                            return _HomeCategoryChip(
+                              shop: shop,
+                              selected: selected?.shopId == shop.shopId,
+                              accent: _homeCategoryAccent(shop.shopName, index),
+                              closed: !shop
+                                  .effectiveHours(appState.shopHoursSettings)
+                                  .isOpenAt(DateTime.now()),
+                              onTap: () =>
+                                  appState.setSelectedHomeCategory(shop),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: IgnorePointer(
+                      ignoring: !_canScrollForward,
+                      child: AnimatedOpacity(
+                        opacity: _canScrollForward ? 1 : 0,
+                        duration: const Duration(milliseconds: 180),
+                        child: Center(
+                          child: _RailArrowButton(
+                            icon: Icons.chevron_right,
+                            tooltip: context.t('More categories'),
+                            onTap: _scrollForward,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Transparent at whichever edge still has chips beyond it.
+  Shader _edgeFadeShader(Rect bounds) {
+    final width = bounds.width;
+    if (width <= 0) {
+      return const LinearGradient(colors: [Colors.white, Colors.white])
+          .createShader(bounds);
+    }
+    final fade = (_fadeWidth / width).clamp(0.0, 0.4);
+    return LinearGradient(
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
+      colors: [
+        _canScrollBack ? Colors.transparent : Colors.white,
+        Colors.white,
+        Colors.white,
+        _canScrollForward ? Colors.transparent : Colors.white,
+      ],
+      stops: [0, fade * 0.6, 1 - fade, 1],
+    ).createShader(bounds);
+  }
+}
+
+/// The "View All" affordance in the category header. It is always a tinted
+/// pill, so it reads as a button at rest. While categories are still off
+/// screen a gloss band sweeps across it every 2.6s while the pill lifts,
+/// deepens and its arrow slides -- a slow cycle deliberately out of step with
+/// the rail arrow, so the two read as two separate invitations.
+class _ViewAllButton extends StatefulWidget {
+  const _ViewAllButton({
+    required this.label,
+    required this.animate,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool animate;
+  final VoidCallback onTap;
+
+  @override
+  State<_ViewAllButton> createState() => _ViewAllButtonState();
+}
+
+class _ViewAllButtonState extends State<_ViewAllButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  );
+
+  /// The sweep runs across the first 45% of the cycle; the rest is a rest
+  /// beat, so the button invites rather than flickers.
+  static const _sweepEnd = 0.45;
+
+  /// Rises and falls with the sweep and drives the lift, the tint and the
+  /// chevron.
+  late final Animation<double> _emphasis = TweenSequence<double>([
+    TweenSequenceItem(
+      tween: Tween<double>(
+        begin: 0,
+        end: 1,
+      ).chain(CurveTween(curve: Curves.easeOutCubic)),
+      weight: 18,
+    ),
+    TweenSequenceItem(
+      tween: Tween<double>(
+        begin: 1,
+        end: 0,
+      ).chain(CurveTween(curve: Curves.easeInCubic)),
+      weight: 27,
+    ),
+    TweenSequenceItem(tween: ConstantTween<double>(0), weight: 55),
+  ]).animate(_controller);
+
+  @override
+  void initState() {
+    super.initState();
+    _syncAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ViewAllButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.animate != oldWidget.animate) {
+      _syncAnimation();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncAnimation();
+  }
+
+  void _syncAnimation() {
+    // Customers who asked the platform for less motion get a plain button.
+    final allowed = widget.animate &&
+        !(MediaQuery.maybeDisableAnimationsOf(context) ?? false);
+    if (allowed) {
+      if (!_controller.isAnimating) {
+        _controller.repeat();
+      }
+    } else if (_controller.isAnimating) {
+      _controller
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const radius = BorderRadius.all(Radius.circular(16));
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final emphasis = _emphasis.value;
+        // Where the highlight band sits, from just off the left edge to just
+        // past the right one.
+        final sweep = (_controller.value / _sweepEnd).clamp(0.0, 1.0);
+        final showSweep =
+            _controller.isAnimating && _controller.value < _sweepEnd;
+        return Transform.scale(
+          scale: 1 + 0.05 * emphasis,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              color: Color.lerp(
+                _customerPrimary.withValues(alpha: 0.10),
+                _customerPrimary.withValues(alpha: 0.20),
+                emphasis,
+              ),
+              border: Border.all(
+                color: _customerPrimary.withValues(
+                  alpha: 0.22 + 0.38 * emphasis,
                 ),
-              );
-            },
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _customerPrimary.withValues(alpha: 0.18 * emphasis),
+                  blurRadius: 10 * emphasis,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: radius,
+              child: Stack(
+                children: [
+                  child!,
+                  if (showSweep)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              // A narrow gloss band travelling left to right.
+                              begin: Alignment(-2.2 + 3.6 * sweep, 0),
+                              end: Alignment(-1.4 + 3.6 * sweep, 0),
+                              colors: [
+                                Colors.white.withValues(alpha: 0),
+                                Colors.white.withValues(alpha: 0.75),
+                                Colors.white.withValues(alpha: 0),
+                              ],
+                              stops: const [0, 0.5, 1],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
         );
       },
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: radius,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 7, 8, 7),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: _customerPrimary,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(width: 3),
+                AnimatedBuilder(
+                  animation: _emphasis,
+                  builder: (context, icon) => Transform.translate(
+                    offset: Offset(3 * _emphasis.value, 0),
+                    child: icon,
+                  ),
+                  child: const Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 14,
+                    color: _customerPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The round chevron sitting on the faded edge of the category rail. It is
+/// static: the rail only fades it in while there are chips left to the right,
+/// and the "View All" pill carries the animated invitation.
+class _RailArrowButton extends StatelessWidget {
+  const _RailArrowButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: _customerSurface,
+        shape: const CircleBorder(side: BorderSide(color: _customerLine)),
+        elevation: 1,
+        shadowColor: Colors.black26,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 30,
+            height: 30,
+            child: Icon(icon, size: 18, color: _customerPrimary),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeCategoryChip extends StatelessWidget {
+  const _HomeCategoryChip({
+    required this.shop,
+    required this.selected,
+    required this.accent,
+    required this.closed,
+    required this.onTap,
+  });
+
+  final Shop shop;
+  final bool selected;
+  final Color accent;
+  final bool closed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      avatar: closed
+          ? Icon(
+              Icons.access_time,
+              size: 14,
+              color: selected ? Colors.white : _customerDanger,
+            )
+          : null,
+      label: Text(shop.shopName),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      labelStyle: TextStyle(
+        color: selected ? Colors.white : _customerInk,
+        fontWeight: FontWeight.w800,
+        fontSize: 12,
+      ),
+      selectedColor: accent,
+      backgroundColor: Colors.white,
+      side: BorderSide(
+        color: selected ? accent : _customerLine,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+    );
+  }
+}
+
+/// Every category in one scrollable sheet, so nothing depends on noticing the
+/// rail can be swiped.
+class _AllCategoriesSheet extends StatelessWidget {
+  const _AllCategoriesSheet({
+    required this.shops,
+    required this.selectedShopId,
+    required this.hoursSettings,
+  });
+
+  final List<Shop> shops;
+  final String? selectedShopId;
+  final ShopHoursSettings hoursSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    return SafeArea(
+      top: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: _customerLine,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      context.t('All categories'),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: _customerInk,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${shops.length}',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: _customerMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+                itemCount: shops.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 4),
+                itemBuilder: (context, index) {
+                  final shop = shops[index];
+                  final accent = _homeCategoryAccent(shop.shopName, index);
+                  final isSelected = shop.shopId == selectedShopId;
+                  final closed =
+                      !shop.effectiveHours(hoursSettings).isOpenAt(now);
+                  return ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: isSelected ? accent : Colors.transparent,
+                      ),
+                    ),
+                    tileColor: isSelected
+                        ? accent.withValues(alpha: 0.08)
+                        : Colors.transparent,
+                    leading: CircleAvatar(
+                      radius: 16,
+                      backgroundColor: accent.withValues(alpha: 0.14),
+                      child: Icon(
+                        Icons.storefront_outlined,
+                        size: 17,
+                        color: accent,
+                      ),
+                    ),
+                    title: Text(
+                      shop.shopName,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: _customerInk,
+                      ),
+                    ),
+                    subtitle: closed
+                        ? Text(
+                            context.t('Closed right now'),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: _customerDanger,
+                            ),
+                          )
+                        : null,
+                    trailing: isSelected
+                        ? Icon(Icons.check_circle, color: accent, size: 20)
+                        : const Icon(
+                            Icons.chevron_right,
+                            color: _customerMuted,
+                            size: 20,
+                          ),
+                    onTap: () => Navigator.of(context).pop(shop),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
 class _HomeActionGrid extends StatelessWidget {
-  const _HomeActionGrid({required this.actions});
+  const _HomeActionGrid({super.key, required this.actions});
 
   final List<_HomeActionSpec> actions;
 

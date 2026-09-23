@@ -6134,8 +6134,7 @@ class _AdminProductManagementScreenState
             final groups = matches.groupByShop();
             return CustomScrollView(
               physics: appRefreshScrollPhysics,
-              keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior.onDrag,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               slivers: [
                 SliverToBoxAdapter(
                   child: _AdminProductSearchBar(
@@ -6220,7 +6219,8 @@ class _AdminProductManagementScreenState
             // Keyed by product so filtering reuses surviving rows instead of
             // rebuilding every tile (and reloading its image) from scratch.
             key: ValueKey(product.productId),
-            padding: EdgeInsets.only(bottom: i == group.items.length - 1 ? 0 : 10),
+            padding:
+                EdgeInsets.only(bottom: i == group.items.length - 1 ? 0 : 10),
             child: _AdminReveal(
               index: revealIndex++,
               child: _AdminProductTile(
@@ -6414,8 +6414,7 @@ class _AdminProductCategoryHeader extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
@@ -6657,8 +6656,7 @@ class _AdminQuickPriceScreenState extends State<AdminQuickPriceScreen> {
             final groups = matches.groupByShop();
             return CustomScrollView(
               physics: appRefreshScrollPhysics,
-              keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior.onDrag,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               slivers: [
                 SliverToBoxAdapter(
                   child: Column(
@@ -7501,23 +7499,9 @@ class AdminShopManagementScreen extends StatelessWidget {
                 ),
               );
             }
-            return ListView.separated(
-              physics: appRefreshScrollPhysics,
-              padding: const EdgeInsets.fromLTRB(0, 16, 0, 96),
-              itemCount: shops.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final shop = shops[index];
-                return _AdminReveal(
-                  index: index,
-                  child: _AdminShopTile(
-                    shop: shop,
-                    onActiveChanged: (value) => appState.firestoreService
-                        .toggleShop(shop.shopId, value),
-                    onTap: () => _showShopDialog(context, shop: shop),
-                  ),
-                );
-              },
+            return _AdminShopReorderList(
+              shops: shops,
+              onEdit: (shop) => _showShopDialog(context, shop: shop),
             );
           },
         ),
@@ -7840,15 +7824,16 @@ class _ShopEditorDialogState extends State<_ShopEditorDialog> {
       isActive: shop?.isActive ?? true,
       createdAt: shop?.createdAt ?? DateTime.now(),
       allowedMethods: Shop.normalizeMethods(_allowedMethods),
+      // Keep the position the admin dragged this category to.
+      sortOrder: shop?.sortOrder,
       hoursOverride: _useCustomHours
           ? ShopHoursSettings(
               openingMinutes: _openingMinutes,
               closingMinutes: _closingMinutes,
               updatedAt: DateTime.now(),
               isTemporarilyClosed: _isTemporarilyClosed,
-              temporaryClosureReason: _isTemporarilyClosed
-                  ? _closureReason.text.trim()
-                  : '',
+              temporaryClosureReason:
+                  _isTemporarilyClosed ? _closureReason.text.trim() : '',
             )
           : null,
     );
@@ -7868,16 +7853,174 @@ class _ShopEditorDialogState extends State<_ShopEditorDialog> {
   }
 }
 
+/// The draggable category list. Customers see their category chips in
+/// exactly this order, so the drag handle is the one place the arrangement is
+/// decided.
+///
+/// The new order is shown immediately and written to Firestore in the
+/// background; the local copy is kept only until the stream echoes the same
+/// arrangement back, so a failed write self-corrects on the next snapshot.
+class _AdminShopReorderList extends StatefulWidget {
+  const _AdminShopReorderList({required this.shops, required this.onEdit});
+
+  final List<Shop> shops;
+  final ValueChanged<Shop> onEdit;
+
+  @override
+  State<_AdminShopReorderList> createState() => _AdminShopReorderListState();
+}
+
+class _AdminShopReorderListState extends State<_AdminShopReorderList> {
+  /// The order being shown while a write is in flight. Null means "just use
+  /// what the stream says".
+  List<Shop>? _pendingOrder;
+  bool _saving = false;
+
+  List<Shop> get _shops => _pendingOrder ?? widget.shops;
+
+  @override
+  void didUpdateWidget(covariant _AdminShopReorderList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final pending = _pendingOrder;
+    if (pending == null) {
+      return;
+    }
+    final incoming = widget.shops.map((shop) => shop.shopId).toList();
+    final shown = pending.map((shop) => shop.shopId).toList();
+    // Either the write landed (the ids now match) or categories were added or
+    // removed elsewhere -- both mean the stream is the better truth.
+    final settled = incoming.length != shown.length ||
+        !_saving ||
+        incoming.join() == shown.join();
+    if (settled) {
+      setState(() => _pendingOrder = null);
+    }
+  }
+
+  /// [newIndex] already accounts for the dragged row being lifted out of the
+  /// list, so it is used as given.
+  Future<void> _onReorder(int oldIndex, int newIndex) async {
+    final reordered = [..._shops];
+    final moved = reordered.removeAt(oldIndex);
+    reordered.insert(newIndex, moved);
+    setState(() {
+      _pendingOrder = reordered;
+      _saving = true;
+    });
+    final appState = context.read<AppState>();
+    try {
+      await appState.firestoreService.saveShopOrder(reordered);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _pendingOrder = null;
+        _saving = false;
+      });
+      showSnack(context, 'Could not save the category order.');
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() => _saving = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.read<AppState>();
+    final shops = _shops;
+    return ReorderableListView.builder(
+      physics: appRefreshScrollPhysics,
+      padding: const EdgeInsets.fromLTRB(0, 16, 0, 96),
+      itemCount: shops.length,
+      onReorderItem: _onReorder,
+      buildDefaultDragHandles: false,
+      proxyDecorator: (child, index, animation) => Material(
+        color: Colors.transparent,
+        elevation: 6,
+        shadowColor: Colors.black26,
+        borderRadius: BorderRadius.circular(14),
+        child: child,
+      ),
+      header: const Padding(
+        padding: EdgeInsets.only(bottom: 10),
+        child: _AdminHint(
+          icon: Icons.drag_indicator,
+          text: 'Drag the handle to set the order customers see on the home '
+              'screen.',
+        ),
+      ),
+      itemBuilder: (context, index) {
+        final shop = shops[index];
+        return Padding(
+          key: ValueKey('shop-${shop.shopId}'),
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _AdminShopTile(
+            shop: shop,
+            position: index,
+            onActiveChanged: (value) =>
+                appState.firestoreService.toggleShop(shop.shopId, value),
+            onTap: () => widget.onEdit(shop),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A one-line explainer above an admin list.
+class _AdminHint extends StatelessWidget {
+  const _AdminHint({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _adminBlue.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _adminBlue.withValues(alpha: 0.20)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: _adminBlue),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: _adminBlue,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AdminShopTile extends StatelessWidget {
   const _AdminShopTile({
     required this.shop,
     required this.onTap,
     required this.onActiveChanged,
+    this.position,
   });
 
   final Shop shop;
   final VoidCallback onTap;
   final ValueChanged<bool> onActiveChanged;
+
+  /// Index in the admin's ordering, used for the drag handle and the rank
+  /// badge. Null outside the reorderable list.
+  final int? position;
 
   @override
   Widget build(BuildContext context) {
@@ -7885,6 +8028,31 @@ class _AdminShopTile extends StatelessWidget {
       onTap: onTap,
       child: Row(
         children: [
+          if (position != null) ...[
+            ReorderableDragStartListener(
+              index: position!,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.drag_indicator,
+                    color: _adminMuted,
+                    size: 22,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${position! + 1}',
+                    style: const TextStyle(
+                      color: _adminMuted,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
           _AdminIconBadge(
             icon: Icons.category_outlined,
             color: shop.isActive ? _adminPrimary : _adminMuted,

@@ -200,6 +200,9 @@ const _tamil = <String, String>{
   'Cart': 'கார்ட்',
   'Items': 'பொருட்கள்',
   'Categories': 'வகைகள்',
+  'View All': 'அனைத்தையும் பார்',
+  'All categories': 'அனைத்து வகைகள்',
+  'More categories': 'மேலும் வகைகள்',
   'Pick the items you need.':
       'உங்களுக்கு தேவையான பொருட்களை தேர்வு செய்யுங்கள்.',
   'Photo list': 'புகைப்பட பட்டியல்',

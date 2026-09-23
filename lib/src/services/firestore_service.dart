@@ -255,7 +255,7 @@ class FirestoreService {
       final shops = snapshot.docs
           .map((doc) => Shop.fromMap(doc.data(), doc.id))
           .toList()
-        ..sort((a, b) => a.shopName.compareTo(b.shopName));
+        ..sort(Shop.compareForDisplay);
       return shops;
     });
   }
@@ -382,6 +382,20 @@ class FirestoreService {
       data['hoursOverride'] = FieldValue.delete();
     }
     return _shops.doc(shop.shopId).set(data, SetOptions(merge: true));
+  }
+
+  /// Persists the admin's drag order. [shops] is the full list in its new
+  /// order; every category is stamped with its index so the arrangement is
+  /// unambiguous even for categories that had never been dragged.
+  Future<void> saveShopOrder(List<Shop> shops) async {
+    if (!_firebaseAvailable || shops.isEmpty) {
+      return;
+    }
+    final batch = _db.batch();
+    for (var index = 0; index < shops.length; index++) {
+      batch.update(_shops.doc(shops[index].shopId), {'sortOrder': index});
+    }
+    await batch.commit();
   }
 
   Future<void> toggleShop(String shopId, bool isActive) {
