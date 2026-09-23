@@ -386,6 +386,13 @@ const _tamil = <String, String>{
   'Track order': 'ஆர்டரை கண்காணி',
   'Back home': 'முகப்புக்கு திரும்பு',
   'Order history': 'உங்கள் ஆர்டர்கள்',
+  'Preferences': 'விருப்பங்கள்',
+  'Personal details': 'தனிப்பட்ட விவரங்கள்',
+  'Keep your delivery details up to date.':
+      'உங்கள் டெலிவரி விவரங்களை புதுப்பித்து வைத்திருங்கள்.',
+  'Member since {date}': '{date} முதல் உறுப்பினர்',
+  'Sign out of this device.': 'இந்த சாதனத்திலிருந்து வெளியேறு.',
+  'App language': 'செயலி மொழி',
   'No orders yet': 'இன்னும் ஆர்டர்கள் இல்லை',
   'Your order history will appear here.':
       'உங்கள் ஆர்டர் வரலாறு இங்கே தோன்றும்.',

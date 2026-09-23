@@ -12283,8 +12283,7 @@ class _SupportScreenState extends State<SupportScreen> {
                               topic: topic,
                               isSelected:
                                   _subject.text == context.t(topic.label),
-                              onTap: () =>
-                                  _subject.text = context.t(topic.label),
+                              onTap: () => _selectTopic(topic),
                             ),
                         ],
                       ),
@@ -12368,6 +12367,16 @@ class _SupportScreenState extends State<SupportScreen> {
           );
         },
       ),
+    );
+  }
+
+  void _selectTopic(_SupportTopic topic) {
+    HapticFeedback.selectionClick();
+    // tNow, not t: t listens to Provider, which throws outside build.
+    final label = context.tNow(topic.label);
+    _subject.value = TextEditingValue(
+      text: label,
+      selection: TextSelection.collapsed(offset: label.length),
     );
   }
 
@@ -13191,22 +13200,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 128),
           children: [
             _ProfileHeader(profile: profile),
-            const SizedBox(height: 16),
+            const _ProfileSectionLabel('Preferences'),
             _LanguageSettingsCard(
               languageCode: appState.effectiveLanguageCode,
               isSaving: _isChangingLanguage,
               onToggle: _toggleLanguage,
             ),
-            const SizedBox(height: 16),
+            const _ProfileSectionLabel('Personal details'),
             _CustomerCard(
+              padding: const EdgeInsets.all(16),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  const _ProfileCardTitle(
+                    icon: Icons.badge_outlined,
+                    title: 'Personal details',
+                    subtitle: 'Keep your delivery details up to date.',
+                  ),
+                  const SizedBox(height: 16),
                   AppTextField(
                     controller: _name,
                     label: 'Full name',
                     validator: (value) =>
                         Validators.requiredText(value, 'Full name'),
-                    prefixIcon: Icons.person,
+                    prefixIcon: Icons.person_outline_rounded,
                   ),
                   const SizedBox(height: 12),
                   AppTextField(
@@ -13215,105 +13232,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     validator: (value) =>
                         Validators.requiredText(value, 'Delivery address'),
                     maxLines: 3,
-                    prefixIcon: Icons.home,
+                    prefixIcon: Icons.location_on_outlined,
+                  ),
+                  const SizedBox(height: 14),
+                  PrimaryActionButton(
+                    label: 'Save profile',
+                    icon: Icons.check_rounded,
+                    isLoading: _isSaving,
+                    onPressed: _save,
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 18),
-            PrimaryActionButton(
-              label: 'Save profile',
-              icon: Icons.save,
-              isLoading: _isSaving,
-              onPressed: _save,
-            ),
-            const SizedBox(height: 16),
+            const _ProfileSectionLabel('Follow us'),
             _CustomerCard(
+              padding: const EdgeInsets.symmetric(vertical: 4),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    context.t('Follow us'),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(
-                      Icons.chat_rounded,
-                      color: Color(0xFF25D366),
-                    ),
-                    title: Text(context.t('Join our WhatsApp channel')),
-                    subtitle: Text(
-                      context.t('Get offers and updates on WhatsApp.'),
-                    ),
-                    trailing: const Icon(Icons.open_in_new),
+                  _ProfileActionRow(
+                    icon: Icons.chat_rounded,
+                    color: const Color(0xFF25D366),
+                    title: 'Join our WhatsApp channel',
+                    subtitle: 'Get offers and updates on WhatsApp.',
+                    trailingIcon: Icons.open_in_new_rounded,
                     onTap: () => _openUrl(AppConstants.whatsappChannelUrl),
                   ),
-                  const Divider(),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(
-                      Icons.facebook,
-                      color: Color(0xFF1877F2),
-                    ),
-                    title: Text(context.t('Like our Facebook page')),
-                    subtitle: Text(
-                      context.t('Follow us on Facebook for the latest news.'),
-                    ),
-                    trailing: const Icon(Icons.open_in_new),
+                  const _ProfileRowDivider(),
+                  _ProfileActionRow(
+                    icon: Icons.facebook,
+                    color: const Color(0xFF1877F2),
+                    title: 'Like our Facebook page',
+                    subtitle: 'Follow us on Facebook for the latest news.',
+                    trailingIcon: Icons.open_in_new_rounded,
                     onTap: () => _openUrl(AppConstants.facebookPageUrl),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const _ProfileSectionLabel('Account'),
             _CustomerCard(
+              padding: const EdgeInsets.symmetric(vertical: 4),
               child: Column(
                 children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(
-                      Icons.privacy_tip_outlined,
-                      color: _customerPrimary,
-                    ),
-                    title: Text(context.t('Privacy policy')),
-                    subtitle: Text(
-                      context.t(
+                  _ProfileActionRow(
+                    icon: Icons.privacy_tip_outlined,
+                    color: _customerPrimary,
+                    title: 'Privacy policy',
+                    subtitle:
                         'See how account, order, and image data is handled.',
-                      ),
-                    ),
-                    trailing: const Icon(Icons.open_in_new),
+                    trailingIcon: Icons.open_in_new_rounded,
                     onTap: () => _openUrl(AppConstants.privacyPolicyUrl),
                   ),
-                  const Divider(),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(
-                      Icons.delete_forever_outlined,
-                      color: _customerDanger,
-                    ),
-                    title: Text(
-                      context.t('Delete account'),
-                      style: const TextStyle(color: _customerDanger),
-                    ),
-                    subtitle: Text(
-                      context.t(
+                  const _ProfileRowDivider(),
+                  _ProfileActionRow(
+                    icon: Icons.logout_rounded,
+                    color: _customerBlue,
+                    title: 'Logout',
+                    subtitle: 'Sign out of this device.',
+                    onTap: _logout,
+                  ),
+                  const _ProfileRowDivider(),
+                  _ProfileActionRow(
+                    icon: Icons.delete_forever_outlined,
+                    color: _customerDanger,
+                    title: 'Delete account',
+                    subtitle:
                         'Permanently remove your account and personal data.',
-                      ),
-                    ),
+                    isDestructive: true,
                     onTap: _deleteAccount,
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: _logout,
-              icon: const Icon(Icons.logout),
-              label: Text(context.t('Logout')),
             ),
           ],
         ),
@@ -13519,64 +13508,305 @@ class _LanguageSettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final normalized = AppLanguageCodes.normalize(languageCode);
-    final isTamil = normalized == AppLanguageCodes.tamil;
+    final isTamil =
+        AppLanguageCodes.normalize(languageCode) == AppLanguageCodes.tamil;
     return _CustomerCard(
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: _customerPrimaryLight,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.translate, color: _customerPrimary),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.t('Language / Translate'),
-                      style: const TextStyle(
-                        color: _customerInk,
-                        fontWeight: FontWeight.w900,
+          const _ProfileCardTitle(
+            icon: Icons.translate_rounded,
+            title: 'Language / Translate',
+            subtitle: 'App language',
+          ),
+          const SizedBox(height: 14),
+          Container(
+            height: 46,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: _customerBackground,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _customerLine),
+            ),
+            child: Stack(
+              children: [
+                AnimatedAlign(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  alignment:
+                      isTamil ? Alignment.centerRight : Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: 0.5,
+                    heightFactor: 1,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: _customerPrimary,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _customerPrimary.withValues(alpha: 0.25),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${context.t('Current language')}: ${AppLanguageCodes.nativeName(normalized)}',
-                      style: const TextStyle(
-                        color: _customerMuted,
-                        fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Row(
+                  children: [
+                    _LanguageSegment(
+                      label: AppLanguageCodes.nativeName(
+                        AppLanguageCodes.english,
                       ),
+                      isSelected: !isTamil,
+                      isLoading: isSaving && isTamil,
+                      onTap: isSaving || !isTamil ? null : onToggle,
+                    ),
+                    _LanguageSegment(
+                      label: AppLanguageCodes.nativeName(
+                        AppLanguageCodes.tamil,
+                      ),
+                      isSelected: isTamil,
+                      isLoading: isSaving && !isTamil,
+                      onTap: isSaving || isTamil ? null : onToggle,
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: isSaving ? null : onToggle,
-            icon: isSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.swap_horiz),
-            label: Text(
-              context.t(isTamil ? 'Switch to English' : 'Switch to Tamil'),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _LanguageSegment extends StatelessWidget {
+  const _LanguageSegment({
+    required this.label,
+    required this.isSelected,
+    required this.isLoading,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final bool isLoading;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Center(
+            child: isLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: _customerPrimary,
+                    ),
+                  )
+                : AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 200),
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : _customerMuted,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isSelected) ...[
+                          const Icon(
+                            Icons.check_rounded,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 5),
+                        ],
+                        Text(label),
+                      ],
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileSectionLabel extends StatelessWidget {
+  const _ProfileSectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 22, 4, 8),
+      child: Text(
+        context.t(label).toUpperCase(),
+        style: const TextStyle(
+          color: _customerMuted,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileCardTitle extends StatelessWidget {
+  const _ProfileCardTitle({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: _customerPrimaryLight,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: _customerPrimary, size: 21),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.t(title),
+                style: const TextStyle(
+                  color: _customerInk,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                context.t(subtitle),
+                style: const TextStyle(
+                  color: _customerMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileActionRow extends StatelessWidget {
+  const _ProfileActionRow({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.trailingIcon = Icons.chevron_right_rounded,
+    this.isDestructive = false,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final IconData trailingIcon;
+  final bool isDestructive;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 21),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.t(title),
+                    style: TextStyle(
+                      color: isDestructive ? _customerDanger : _customerInk,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    context.t(subtitle),
+                    style: const TextStyle(
+                      color: _customerMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              trailingIcon,
+              size: trailingIcon == Icons.chevron_right_rounded ? 22 : 18,
+              color: isDestructive
+                  ? _customerDanger.withValues(alpha: 0.7)
+                  : _customerMuted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileRowDivider extends StatelessWidget {
+  const _ProfileRowDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Divider(
+      height: 1,
+      thickness: 1,
+      indent: 68,
+      endIndent: 16,
+      color: _customerLine,
     );
   }
 }
@@ -13588,10 +13818,10 @@ class _ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initials = profile.fullName.trim().isEmpty
+    final name = profile.fullName.trim();
+    final initials = name.isEmpty
         ? 'IG'
-        : profile.fullName
-            .trim()
+        : name
             .split(RegExp(r'\s+'))
             .take(2)
             .map((part) => part.substring(0, 1).toUpperCase())
@@ -13599,78 +13829,166 @@ class _ProfileHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(18),
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF163D2C),
-            Color(0xFF176B45),
-            Color(0xFFE86F4A),
-          ],
+          colors: [Color(0xFF1C8053), _customerPrimary, Color(0xFF0F5134)],
         ),
         boxShadow: [
           BoxShadow(
-            color: _customerPrimary.withValues(alpha: 0.2),
-            blurRadius: 28,
-            offset: const Offset(0, 16),
+            color: _customerPrimary.withValues(alpha: 0.28),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
-      child: Row(
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          Container(
-            width: 68,
-            height: 68,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-            ),
-            child: Center(
-              child: Text(
-                initials,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                ),
+          Positioned(
+            right: -24,
+            top: -30,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.06),
               ),
             ),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  profile.fullName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0,
-                      ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  profile.phone,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.84),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  context.t(profile.role),
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.72),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+          Positioned(
+            right: 40,
+            bottom: -40,
+            child: Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.05),
+              ),
             ),
+          ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    width: 2,
+                  ),
+                ),
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                  ),
+                  child: Center(
+                    child: Text(
+                      initials,
+                      style: const TextStyle(
+                        color: _customerPrimary,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name.isEmpty ? profile.phone : name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.phone_outlined,
+                          size: 14,
+                          color: Colors.white.withValues(alpha: 0.8),
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            profile.phone,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.88),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        if (profile.isPhoneVerified) ...[
+                          const SizedBox(width: 6),
+                          const Icon(
+                            Icons.verified_rounded,
+                            size: 15,
+                            color: Colors.white,
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.18),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.calendar_today_outlined,
+                            size: 12,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            context.t(
+                              'Member since {date}',
+                              values: {
+                                'date':
+                                    DateFormat.yMMM().format(profile.createdAt),
+                              },
+                            ),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
