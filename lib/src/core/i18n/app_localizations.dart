@@ -393,6 +393,11 @@ const _tamil = <String, String>{
   'Track progress and review previous baskets':
       'ஆர்டர் நிலையும் பழைய ஆர்டர்களும் இங்கே பார்க்கலாம்',
   'Order {id}': 'ஆர்டர் {id}',
+  'Total spent': 'மொத்த செலவு',
+  '1 item': '1 பொருள்',
+  '{count} items': '{count} பொருட்கள்',
+  'Manual list': 'கைமுறை பட்டியல்',
+  'Order details': 'ஆர்டர் விவரங்கள்',
   '{count} orders': '{count} ஆர்டர்கள்',
   '{count} of {total} orders': '{total} ஆர்டர்களில் {count}',
   'All': 'அனைத்தும்',
@@ -461,6 +466,18 @@ const _tamil = <String, String>{
   'Message': 'செய்தி',
   'Create ticket': 'டிக்கெட் உருவாக்கு',
   'Your tickets': 'உங்கள் டிக்கெட்டுகள்',
+  'How can we help?': 'நாங்கள் எப்படி உதவலாம்?',
+  'Send us a message and our team will reply right here.':
+      'எங்களுக்கு செய்தி அனுப்புங்கள், எங்கள் குழு இங்கேயே பதில் அளிக்கும்.',
+  'New ticket': 'புதிய டிக்கெட்',
+  'Pick a topic or write your own subject.':
+      'ஒரு தலைப்பைத் தேர்ந்தெடுக்கவும் அல்லது உங்கள் சொந்த தலைப்பை எழுதவும்.',
+  'Order issue': 'ஆர்டர் பிரச்சினை',
+  'Delivery': 'டெலிவரி',
+  'Account': 'கணக்கு',
+  '{count} open': '{count} திறந்தவை',
+  '{count} total': 'மொத்தம் {count}',
+  'Updated {date}': 'புதுப்பிக்கப்பட்டது {date}',
   'Continue a previous conversation': 'முந்தைய உரையாடலை தொடருங்கள்',
   'No support tickets': 'ஆதரவு டிக்கெட்டுகள் இல்லை',
   'Create a ticket when you need help with an order.':

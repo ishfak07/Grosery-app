@@ -8486,14 +8486,24 @@ class OrderHistoryScreen extends StatefulWidget {
 class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   var _selectedFilter = _OrderHistoryFilters.all;
 
+  // Created once so filter taps (setState) don't resubscribe the stream and
+  // flash the loading skeleton over the whole screen.
+  late final Stream<List<OrderModel>> _ordersStream;
+
+  @override
+  void initState() {
+    super.initState();
+    final appState = context.read<AppState>();
+    _ordersStream =
+        appState.firestoreService.watchOrdersForUser(appState.profile!.uid);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final appState = context.read<AppState>();
     return _CustomerScaffold(
       title: 'Order history',
       body: StreamBuilder<List<OrderModel>>(
-        stream:
-            appState.firestoreService.watchOrdersForUser(appState.profile!.uid),
+        stream: _ordersStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const _ListSkeleton();
@@ -8511,11 +8521,11 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
           return _CustomerScrollView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 128),
             children: [
-              _OrderHistoryHeading(
+              _OrderHistorySummary(
                 filter: _selectedFilter,
-                shownCount: _selectedFilter.countIn(orders),
-                totalCount: orders.length,
+                orders: orders,
               ),
+              const SizedBox(height: 14),
               _OrderHistoryFilterBar(
                 selected: _selectedFilter,
                 orders: orders,
@@ -8523,8 +8533,34 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                   setState(() => _selectedFilter = filter);
                 },
               ),
-              const SizedBox(height: 14),
-              ..._buildOrderList(_selectedFilter.apply(orders)),
+              const SizedBox(height: 6),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 280),
+                reverseDuration: const Duration(milliseconds: 140),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                layoutBuilder: (current, previous) => Stack(
+                  alignment: Alignment.topCenter,
+                  fit: StackFit.passthrough,
+                  children: [...previous, if (current != null) current],
+                ),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: AnimatedBuilder(
+                    animation: animation,
+                    child: child,
+                    builder: (context, child) => Transform.translate(
+                      offset: Offset(0, (1 - animation.value) * 18),
+                      child: child,
+                    ),
+                  ),
+                ),
+                child: Column(
+                  key: ValueKey(_selectedFilter.id),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: _buildOrderList(_selectedFilter.apply(orders)),
+                ),
+              ),
             ],
           );
         },
@@ -8535,6 +8571,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
   List<Widget> _buildOrderList(List<OrderModel> orders) {
     if (orders.isEmpty) {
       return [
+        const SizedBox(height: 12),
         EmptyState(
           icon: _selectedFilter.emptyIcon,
           title: _selectedFilter.emptyTitle,
@@ -8543,15 +8580,51 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       ];
     }
 
-    return [
-      for (var index = 0; index < orders.length; index++) ...[
-        _FadeSlideIn(
-          index: index,
-          child: OrderTile(order: orders[index]),
-        ),
-        if (index != orders.length - 1) const SizedBox(height: 12),
-      ],
-    ];
+    final monthFormat = DateFormat.yMMMM();
+    final widgets = <Widget>[];
+    String? currentMonth;
+    for (var index = 0; index < orders.length; index++) {
+      final order = orders[index];
+      final month = monthFormat.format(order.createdAt);
+      if (month != currentMonth) {
+        currentMonth = month;
+        widgets.add(_OrderHistoryMonthLabel(label: month));
+      } else {
+        widgets.add(const SizedBox(height: 12));
+      }
+      widgets.add(RepaintBoundary(child: OrderTile(order: order)));
+    }
+    return widgets;
+  }
+}
+
+class _OrderHistoryMonthLabel extends StatelessWidget {
+  const _OrderHistoryMonthLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 16, 2, 10),
+      child: Row(
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              color: _customerMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Divider(height: 1, thickness: 1, color: _customerLine),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -8672,75 +8745,208 @@ class _OrderHistoryFilters {
   ];
 }
 
-class _OrderHistoryHeading extends StatelessWidget {
-  const _OrderHistoryHeading({
+class _OrderHistorySummary extends StatelessWidget {
+  const _OrderHistorySummary({
     required this.filter,
-    required this.shownCount,
-    required this.totalCount,
+    required this.orders,
   });
 
   final _OrderHistoryFilter filter;
-  final int shownCount;
-  final int totalCount;
+  final List<OrderModel> orders;
 
   @override
   Widget build(BuildContext context) {
-    final isShowingAll = filter.id == _OrderHistoryFilters.all.id;
-    final countLabel = isShowingAll
-        ? context.t('{count} orders', values: {'count': totalCount})
-        : context.t(
-            '{count} of {total} orders',
-            values: {'count': shownCount, 'total': totalCount},
-          );
+    final activeCount = _OrderHistoryFilters.active.countIn(orders);
+    final deliveredCount = _OrderHistoryFilters.delivered.countIn(orders);
+    final spent = orders
+        .where((order) => order.orderStatus == 'Delivered')
+        .fold<double>(0, (sum, order) => sum + order.totalAmount);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1C8053), _customerPrimary, Color(0xFF0F5134)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: _customerPrimary.withValues(alpha: 0.28),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.t(filter.heading),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: _customerInk,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0,
-                      ),
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  context.t(filter.subtitle),
-                  style: const TextStyle(
-                    color: _customerMuted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 240),
+                  transitionBuilder: (child, animation) => ScaleTransition(
+                    scale: animation,
+                    child: FadeTransition(opacity: animation, child: child),
+                  ),
+                  child: Icon(
+                    filter.icon,
+                    key: ValueKey(filter.id),
+                    color: Colors.white,
+                    size: 21,
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 240),
+                  layoutBuilder: (current, previous) => Stack(
+                    alignment: Alignment.centerLeft,
+                    children: [...previous, if (current != null) current],
+                  ),
+                  child: Column(
+                    key: ValueKey(filter.id),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.t(filter.heading),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        context.t(filter.subtitle),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.78),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
+          const SizedBox(height: 14),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
-              color: _customerPrimaryLight,
-              border: Border.all(color: _customerLine),
-              borderRadius: BorderRadius.circular(20),
+              color: Colors.white.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Text(
-              countLabel,
-              style: const TextStyle(
-                color: _customerPrimary,
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
+            child: IntrinsicHeight(
+              child: Row(
+                children: [
+                  _OrderHistoryStat(
+                    value: '${orders.length}',
+                    label: context.t('Orders'),
+                  ),
+                  const _OrderHistoryStatDivider(),
+                  _OrderHistoryStat(
+                    value: '$activeCount',
+                    label: context.t('Active'),
+                  ),
+                  const _OrderHistoryStatDivider(),
+                  _OrderHistoryStat(
+                    value: '$deliveredCount',
+                    label: context.t('Delivered'),
+                  ),
+                  const _OrderHistoryStatDivider(),
+                  _OrderHistoryStat(
+                    value: spent.money,
+                    label: context.t('Total spent'),
+                    flex: 2,
+                  ),
+                ],
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _OrderHistoryStat extends StatelessWidget {
+  const _OrderHistoryStat({
+    required this.value,
+    required this.label,
+    this.flex = 1,
+  });
+
+  final String value;
+  final String label;
+  final int flex;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                maxLines: 1,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.75),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OrderHistoryStatDivider extends StatelessWidget {
+  const _OrderHistoryStatDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return VerticalDivider(
+      width: 1,
+      thickness: 1,
+      indent: 4,
+      endIndent: 4,
+      color: Colors.white.withValues(alpha: 0.2),
     );
   }
 }
@@ -8759,40 +8965,86 @@ class _OrderHistoryFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 48,
+      height: 42,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
         itemCount: _OrderHistoryFilters.values.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final filter = _OrderHistoryFilters.values[index];
           final isSelected = selected.id == filter.id;
-          final accent = isSelected ? _customerPrimary : _customerMuted;
-          return ChoiceChip(
-            avatar: Icon(
-              isSelected ? Icons.check : filter.icon,
-              size: 17,
-              color: isSelected ? Colors.white : accent,
-            ),
-            label: Text(
-              '${context.t(filter.label)} (${filter.countIn(orders)})',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            selected: isSelected,
-            onSelected: (_) => onSelected(filter),
-            labelStyle: TextStyle(
-              color: isSelected ? Colors.white : _customerInk,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
-            selectedColor: _customerPrimary,
-            backgroundColor: Colors.white,
-            side: BorderSide(
-              color: isSelected ? _customerPrimary : _customerLine,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+          final count = filter.countIn(orders);
+          final highlight = !isSelected &&
+              filter.id == _OrderHistoryFilters.attention.id &&
+              count > 0;
+          final iconColor = isSelected
+              ? Colors.white
+              : highlight
+                  ? _customerWarning
+                  : _customerMuted;
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => onSelected(filter),
+              borderRadius: BorderRadius.circular(21),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.fromLTRB(12, 0, 6, 0),
+                decoration: BoxDecoration(
+                  color: isSelected ? _customerInk : _customerSurface,
+                  borderRadius: BorderRadius.circular(21),
+                  border: Border.all(
+                    color: isSelected
+                        ? _customerInk
+                        : highlight
+                            ? _customerWarning.withValues(alpha: 0.45)
+                            : _customerLine,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(filter.icon, size: 16, color: iconColor),
+                    const SizedBox(width: 6),
+                    Text(
+                      context.t(filter.label),
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : _customerInk,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      constraints: const BoxConstraints(minWidth: 24),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Colors.white.withValues(alpha: 0.18)
+                            : highlight
+                                ? _customerWarning.withValues(alpha: 0.14)
+                                : _customerBackground,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '$count',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: iconColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           );
         },
@@ -8809,141 +9061,264 @@ class OrderTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _statusAccent(order.orderStatus);
+    final shortId = order.orderId.length <= 8
+        ? order.orderId
+        : order.orderId.substring(0, 8);
+    final reason = _orderTileReason(context, order);
+
     return _CustomerCard(
+      padding: EdgeInsets.zero,
       onTap: () => Navigator.of(context).push(
         _CustomerPageRoute(
           builder: (_) => OrderTrackingScreen(orderId: order.orderId),
         ),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final details = _OrderTileDetails(order: order);
-          final status = ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: constraints.maxWidth < 380
-                  ? constraints.maxWidth - 64
-                  : constraints.maxWidth * 0.42,
-            ),
-            child: Align(
-              alignment: constraints.maxWidth < 380
-                  ? Alignment.centerLeft
-                  : Alignment.centerRight,
-              child: StatusChip(status: order.orderStatus),
-            ),
-          );
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(Icons.receipt_long_outlined, color: color),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: constraints.maxWidth < 380
-                    ? Column(
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: Container(width: 4, color: color),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        _orderStatusIcon(order.orderStatus),
+                        color: color,
+                        size: 21,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          details,
-                          const SizedBox(height: 10),
-                          status,
-                        ],
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: details),
-                          const SizedBox(width: 10),
-                          status,
+                          Text(
+                            context.t(
+                              'Order {id}',
+                              values: {'id': '#$shortId'},
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _customerInk,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.schedule_rounded,
+                                size: 13,
+                                color: _customerMuted,
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  DateFormat.MMMd()
+                                      .add_jm()
+                                      .format(order.createdAt),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: _customerMuted,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
-              ),
-            ],
-          );
-        },
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: StatusChip(status: order.orderStatus),
+                      ),
+                    ),
+                  ],
+                ),
+                if (reason.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 14, color: color),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            reason,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                const Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: _customerLine,
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.shopping_basket_outlined,
+                      size: 16,
+                      color: _customerMuted,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _orderTileSummary(context, order),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _customerMuted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (order.hasDeliveryReview) ...[
+                            const SizedBox(height: 3),
+                            Row(
+                              children: [
+                                for (var star = 1; star <= 5; star++)
+                                  Icon(
+                                    star <= order.deliveryRating
+                                        ? Icons.star_rounded
+                                        : Icons.star_outline_rounded,
+                                    color: _customerGold,
+                                    size: 14,
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      order.totalAmount.money,
+                      maxLines: 1,
+                      style: const TextStyle(
+                        color: _customerInk,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: _customerMuted,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _OrderTileDetails extends StatelessWidget {
-  const _OrderTileDetails({required this.order});
+String _orderTileReason(BuildContext context, OrderModel order) {
+  switch (order.orderStatus) {
+    case 'Rejected':
+      return order.rejectionReason.trim();
+    case 'Cancelled':
+      final code = order.cancellationReason.trim();
+      return code.isEmpty ? '' : _cancellationReasonMessage(context, code);
+    default:
+      return '';
+  }
+}
 
-  final OrderModel order;
+String _orderTileSummary(BuildContext context, OrderModel order) {
+  final parts = <String>[];
+  final itemCount =
+      order.items.fold<int>(0, (sum, item) => sum + item.quantity);
+  if (itemCount == 1) {
+    parts.add(context.t('1 item'));
+  } else if (itemCount > 1) {
+    parts.add(context.t('{count} items', values: {'count': itemCount}));
+  }
+  if (order.photoLists.isNotEmpty || order.uploadedImageUrl.isNotEmpty) {
+    parts.add(context.t('Photo list'));
+  }
+  if (order.manualLists.isNotEmpty || order.manualListText.trim().isNotEmpty) {
+    parts.add(context.t('Manual list'));
+  }
+  if (parts.isEmpty) {
+    return context.t('Order details');
+  }
+  return parts.join(' · ');
+}
 
-  @override
-  Widget build(BuildContext context) {
-    final shortId = order.orderId.length <= 8
-        ? order.orderId
-        : order.orderId.substring(0, 8);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          context.t(
-            'Order {id}',
-            values: {'id': shortId},
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: _customerInk,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          DateFormat.yMMMd().add_jm().format(order.createdAt),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: _customerMuted,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          order.totalAmount.money,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: _customerPrimary,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        if (order.hasDeliveryReview) ...[
-          const SizedBox(height: 5),
-          Row(
-            children: [
-              const Icon(Icons.star, color: _customerGold, size: 16),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  context.t(
-                    '{rating}/5 delivery rating',
-                    values: {'rating': order.deliveryRating},
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _customerMuted,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ],
-    );
+IconData _orderStatusIcon(String status) {
+  switch (status) {
+    case 'Delivered':
+      return Icons.check_circle_outline_rounded;
+    case 'Cancelled':
+    case 'Rejected':
+      return Icons.cancel_outlined;
+    case 'Item Unavailable':
+      return Icons.remove_shopping_cart_outlined;
+    case 'Need Clarification':
+      return Icons.help_outline_rounded;
+    case 'Bill Updated':
+      return Icons.receipt_long_outlined;
+    case 'Pending':
+      return Icons.hourglass_top_rounded;
+    case 'Accepted':
+      return Icons.thumb_up_alt_outlined;
+    case 'Shopping Started':
+      return Icons.shopping_cart_outlined;
+    case 'Out for Delivery':
+      return Icons.local_shipping_outlined;
+    default:
+      return Icons.receipt_long_outlined;
   }
 }
 
@@ -11817,11 +12192,15 @@ class _SupportScreenState extends State<SupportScreen> {
   final _subject = TextEditingController();
   final _message = TextEditingController();
   var _isCreating = false;
+  late final Stream<List<SupportTicket>> _ticketsStream;
 
   @override
   void initState() {
     super.initState();
     _subject.text = widget.initialSubject ?? '';
+    final appState = context.read<AppState>();
+    _ticketsStream =
+        appState.firestoreService.watchTickets(userId: appState.profile!.uid);
   }
 
   @override
@@ -11833,130 +12212,161 @@ class _SupportScreenState extends State<SupportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final appState = context.read<AppState>();
-    final profile = appState.profile!;
     return _CustomerScaffold(
       title: 'Support',
-      body: _CustomerScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 128),
-        children: [
-          _CustomerCard(
-            child: Column(
-              children: [
-                AppTextField(
-                  controller: _subject,
-                  label: 'Subject',
-                  prefixIcon: Icons.subject,
-                ),
-                const SizedBox(height: 10),
-                AppTextField(
-                  controller: _message,
-                  label: 'Message',
-                  maxLines: 3,
-                  prefixIcon: Icons.message,
-                ),
-                const SizedBox(height: 12),
-                PrimaryActionButton(
-                  label: 'Create ticket',
-                  icon: Icons.add_comment,
-                  isLoading: _isCreating,
-                  onPressed: _createTicket,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          const _CustomerSectionHeader(
-            title: 'Your tickets',
-            subtitle: 'Continue a previous conversation',
-          ),
-          StreamBuilder<List<SupportTicket>>(
-            stream: appState.firestoreService.watchTickets(userId: profile.uid),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Column(
+      body: StreamBuilder<List<SupportTicket>>(
+        stream: _ticketsStream,
+        builder: (context, snapshot) {
+          final isLoading = snapshot.connectionState == ConnectionState.waiting;
+          final tickets = snapshot.data ?? const <SupportTicket>[];
+          final openCount =
+              tickets.where((ticket) => ticket.status != 'closed').length;
+          return _CustomerScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 128),
+            children: [
+              _SupportHero(
+                openCount: openCount,
+                totalCount: tickets.length,
+              ),
+              const SizedBox(height: 16),
+              _CustomerCard(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _ShimmerBox(width: double.infinity, height: 86),
-                    SizedBox(height: 12),
-                    _ShimmerBox(width: double.infinity, height: 86),
-                  ],
-                );
-              }
-              final tickets = snapshot.data ?? const <SupportTicket>[];
-              if (tickets.isEmpty) {
-                return const EmptyState(
-                  icon: Icons.support_agent,
-                  title: 'No support tickets',
-                  message: 'Create a ticket when you need help with an order.',
-                );
-              }
-              return Column(
-                children: [
-                  for (var index = 0; index < tickets.length; index++) ...[
-                    _FadeSlideIn(
-                      index: index,
-                      child: _CustomerCard(
-                        onTap: () => Navigator.of(context).push(
-                          _CustomerPageRoute(
-                            builder: (_) =>
-                                SupportThreadScreen(ticket: tickets[index]),
+                    Row(
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: _customerPrimaryLight,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.edit_note_rounded,
+                            color: _customerPrimary,
+                            size: 20,
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                color: _statusAccent(tickets[index].status)
-                                    .withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                Icons.support_agent,
-                                color: _statusAccent(tickets[index].status),
-                              ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            context.t('New ticket'),
+                            style: const TextStyle(
+                              color: _customerInk,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    tickets[index].subject,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: _customerInk,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    context.t(tickets[index].status),
-                                    style: const TextStyle(
-                                      color: _customerMuted,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      context.t('Pick a topic or write your own subject.'),
+                      style: const TextStyle(
+                        color: _customerMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ListenableBuilder(
+                      listenable: _subject,
+                      builder: (context, _) => Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final topic in _supportTopics)
+                            _SupportTopicChip(
+                              topic: topic,
+                              isSelected:
+                                  _subject.text == context.t(topic.label),
+                              onTap: () =>
+                                  _subject.text = context.t(topic.label),
                             ),
-                            const Icon(
-                              Icons.chevron_right,
-                              color: _customerMuted,
-                            ),
-                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    AppTextField(
+                      controller: _subject,
+                      label: 'Subject',
+                      prefixIcon: Icons.subject,
+                    ),
+                    const SizedBox(height: 10),
+                    AppTextField(
+                      controller: _message,
+                      label: 'Message',
+                      maxLines: 4,
+                      prefixIcon: Icons.chat_bubble_outline_rounded,
+                    ),
+                    const SizedBox(height: 14),
+                    PrimaryActionButton(
+                      label: 'Create ticket',
+                      icon: Icons.send_rounded,
+                      isLoading: _isCreating,
+                      onPressed: _createTicket,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 22),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Expanded(
+                    child: _CustomerSectionHeader(
+                      title: 'Your tickets',
+                      subtitle: 'Continue a previous conversation',
+                    ),
+                  ),
+                  if (tickets.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8, bottom: 12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _customerPrimaryLight,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${tickets.length}',
+                          style: const TextStyle(
+                            color: _customerPrimary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ),
                     ),
-                    if (index != tickets.length - 1) const SizedBox(height: 12),
-                  ],
                 ],
-              );
-            },
-          ),
-        ],
+              ),
+              if (isLoading) ...const [
+                _ShimmerBox(width: double.infinity, height: 96),
+                SizedBox(height: 12),
+                _ShimmerBox(width: double.infinity, height: 96),
+              ] else if (tickets.isEmpty)
+                const EmptyState(
+                  icon: Icons.support_agent,
+                  title: 'No support tickets',
+                  message: 'Create a ticket when you need help with an order.',
+                )
+              else
+                for (var index = 0; index < tickets.length; index++) ...[
+                  _FadeSlideIn(
+                    index: index,
+                    child: _SupportTicketTile(ticket: tickets[index]),
+                  ),
+                  if (index != tickets.length - 1) const SizedBox(height: 12),
+                ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -11988,6 +12398,395 @@ class _SupportScreenState extends State<SupportScreen> {
         setState(() => _isCreating = false);
       }
     }
+  }
+}
+
+class _SupportTopic {
+  const _SupportTopic(this.label, this.icon);
+
+  final String label;
+  final IconData icon;
+}
+
+const _supportTopics = <_SupportTopic>[
+  _SupportTopic('Order issue', Icons.receipt_long_outlined),
+  _SupportTopic('Delivery', Icons.local_shipping_outlined),
+  _SupportTopic('Payment', Icons.payments_outlined),
+  _SupportTopic('Account', Icons.person_outline_rounded),
+];
+
+class _SupportHero extends StatelessWidget {
+  const _SupportHero({required this.openCount, required this.totalCount});
+
+  final int openCount;
+  final int totalCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1C8053), _customerPrimary, Color(0xFF0F5134)],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: _customerPrimary.withValues(alpha: 0.28),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            right: -14,
+            top: -14,
+            child: Icon(
+              Icons.support_agent_rounded,
+              size: 110,
+              color: Colors.white.withValues(alpha: 0.08),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.support_agent_rounded,
+                  color: Colors.white,
+                  size: 26,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                context.t('How can we help?'),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                context.t(
+                  'Send us a message and our team will reply right here.',
+                ),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  height: 1.35,
+                ),
+              ),
+              if (totalCount > 0) ...[
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _SupportHeroPill(
+                      icon: Icons.mark_chat_unread_outlined,
+                      label: context.t(
+                        '{count} open',
+                        values: {'count': openCount},
+                      ),
+                    ),
+                    _SupportHeroPill(
+                      icon: Icons.forum_outlined,
+                      label: context.t(
+                        '{count} total',
+                        values: {'count': totalCount},
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SupportHeroPill extends StatelessWidget {
+  const _SupportHeroPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SupportTopicChip extends StatelessWidget {
+  const _SupportTopicChip({
+    required this.topic,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final _SupportTopic topic;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? _customerPrimary : _customerBackground,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected ? _customerPrimary : _customerLine,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                topic.icon,
+                size: 15,
+                color: isSelected ? Colors.white : _customerPrimary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                context.t(topic.label),
+                style: TextStyle(
+                  color: isSelected ? Colors.white : _customerInk,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Color _supportStatusColor(String status) {
+  switch (status) {
+    case 'open':
+      return _customerWarning;
+    case 'replied':
+      return _customerBlue;
+    default:
+      return _customerMuted;
+  }
+}
+
+IconData _supportStatusIcon(String status) {
+  switch (status) {
+    case 'open':
+      return Icons.hourglass_top_rounded;
+    case 'replied':
+      return Icons.mark_chat_unread_outlined;
+    default:
+      return Icons.check_circle_outline_rounded;
+  }
+}
+
+class _SupportTicketTile extends StatelessWidget {
+  const _SupportTicketTile({required this.ticket});
+
+  final SupportTicket ticket;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _supportStatusColor(ticket.status);
+    final isClosed = ticket.status == 'closed';
+    final preview = ticket.message.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+    return _CustomerCard(
+      padding: EdgeInsets.zero,
+      onTap: () => Navigator.of(context).push(
+        _CustomerPageRoute(
+          builder: (_) => SupportThreadScreen(ticket: ticket),
+        ),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(width: 4, color: color),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        _supportStatusIcon(ticket.status),
+                        color: color,
+                        size: 21,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  ticket.subject,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: isClosed
+                                        ? _customerMuted
+                                        : _customerInk,
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 6,
+                                      height: 6,
+                                      decoration: BoxDecoration(
+                                        color: color,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      context.t(ticket.status),
+                                      style: TextStyle(
+                                        color: color,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (preview.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              preview,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: _customerMuted,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.schedule_rounded,
+                                size: 12,
+                                color: _customerMuted,
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  context.t(
+                                    'Updated {date}',
+                                    values: {
+                                      'date': DateFormat.MMMd()
+                                          .add_jm()
+                                          .format(ticket.updatedAt),
+                                    },
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: _customerMuted,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: _customerMuted,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
