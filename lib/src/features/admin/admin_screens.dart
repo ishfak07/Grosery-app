@@ -304,11 +304,17 @@ class _AdminPill extends StatelessWidget {
     required this.label,
     required this.color,
     this.icon,
+    this.scaleDownLabel = false,
   });
 
   final String label;
   final Color color;
   final IconData? icon;
+
+  /// Shrinks the label instead of clipping it when the pill is squeezed.
+  /// Used where every character matters (a price and its unit), and cutting
+  /// the tail would leave the admin guessing.
+  final bool scaleDownLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -327,14 +333,34 @@ class _AdminPill extends StatelessWidget {
             Icon(icon, color: color, size: 14),
             const SizedBox(width: 5),
           ],
-          Text(
-            label,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
-            ),
+          // Flexible, or a long label (a big price with a long unit) lays out
+          // at its full intrinsic width and overflows the pill by a few
+          // pixels instead of ellipsizing.
+          Flexible(
+            child: scaleDownLabel
+                ? FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                  )
+                : Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                    ),
+                  ),
           ),
         ],
       ),
@@ -6486,6 +6512,7 @@ class _AdminProductTile extends StatelessWidget {
                       label: '${product.price.money} / ${product.unit}',
                       color: _adminBlue,
                       icon: Icons.payments_outlined,
+                      scaleDownLabel: true,
                     ),
                     _AdminPill(
                       label: product.stockStatus,
