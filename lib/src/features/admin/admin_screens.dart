@@ -10023,6 +10023,7 @@ class AdminPasswordResetScreen extends StatefulWidget {
 
 class _AdminPasswordResetScreenState extends State<AdminPasswordResetScreen> {
   String? _busyRequestId;
+  String? _openingRequestId;
 
   @override
   Widget build(BuildContext context) {
@@ -10030,43 +10031,66 @@ class _AdminPasswordResetScreenState extends State<AdminPasswordResetScreen> {
     return _AdminScaffold(
       title: 'Password resets',
       body: _AdminPage(
-        child: StreamBuilder<List<PasswordResetRequest>>(
-          stream: appState.firestoreService.watchPasswordResetRequests(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const RefreshableCenteredContent(
-                child: LoadingView(),
-              );
-            }
-            final requests = snapshot.data ?? const <PasswordResetRequest>[];
-            if (requests.isEmpty) {
-              return const RefreshableCenteredContent(
-                child: EmptyState(
-                  icon: Icons.lock_reset,
-                  title: 'No reset requests',
-                  message: 'Customer password reset requests will appear here.',
-                ),
-              );
-            }
-            return ListView.separated(
-              physics: appRefreshScrollPhysics,
-              padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
-              itemCount: requests.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final request = requests[index];
-                return _AdminReveal(
-                  index: index,
-                  child: _AdminPasswordResetTile(
-                    request: request,
-                    isBusy: _busyRequestId == request.requestId,
-                    onApprove: request.isPending
-                        ? () => _setRequestStatus(request, approve: true)
-                        : null,
-                    onReject: request.isPending
-                        ? () => _setRequestStatus(request, approve: false)
-                        : null,
-                  ),
+        // The request document only carries whatever name the customer typed
+        // at sign-up time (often blank), so the live user list is joined in
+        // to show the real account name and to open the profile instantly.
+        child: StreamBuilder<List<UserProfile>>(
+          stream: appState.firestoreService.watchUsers(),
+          builder: (context, usersSnapshot) {
+            final users = usersSnapshot.data ?? const <UserProfile>[];
+            final byUid = <String, UserProfile>{
+              for (final user in users) user.uid: user,
+            };
+            final byPhone = <String, UserProfile>{
+              for (final user in users)
+                if (PhoneUtils.localSriLankanDigits(user.phone).isNotEmpty)
+                  PhoneUtils.localSriLankanDigits(user.phone): user,
+            };
+            return StreamBuilder<List<PasswordResetRequest>>(
+              stream: appState.firestoreService.watchPasswordResetRequests(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const RefreshableCenteredContent(
+                    child: LoadingView(),
+                  );
+                }
+                final requests =
+                    snapshot.data ?? const <PasswordResetRequest>[];
+                if (requests.isEmpty) {
+                  return const RefreshableCenteredContent(
+                    child: EmptyState(
+                      icon: Icons.lock_reset,
+                      title: 'No reset requests',
+                      message:
+                          'Customer password reset requests will appear here.',
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  physics: appRefreshScrollPhysics,
+                  padding: const EdgeInsets.fromLTRB(0, 16, 0, 28),
+                  itemCount: requests.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final request = requests[index];
+                    final customer = _resolveCustomer(request, byUid, byPhone);
+                    return _AdminReveal(
+                      index: index,
+                      child: _AdminPasswordResetTile(
+                        request: request,
+                        customer: customer,
+                        isBusy: _busyRequestId == request.requestId,
+                        isOpening: _openingRequestId == request.requestId,
+                        onTap: () => _openCustomerDetail(request, customer),
+                        onApprove: request.isPending
+                            ? () => _setRequestStatus(request, approve: true)
+                            : null,
+                        onReject: request.isPending
+                            ? () => _setRequestStatus(request, approve: false)
+                            : null,
+                      ),
+                    );
+                  },
                 );
               },
             );
@@ -10074,6 +10098,70 @@ class _AdminPasswordResetScreenState extends State<AdminPasswordResetScreen> {
         ),
       ),
     );
+  }
+
+  /// Matches a request to a customer account by uid first, then by phone so
+  /// requests written before the uid was recorded still resolve.
+  UserProfile? _resolveCustomer(
+    PasswordResetRequest request,
+    Map<String, UserProfile> byUid,
+    Map<String, UserProfile> byPhone,
+  ) {
+    final byId = byUid[request.userId];
+    if (byId != null) {
+      return byId;
+    }
+    final digits = PhoneUtils.localSriLankanDigits(request.phone);
+    if (digits.isEmpty) {
+      return null;
+    }
+    return byPhone[digits];
+  }
+
+  /// Opens the same customer profile page the customer list uses, so an
+  /// admin can vet a reset request against the full account details.
+  Future<void> _openCustomerDetail(
+    PasswordResetRequest request,
+    UserProfile? resolved,
+  ) async {
+    if (_openingRequestId != null) {
+      return;
+    }
+    if (resolved != null) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => AdminCustomerDetailScreen(customer: resolved),
+        ),
+      );
+      return;
+    }
+    setState(() => _openingRequestId = request.requestId);
+    try {
+      final firestoreService = context.read<AppState>().firestoreService;
+      final customer = request.userId.isEmpty
+          ? null
+          : await firestoreService.fetchUserProfile(request.userId);
+      if (!mounted) {
+        return;
+      }
+      if (customer == null) {
+        showSnack(context, 'This customer account no longer exists.');
+        return;
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => AdminCustomerDetailScreen(customer: customer),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        showSnack(context, error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _openingRequestId = null);
+      }
+    }
   }
 
   Future<void> _setRequestStatus(
@@ -10106,21 +10194,42 @@ class _AdminPasswordResetScreenState extends State<AdminPasswordResetScreen> {
 class _AdminPasswordResetTile extends StatelessWidget {
   const _AdminPasswordResetTile({
     required this.request,
+    required this.customer,
     required this.isBusy,
+    required this.isOpening,
+    required this.onTap,
     required this.onApprove,
     required this.onReject,
   });
 
   final PasswordResetRequest request;
+  final UserProfile? customer;
   final bool isBusy;
+  final bool isOpening;
+  final VoidCallback? onTap;
   final VoidCallback? onApprove;
   final VoidCallback? onReject;
+
+  /// Prefers the live account name over the (often blank) name stored on the
+  /// request, and only falls back to the phone number when neither exists.
+  String get _displayName {
+    final accountName = customer?.fullName.trim() ?? '';
+    if (accountName.isNotEmpty) {
+      return accountName;
+    }
+    final requestName = request.customerName.trim();
+    if (requestName.isNotEmpty) {
+      return requestName;
+    }
+    return request.phone.isEmpty ? 'Unknown customer' : request.phone;
+  }
 
   @override
   Widget build(BuildContext context) {
     final statusColor = _adminStatusColor(request.effectiveStatus);
     final requestedAt = DateFormat.yMMMd().add_jm().format(request.createdAt);
     return _AdminCard(
+      onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -10137,9 +10246,7 @@ class _AdminPasswordResetTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      request.customerName.isEmpty
-                          ? request.phone
-                          : request.customerName,
+                      _displayName,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: _adminInk,
@@ -10165,6 +10272,19 @@ class _AdminPasswordResetTile extends StatelessWidget {
                 color: statusColor,
                 icon: Icons.circle,
               ),
+              const SizedBox(width: 4),
+              if (isOpening)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                const Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: _adminMuted,
+                ),
             ],
           ),
           if (request.isPending) ...[
