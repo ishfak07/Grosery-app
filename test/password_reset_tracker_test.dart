@@ -202,7 +202,15 @@ PasswordResetRequest _adminRequest({
 Widget _wrapWithAppState(AppState appState) {
   return ChangeNotifierProvider<AppState>.value(
     value: appState,
-    child: const MaterialApp(home: LoginScreen()),
+    // Reduce motion: the auth header art otherwise loops forever and
+    // pumpAndSettle would never settle.
+    child: MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(disableAnimations: true),
+        child: child!,
+      ),
+      home: const LoginScreen(),
+    ),
   );
 }
 

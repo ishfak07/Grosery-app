@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' show PathMetric;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_constants.dart';
@@ -46,71 +47,767 @@ class _AuthBackdrop extends StatelessWidget {
   }
 }
 
+const _authSheet = Color(0xFFFFFDF8);
+const _authSand = Color(0xFFF6F1E7);
+const _authSandLine = Color(0xFFE9E0CF);
+const _authNight = Color(0xFF12261D);
+const _authLime = Color(0xFFB5E36A);
+
+class _AuthHero {
+  const _AuthHero({required this.title, required this.message});
+
+  final String title;
+  final String message;
+}
+
+/// Colours for the lagoon scene; each auth screen gets its own time of day.
+class _AuthScenePalette {
+  const _AuthScenePalette({
+    required this.sky,
+    required this.sun,
+    required this.hills,
+    required this.water,
+    required this.palm,
+  });
+
+  final List<Color> sky;
+  final Color sun;
+  final Color hills;
+  final List<Color> water;
+  final Color palm;
+
+  static const dawn = _AuthScenePalette(
+    sky: [Color(0xFFFFD9BE), Color(0xFFFFF1E2)],
+    sun: Color(0xFFFF8A5B),
+    hills: Color(0xFFE8C4A6),
+    water: [Color(0xFFA3D7D1), Color(0xFF5FB2A9), Color(0xFF2F7F77)],
+    palm: Color(0xFF1F3B33),
+  );
+
+  static const day = _AuthScenePalette(
+    sky: [Color(0xFFCDEEEB), Color(0xFFF1FAF5)],
+    sun: Color(0xFFFFC34D),
+    hills: Color(0xFFB7DAC5),
+    water: [Color(0xFFA7DDD6), Color(0xFF5DB6AB), Color(0xFF2A8076)],
+    palm: Color(0xFF1C3E30),
+  );
+
+  static const dusk = _AuthScenePalette(
+    sky: [Color(0xFFDCCFEF), Color(0xFFFCEBE0)],
+    sun: Color(0xFFF2876A),
+    hills: Color(0xFFD2BCD6),
+    water: [Color(0xFFB9C7E8), Color(0xFF7F9BCD), Color(0xFF4C6BA5)],
+    palm: Color(0xFF282C45),
+  );
+}
+
 class _AuthScaffold extends StatelessWidget {
   const _AuthScaffold({
     required this.title,
     required this.children,
+    this.scene = _AuthScenePalette.dawn,
     this.appBarTitle,
+    this.hero,
   });
 
   final String title;
   final String? appBarTitle;
+  final _AuthHero? hero;
+  final _AuthScenePalette scene;
   final List<Widget> children;
+
+  static const _sheetOverlap = 30.0;
 
   @override
   Widget build(BuildContext context) {
+    final hero = this.hero;
     return Scaffold(
-      backgroundColor: _authBackground,
-      appBar: appBarTitle == null
-          ? null
-          : AppBar(
-              title: Text(context.t(appBarTitle!)),
-              backgroundColor: _authBackground.withValues(alpha: 0.96),
-              shape: const Border(bottom: BorderSide(color: _authLine)),
-            ),
-      body: _AuthBackdrop(
+      backgroundColor: _authSheet,
+      body: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark.copyWith(
+          statusBarColor: Colors.transparent,
+        ),
         child: AppRefreshIndicator(
-          child: SafeArea(
-            top: appBarTitle == null,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final horizontal = constraints.maxWidth >= 720 ? 24.0 : 16.0;
-                return ListView(
-                  physics: appRefreshScrollPhysics,
-                  padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 24),
-                  children: [
-                    Align(
-                      alignment: Alignment.topCenter,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 520),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (appBarTitle == null) ...[
-                              const _AuthBrandMark(),
-                              const SizedBox(height: 20),
-                            ],
-                            Text(
-                              context.t(title),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
-                                  ?.copyWith(
-                                    color: _authInk,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0,
-                                  ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final sceneHeight =
+                  (constraints.maxHeight * 0.36).clamp(230.0, 340.0);
+              final horizontal = constraints.maxWidth >= 720 ? 32.0 : 22.0;
+              return ListView(
+                physics: appRefreshScrollPhysics,
+                padding: EdgeInsets.zero,
+                children: [
+                  SizedBox(
+                    height: sceneHeight,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _AuthScene(palette: scene),
+                        SafeArea(
+                          bottom: false,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                            child: Align(
+                              alignment: Alignment.topLeft,
+                              child: appBarTitle == null
+                                  ? const _AuthBrandMark()
+                                  : _AuthBackBar(title: appBarTitle!),
                             ),
-                            const SizedBox(height: 14),
-                            ...children,
-                          ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Transform.translate(
+                    offset: const Offset(0, -_sheetOverlap),
+                    child: Container(
+                      constraints: BoxConstraints(
+                        minHeight: math.max(
+                          0,
+                          constraints.maxHeight - sceneHeight + _sheetOverlap,
+                        ),
+                      ),
+                      decoration: const BoxDecoration(
+                        color: _authSheet,
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(34)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0x1A0F2A2E),
+                            blurRadius: 30,
+                            offset: Offset(0, -6),
+                          ),
+                        ],
+                      ),
+                      child: SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            horizontal,
+                            14,
+                            horizontal,
+                            28,
+                          ),
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 520),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Center(
+                                    child: Container(
+                                      width: 44,
+                                      height: 5,
+                                      decoration: BoxDecoration(
+                                        color: _authSandLine,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  if (hero != null)
+                                    _AuthStagger(
+                                      index: 0,
+                                      child: Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 10),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: const BoxDecoration(
+                                                color: _authAccent,
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Flexible(
+                                              child: Text(
+                                                context.t(hero.title),
+                                                style: const TextStyle(
+                                                  color: _authAccent,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w800,
+                                                  letterSpacing: 0.4,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  _AuthTitleReveal(text: context.t(title)),
+                                  if (hero != null)
+                                    _AuthStagger(
+                                      index: 1,
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(top: 10),
+                                        child: Text(
+                                          context.t(hero.message),
+                                          style: const TextStyle(
+                                            color: _authMuted,
+                                            fontSize: 14.5,
+                                            height: 1.5,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  const SizedBox(height: 22),
+                                  _AuthFormTheme(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        for (var i = 0;
+                                            i < children.length;
+                                            i++)
+                                          _AuthStagger(
+                                            index: i + 2,
+                                            child: children[i],
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ],
-                );
-              },
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthBackBar extends StatelessWidget {
+  const _AuthBackBar({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Material(
+          color: Colors.white.withValues(alpha: 0.9),
+          shape: const CircleBorder(),
+          elevation: 0,
+          child: IconButton(
+            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.arrow_back_rounded, color: _authInk),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(20),
             ),
+            child: Text(
+              context.t(title),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _authInk,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Minimal underlined inputs and pill buttons for the auth forms only.
+class _AuthFormTheme extends StatelessWidget {
+  const _AuthFormTheme({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = Theme.of(context);
+    UnderlineInputBorder line(Color color, [double width = 1.2]) {
+      return UnderlineInputBorder(
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
+
+    const error = Color(0xFFC83A2B);
+    return Theme(
+      data: base.copyWith(
+        inputDecorationTheme: base.inputDecorationTheme.copyWith(
+          filled: false,
+          contentPadding: const EdgeInsets.fromLTRB(4, 16, 4, 12),
+          border: line(_authSandLine),
+          enabledBorder: line(_authSandLine),
+          focusedBorder: line(_authNight, 2.2),
+          errorBorder: line(error),
+          focusedErrorBorder: line(error, 2.2),
+          floatingLabelStyle: WidgetStateTextStyle.resolveWith(
+            (states) => TextStyle(
+              color: states.contains(WidgetState.error) ? error : _authNight,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          prefixIconColor: WidgetStateColor.resolveWith(
+            (states) => states.contains(WidgetState.focused)
+                ? _authNight
+                : const Color(0xFF9AA59E),
+          ),
+          suffixIconColor: const Color(0xFF9AA59E),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(56),
+            foregroundColor: _authNight,
+            side: const BorderSide(color: _authSandLine, width: 1.4),
+            shape: const StadiumBorder(),
+            textStyle: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+            ),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: _authNight,
+            textStyle: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+        segmentedButtonTheme: SegmentedButtonThemeData(
+          style: ButtonStyle(
+            shape: const WidgetStatePropertyAll(StadiumBorder()),
+            side: const WidgetStatePropertyAll(
+              BorderSide(color: _authSandLine, width: 1.4),
+            ),
+            backgroundColor: WidgetStateProperty.resolveWith(
+              (states) =>
+                  states.contains(WidgetState.selected) ? _authNight : null,
+            ),
+            foregroundColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? Colors.white
+                  : _authNight,
+            ),
+            iconColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.selected)
+                  ? _authLime
+                  : _authNight,
+            ),
+            textStyle: const WidgetStatePropertyAll(
+              TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Fades and lifts a block into place, later for higher [index].
+class _AuthStagger extends StatelessWidget {
+  const _AuthStagger({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final delay = 90 * index.clamp(0, 8);
+    final total = 520 + delay;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: total),
+      curve: Interval(delay / total, 1, curve: Curves.easeOutCubic),
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, 22 * (1 - value)),
+          child: child,
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Headline that rises out of a mask, like a title card.
+class _AuthTitleReveal extends StatelessWidget {
+  const _AuthTitleReveal({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 750),
+        curve: const Interval(0.1, 1, curve: Curves.easeOutQuart),
+        builder: (context, value, child) => FractionalTranslation(
+          translation: Offset(0, 1 - value),
+          child: child,
+        ),
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: _authNight,
+            fontSize: 34,
+            height: 1.08,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthScene extends StatefulWidget {
+  const _AuthScene({required this.palette});
+
+  final _AuthScenePalette palette;
+
+  @override
+  State<_AuthScene> createState() => _AuthSceneState();
+}
+
+class _AuthSceneState extends _LoopingArtState<_AuthScene> {
+  @override
+  Duration get loopDuration => const Duration(seconds: 24);
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: CustomPaint(
+        painter: _AuthScenePainter(palette: widget.palette, animation: loop),
+      ),
+    );
+  }
+}
+
+/// Puttalam lagoon at a chosen time of day: sun, coconut palms, layered
+/// water, a passing oruwa and the Puttalam Drop pin. Every motion uses a
+/// whole number of cycles per loop so the scene repeats without a seam.
+class _AuthScenePainter extends CustomPainter {
+  _AuthScenePainter({required this.palette, required this.animation})
+      : super(repaint: animation);
+
+  final _AuthScenePalette palette;
+  final Animation<double> animation;
+
+  static const _tau = math.pi * 2;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final t = animation.value;
+    final w = size.width;
+    final h = size.height;
+    final waterTop = h * 0.67;
+
+    // Sky.
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: palette.sky,
+        ).createShader(Offset.zero & size),
+    );
+
+    // Sun with a slow breathing glow.
+    final sunRadius = (math.min(w, h) * 0.11).clamp(24.0, 44.0);
+    final sun = Offset(w * 0.74, h * 0.4 + math.sin(t * _tau) * 4);
+    final glow = sunRadius * (2.6 + 0.2 * math.sin(t * _tau * 2));
+    canvas.drawCircle(
+      sun,
+      glow,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            palette.sun.withValues(alpha: 0.38),
+            palette.sun.withValues(alpha: 0),
+          ],
+        ).createShader(Rect.fromCircle(center: sun, radius: glow)),
+    );
+    canvas.drawCircle(sun, sunRadius, Paint()..color = palette.sun);
+
+    // Far shore.
+    final hills = Path()
+      ..moveTo(0, h * 0.66)
+      ..cubicTo(w * 0.18, h * 0.54, w * 0.34, h * 0.6, w * 0.5, h * 0.6)
+      ..cubicTo(w * 0.68, h * 0.6, w * 0.82, h * 0.52, w, h * 0.62)
+      ..lineTo(w, h)
+      ..lineTo(0, h)
+      ..close();
+    canvas.drawPath(hills, Paint()..color = palette.hills);
+
+    // Drop pin standing on the shore, with its shadow.
+    final pinBob = (math.sin(t * _tau * 4) + 1) / 2 * 8;
+    final pinTip = Offset(w * 0.36, h * 0.6 - pinBob);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(w * 0.36, h * 0.605),
+        width: 24 * (1 - pinBob / 18),
+        height: 6,
+      ),
+      Paint()..color = Colors.black.withValues(alpha: 0.14),
+    );
+    final pinHead = pinTip.translate(0, -24);
+    final pinPaint = Paint()..color = _authPrimary;
+    canvas.drawPath(
+      Path()
+        ..moveTo(pinHead.dx - 13, pinHead.dy + 8)
+        ..lineTo(pinTip.dx, pinTip.dy)
+        ..lineTo(pinHead.dx + 13, pinHead.dy + 8)
+        ..close(),
+      pinPaint,
+    );
+    canvas.drawCircle(pinHead, 16, pinPaint);
+    canvas.drawCircle(pinHead, 6.5, Paint()..color = Colors.white);
+
+    // Coconut palms swaying out of step with each other.
+    _palm(canvas, Offset(w * 0.09, h * 0.7), h * 0.36, 0.35,
+        math.sin(t * _tau * 3) * 0.05);
+    _palm(canvas, Offset(w * 0.19, h * 0.71), h * 0.25, 0.15,
+        math.sin(t * _tau * 3 + 1.4) * 0.05);
+    _palm(canvas, Offset(w * 0.93, h * 0.7), h * 0.3, -0.3,
+        math.sin(t * _tau * 3 + 2.6) * 0.05);
+
+    // Lagoon: three wave bands drifting at different speeds.
+    for (var i = 0; i < 3; i++) {
+      final y = waterTop + i * h * 0.08;
+      final amplitude = 3.0 + i * 1.5;
+      final wavelength = w / (1.3 + i * 0.4);
+      final direction = i.isEven ? 1 : -1;
+      final phase = t * _tau * (i + 1) * direction;
+      final wave = Path()..moveTo(0, y);
+      for (var x = 0.0; x <= w + 6; x += 6) {
+        wave.lineTo(
+          x,
+          y + math.sin(x / wavelength * _tau + phase) * amplitude,
+        );
+      }
+      wave
+        ..lineTo(w, h)
+        ..lineTo(0, h)
+        ..close();
+      canvas.drawPath(wave, Paint()..color = palette.water[i]);
+
+      if (i == 0) {
+        // Sun glitter on the first band.
+        final glitter = Paint()
+          ..color = Colors.white.withValues(alpha: 0.55)
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round;
+        for (var j = 0; j < 4; j++) {
+          final half =
+              (20 - j * 4) * (0.75 + 0.25 * math.sin(t * _tau * 6 + j));
+          final gy = y + 10 + j * 7;
+          canvas.drawLine(
+            Offset(sun.dx - half, gy),
+            Offset(sun.dx + half, gy),
+            glitter,
+          );
+        }
+      }
+
+      if (i == 1) {
+        // An oruwa sailing across between the wave bands.
+        final bx = -40 + (w + 80) * t;
+        final by = y - 2 + math.sin(t * _tau * 8) * 1.5;
+        final boat = Paint()..color = palette.palm;
+        canvas.drawPath(
+          Path()
+            ..moveTo(bx - 18, by)
+            ..lineTo(bx + 18, by)
+            ..lineTo(bx + 12, by + 6)
+            ..lineTo(bx - 12, by + 6)
+            ..close(),
+          boat,
+        );
+        canvas.drawLine(
+          Offset(bx - 4, by + 9),
+          Offset(bx + 18, by + 9),
+          boat..strokeWidth = 1.6,
+        );
+        canvas.drawPath(
+          Path()
+            ..moveTo(bx - 2, by - 1)
+            ..lineTo(bx - 2, by - 30)
+            ..quadraticBezierTo(bx + 14, by - 16, bx + 13, by - 2)
+            ..close(),
+          Paint()..color = Colors.white.withValues(alpha: 0.92),
+        );
+      }
+    }
+  }
+
+  void _palm(
+    Canvas canvas,
+    Offset base,
+    double height,
+    double lean,
+    double sway,
+  ) {
+    final paint = Paint()..color = palette.palm;
+    final top = base + Offset(lean * height * 0.45, -height);
+    canvas.drawPath(
+      Path()
+        ..moveTo(base.dx, base.dy)
+        ..quadraticBezierTo(
+          base.dx + lean * height * 0.05,
+          base.dy - height * 0.55,
+          top.dx,
+          top.dy,
+        ),
+      Paint()
+        ..color = palette.palm
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(3, height * 0.05)
+        ..strokeCap = StrokeCap.round,
+    );
+
+    final length = height * 0.44;
+    const angles = [-2.9, -2.4, -1.95, -1.2, -0.75, -0.25];
+    for (final base in angles) {
+      final angle = base + sway;
+      final direction = Offset(math.cos(angle), math.sin(angle));
+      final normal = Offset(-direction.dy, direction.dx);
+      final end = top + direction * length + Offset(0, length * 0.38);
+      final control = top + direction * length * 0.6 + Offset(0, -length * 0.1);
+      canvas.drawPath(
+        Path()
+          ..moveTo(top.dx, top.dy)
+          ..quadraticBezierTo(
+            control.dx + normal.dx * length * 0.12,
+            control.dy + normal.dy * length * 0.12,
+            end.dx,
+            end.dy,
+          )
+          ..quadraticBezierTo(
+            control.dx - normal.dx * length * 0.08,
+            control.dy - normal.dy * length * 0.08,
+            top.dx,
+            top.dy,
+          )
+          ..close(),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _AuthScenePainter oldDelegate) =>
+      oldDelegate.palette != palette || oldDelegate.animation != animation;
+}
+
+/// Dark pill button with a lime action dot whose icon nudges forward.
+class _AuthPrimaryButton extends StatefulWidget {
+  const _AuthPrimaryButton({
+    required this.label,
+    required this.onPressed,
+    this.isLoading = false,
+    this.icon,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool isLoading;
+  final IconData? icon;
+
+  @override
+  State<_AuthPrimaryButton> createState() => _AuthPrimaryButtonState();
+}
+
+class _AuthPrimaryButtonState extends _LoopingArtState<_AuthPrimaryButton> {
+  @override
+  Duration get loopDuration => const Duration(milliseconds: 1800);
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onPressed != null && !widget.isLoading;
+    return Material(
+      color: enabled || widget.isLoading ? _authNight : const Color(0xFFC9D0CB),
+      shape: const StadiumBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: enabled ? widget.onPressed : null,
+        splashColor: _authLime.withValues(alpha: 0.18),
+        child: SizedBox(
+          height: 60,
+          child: Row(
+            children: [
+              const SizedBox(width: 26),
+              Expanded(
+                child: Text(
+                  context.t(widget.label),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(7),
+                child: Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: enabled || widget.isLoading
+                        ? _authLime
+                        : Colors.white.withValues(alpha: 0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: widget.isLoading
+                      ? const Padding(
+                          padding: EdgeInsets.all(13),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            color: _authNight,
+                          ),
+                        )
+                      : AnimatedBuilder(
+                          animation: loop,
+                          builder: (context, child) => Transform.translate(
+                            offset: Offset(
+                              enabled
+                                  ? math.sin(loop.value * math.pi * 2) * 2.5
+                                  : 0,
+                              0,
+                            ),
+                            child: child,
+                          ),
+                          child: Icon(
+                            widget.icon ?? Icons.arrow_forward_rounded,
+                            color: _authNight,
+                            size: 22,
+                          ),
+                        ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -119,27 +816,29 @@ class _AuthScaffold extends StatelessWidget {
 }
 
 class _AuthCard extends StatelessWidget {
-  const _AuthCard(
-      {required this.child, this.padding = const EdgeInsets.all(16)});
+  const _AuthCard({
+    required this.child,
+    this.padding = const EdgeInsets.all(18),
+    this.flat = false,
+  });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
 
+  /// Sits straight on the sheet with no panel behind it.
+  final bool flat;
+
   @override
   Widget build(BuildContext context) {
+    if (flat) {
+      return child;
+    }
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: _authSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _authLine),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF163526).withValues(alpha: 0.08),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        color: _authSand,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _authSandLine),
       ),
       child: child,
     );
@@ -167,85 +866,6 @@ class _AuthBrandMark extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _AuthHeroPanel extends StatelessWidget {
-  const _AuthHeroPanel({
-    required this.icon,
-    required this.title,
-    required this.message,
-  });
-
-  final IconData icon;
-  final String title;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF163D2C),
-            Color(0xFF176B45),
-            Color(0xFFE86F4A),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: _authPrimary.withValues(alpha: 0.2),
-            blurRadius: 28,
-            offset: const Offset(0, 16),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.t(title),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 21,
-                    fontWeight: FontWeight.w900,
-                    height: 1.15,
-                    letterSpacing: 0,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  context.t(message),
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.82),
-                    fontWeight: FontWeight.w600,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 14),
-          Container(
-            width: 76,
-            height: 76,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-            ),
-            child: Icon(icon, color: Colors.white, size: 40),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1602,24 +2222,24 @@ class _LoginScreenState extends State<LoginScreen> {
     final appState = context.watch<AppState>();
     return _AuthScaffold(
       title: 'Welcome back',
+      hero: const _AuthHero(
+        title: 'Your next order is waiting',
+        message:
+            'Login with your phone and password to reorder, track deliveries, and send shopping lists.',
+      ),
       children: [
         FirebaseSetupBanner(appState: appState),
-        const _AuthHeroPanel(
-          icon: Icons.shopping_bag_outlined,
-          title: 'Your next order is waiting',
-          message:
-              'Login with your phone and password to reorder, track deliveries, and send shopping lists.',
-        ),
-        const SizedBox(height: 16),
         _AuthCard(
+          flat: true,
           child: Form(
             key: _formKey,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 AppPhoneField(
                   controller: _phone,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 6),
                 AppTextField(
                   controller: _password,
                   label: 'Password',
@@ -1627,10 +2247,24 @@ class _LoginScreenState extends State<LoginScreen> {
                   validator: Validators.password,
                   prefixIcon: Icons.lock,
                 ),
-                const SizedBox(height: 18),
-                PrimaryActionButton(
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: appState.firebaseAvailable
+                        ? () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const ForgotPasswordPhoneScreen(),
+                              ),
+                            )
+                        : null,
+                    child: Text(context.t('Forgot password?')),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _AuthPrimaryButton(
                   label: 'Login',
-                  icon: Icons.login,
+                  icon: Icons.arrow_forward_rounded,
                   isLoading: _isLoading,
                   onPressed: appState.firebaseAvailable ? _login : null,
                 ),
@@ -1638,7 +2272,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         OutlinedButton.icon(
           onPressed: appState.firebaseAvailable
               ? () => Navigator.of(context).push(
@@ -1647,18 +2281,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   )
               : null,
-          icon: const Icon(Icons.person_add),
+          icon: const Icon(Icons.person_add_alt_1_rounded),
           label: Text(context.t('Create account')),
-        ),
-        TextButton(
-          onPressed: appState.firebaseAvailable
-              ? () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ForgotPasswordPhoneScreen(),
-                    ),
-                  )
-              : null,
-          child: Text(context.t('Forgot password?')),
         ),
         if (appState.passwordResetTracker != null) ...[
           const SizedBox(height: 12),
@@ -1778,7 +2402,7 @@ class _PasswordResetTrackerCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (status.isApproved)
-            PrimaryActionButton(
+            _AuthPrimaryButton(
               label: 'Continue password reset',
               icon: Icons.arrow_forward,
               isLoading: false,
@@ -1900,15 +2524,15 @@ class _ForgotPasswordPhoneScreenState extends State<ForgotPasswordPhoneScreen> {
     return _AuthScaffold(
       appBarTitle: 'Forgot password',
       title: 'Reset securely',
+      scene: _AuthScenePalette.dusk,
+      hero: const _AuthHero(
+        title: 'Admin-approved reset',
+        message:
+            'Request approval first. Once approved, you can set a new password here.',
+      ),
       children: [
-        const _AuthHeroPanel(
-          icon: Icons.lock_reset,
-          title: 'Admin-approved reset',
-          message:
-              'Request approval first. Once approved, you can set a new password here.',
-        ),
-        const SizedBox(height: 16),
         _AuthCard(
+          flat: true,
           child: Form(
             key: _formKey,
             child: Column(
@@ -1917,7 +2541,7 @@ class _ForgotPasswordPhoneScreenState extends State<ForgotPasswordPhoneScreen> {
                   controller: _phone,
                 ),
                 const SizedBox(height: 18),
-                PrimaryActionButton(
+                _AuthPrimaryButton(
                   label: 'Request reset',
                   icon: Icons.lock_reset,
                   isLoading: _isLoading,
@@ -2000,15 +2624,15 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
     return _AuthScaffold(
       appBarTitle: 'Complete profile',
       title: 'Create account',
+      scene: _AuthScenePalette.day,
+      hero: const _AuthHero(
+        title: 'Your shopping profile',
+        message:
+            'Add your delivery details once and checkout faster on every order.',
+      ),
       children: [
-        const _AuthHeroPanel(
-          icon: Icons.person_add_alt,
-          title: 'Your shopping profile',
-          message:
-              'Add your delivery details once and checkout faster on every order.',
-        ),
-        const SizedBox(height: 16),
         _AuthCard(
+          flat: true,
           child: Form(
             key: _formKey,
             child: Column(
@@ -2061,7 +2685,7 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
                   prefixIcon: Icons.lock_outline,
                 ),
                 const SizedBox(height: 18),
-                PrimaryActionButton(
+                _AuthPrimaryButton(
                   label: 'Create account',
                   icon: Icons.check_circle,
                   isLoading: _isLoading,
@@ -2150,6 +2774,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     return _AuthScaffold(
       appBarTitle: 'Set new password',
       title: 'Password reset',
+      scene: _AuthScenePalette.dusk,
       children: [
         _AuthCard(
           child: Row(
@@ -2196,6 +2821,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         ),
         const SizedBox(height: 16),
         _AuthCard(
+          flat: true,
           child: Form(
             key: _formKey,
             child: Column(
@@ -2218,14 +2844,14 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     prefixIcon: Icons.lock_outline,
                   ),
                   const SizedBox(height: 18),
-                  PrimaryActionButton(
+                  _AuthPrimaryButton(
                     label: 'Update password',
                     icon: Icons.save,
                     isLoading: _isLoading,
                     onPressed: _reset,
                   ),
                 ] else ...[
-                  PrimaryActionButton(
+                  _AuthPrimaryButton(
                     label: _isChecking ? 'Checking' : 'Check approval',
                     icon: Icons.refresh,
                     isLoading: _isChecking,
