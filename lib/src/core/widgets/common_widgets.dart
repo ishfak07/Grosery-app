@@ -723,45 +723,21 @@ class AppLogoMark extends StatelessWidget {
   const AppLogoMark({
     super.key,
     this.size = 52,
-    this.padding = 3,
-    this.showShadow = false,
-    this.borderRadius = 8,
   });
 
   final double size;
-  final double padding;
-  final bool showShadow;
-  final double borderRadius;
 
+  /// The logo artwork already carries its own rounded green frame and
+  /// transparent corners, so it is drawn as-is - no tile, border, padding
+  /// or shadow around it.
   @override
   Widget build(BuildContext context) {
-    final imageRadius = borderRadius > padding ? borderRadius - padding : 4.0;
-    return Container(
+    return Image.asset(
+      AppConstants.appLogoAsset,
       width: size,
       height: size,
-      padding: EdgeInsets.all(padding),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(borderRadius),
-        border: Border.all(color: const Color(0xFFDDE8DF)),
-        boxShadow: showShadow
-            ? [
-                BoxShadow(
-                  color: const Color(0xFF163526).withValues(alpha: 0.14),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ]
-            : null,
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(imageRadius),
-        child: Image.asset(
-          AppConstants.appLogoAsset,
-          fit: BoxFit.contain,
-          filterQuality: FilterQuality.high,
-        ),
-      ),
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
     );
   }
 }
@@ -1025,9 +1001,8 @@ void showCartConfirmation(
   String message = 'Added to cart.',
   IconData icon = Icons.check_circle_rounded,
 }) {
-  final success =
-      Theme.of(context).extension<AppExtraColors>()?.success ??
-          const Color(0xFF1E8E5A);
+  final success = Theme.of(context).extension<AppExtraColors>()?.success ??
+      const Color(0xFF1E8E5A);
   _showToast(
     context,
     message: message,
@@ -1116,7 +1091,8 @@ class _AppToast extends StatefulWidget {
   State<_AppToast> createState() => _AppToastState();
 }
 
-class _AppToastState extends State<_AppToast> with SingleTickerProviderStateMixin {
+class _AppToastState extends State<_AppToast>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<Offset> _slide;
   late final Animation<double> _fade;

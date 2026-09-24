@@ -148,6 +148,11 @@ class AppState extends ChangeNotifier {
 
   bool _isInitializing = true;
   bool _isLoggingOut = false;
+
+  /// True while completeRegistration is between creating the Auth account
+  /// and saving its profile document. The profile watcher must not treat
+  /// the not-yet-written document as a broken session during that window.
+  bool _isCompletingRegistration = false;
   bool _hasSeenOnboarding = false;
   bool _hasInternetConnection = true;
   UserProfile? _profile;
@@ -539,6 +544,11 @@ class AppState extends ChangeNotifier {
           return;
         }
         if (profile == null) {
+          if (_isCompletingRegistration) {
+            // Registration is still writing this account's profile; the
+            // watcher fires again as soon as the document exists.
+            return;
+          }
           // The Firebase Auth session is live but its Firestore profile
           // document doesn't exist (an interrupted registration, or the
           // document was removed while the account was signed in). Without
@@ -681,6 +691,18 @@ class AppState extends ChangeNotifier {
     );
   }
 
+  /// Push setup (permission prompt, token fetch, token save) takes several
+  /// network round trips; login and registration must not wait on it.
+  void _configureNotificationsInBackground(UserProfile? profile) {
+    unawaited(
+      _configureNotificationsForProfile(profile).catchError((Object _) {
+        // Best-effort: forget the attempt so the profile watcher retries on
+        // the next profile update.
+        _notificationsConfiguredForProfileKey = null;
+      }),
+    );
+  }
+
   Future<void> _configureNotificationsForProfile(UserProfile? profile) async {
     if (profile == null) {
       return;
@@ -790,7 +812,7 @@ class AppState extends ChangeNotifier {
     _watchProductCatalog();
     _watchCategories();
     notifyListeners();
-    await _configureNotificationsForProfile(user);
+    _configureNotificationsInBackground(user);
     // A password-reset tracker is only useful pre-login; once the customer
     // is back in the app (whether via normal login or the auto-login at the
     // end of a completed reset), it has done its job.
@@ -987,13 +1009,18 @@ class AppState extends ChangeNotifier {
     required String preferredLanguageCode,
   }) async {
     final languageCode = AppLanguageCodes.normalize(preferredLanguageCode);
-    _profile = await authService.completeRegistration(
-      fullName: fullName,
-      phone: phone,
-      address: address,
-      password: password,
-      preferredLanguageCode: languageCode,
-    );
+    _isCompletingRegistration = true;
+    try {
+      _profile = await authService.completeRegistration(
+        fullName: fullName,
+        phone: phone,
+        address: address,
+        password: password,
+        preferredLanguageCode: languageCode,
+      );
+    } finally {
+      _isCompletingRegistration = false;
+    }
     _preferredLanguageCode = languageCode;
     await localStorageService.savePreferredLanguageCode(languageCode);
     _watchCheckoutChargeSettings();
@@ -1002,7 +1029,7 @@ class AppState extends ChangeNotifier {
     _watchProductCatalog();
     _watchCategories();
     notifyListeners();
-    await _configureNotificationsForProfile(_profile);
+    _configureNotificationsInBackground(_profile);
   }
 
   Future<void> updateCheckoutChargeSettings({

@@ -852,7 +852,7 @@ class _AuthBrandMark extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Row(
       children: [
-        AppLogoMark(size: 52, padding: 2, showShadow: true),
+        AppLogoMark(size: 52),
         SizedBox(width: 12),
         Expanded(
           child: Text(
@@ -946,11 +946,7 @@ class SplashScreen extends StatelessWidget {
                       builder: (context, value, child) {
                         return Transform.scale(scale: value, child: child);
                       },
-                      child: const AppLogoMark(
-                        size: 96,
-                        padding: 4,
-                        showShadow: true,
-                      ),
+                      child: const AppLogoMark(size: 96),
                     ),
                     const SizedBox(height: 18),
                     Text(

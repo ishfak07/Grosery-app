@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -124,8 +126,6 @@ class AuthService {
 
     final user = credential.user!;
     try {
-      await user.updateDisplayName(fullName.trim());
-
       final now = DateTime.now();
       final profile = UserProfile(
         uid: user.uid,
@@ -143,6 +143,13 @@ class AuthService {
       );
 
       await _firestoreService.saveUserProfile(profile);
+      // Cosmetic only (a fallback name for support tooling): set it in the
+      // background so the customer isn't kept waiting on another round trip.
+      unawaited(
+        user.updateDisplayName(profile.fullName).catchError((Object error) {
+          debugPrint('AuthService: display name not updated ($error)');
+        }),
+      );
       return profile;
     } catch (error) {
       // The Auth account was just created by this call; if the profile it
