@@ -21,7 +21,11 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    // The onboarding illustrations loop forever, so pumpAndSettle would
+    // never settle; advance time in fixed steps instead.
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
 
     expect(find.text('Everything you need in one place'), findsOneWidget);
   });

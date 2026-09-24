@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:ui' show PathMetric;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -380,21 +383,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _controller = PageController();
   var _page = 0;
 
-  final _items = const [
+  static const _items = [
     _OnboardingItem(
-      Icons.storefront,
-      'Everything you need in one place',
-      'Browse our carefully selected products and enjoy a simple shopping experience.',
+      art: _OnboardingArt.catalog,
+      title: 'Everything you need in one place',
+      message:
+          'Browse our carefully selected products and enjoy a simple shopping experience.',
+      colors: [Color(0xFF0B3B27), Color(0xFF136B43), Color(0xFF2F9E62)],
+      glow: Color(0xFF6EE7A0),
     ),
     _OnboardingItem(
-      Icons.receipt_long,
-      'Upload a shopping list',
-      'Send a handwritten or printed list photo when catalog items are not enough.',
+      art: _OnboardingArt.list,
+      title: 'Upload a shopping list',
+      message:
+          'Send a handwritten or printed list photo when catalog items are not enough.',
+      colors: [Color(0xFF0C2F3F), Color(0xFF155E6E), Color(0xFF1F8A7C)],
+      glow: Color(0xFF67E8D5),
     ),
     _OnboardingItem(
-      Icons.payments,
-      'Cash on delivery',
-      'Admin reviews the bill, buys items, delivers, and collects cash.',
+      art: _OnboardingArt.delivery,
+      title: 'Cash on delivery',
+      message:
+          'Admin reviews the bill, buys items, delivers, and collects cash.',
+      colors: [Color(0xFF1F3A2A), Color(0xFF8C4A22), Color(0xFFE8774F)],
+      glow: Color(0xFFFFB38A),
     ),
   ];
 
@@ -404,169 +416,1106 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.dispose();
   }
 
+  double get _pagePosition {
+    if (_controller.hasClients && _controller.position.haveDimensions) {
+      return _controller.page ?? _page.toDouble();
+    }
+    return _page.toDouble();
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    final current = _items[_page];
     return Scaffold(
       backgroundColor: _authBackground,
       body: _AuthBackdrop(
-        child: SafeArea(
-          child: Column(
-            children: [
-              FirebaseSetupBanner(appState: appState),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
-                child: _AuthBrandMark(),
+        child: Stack(
+          children: [
+            // Soft page-tinted light that blends between pages while swiping.
+            Positioned(
+              top: -140,
+              right: -120,
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) {
+                  final position =
+                      _pagePosition.clamp(0.0, _items.length - 1.0);
+                  final from = position.floor();
+                  final to = math.min(from + 1, _items.length - 1);
+                  final color = Color.lerp(
+                    _items[from].glow,
+                    _items[to].glow,
+                    position - from,
+                  )!;
+                  return _OnboardingGlow(
+                    size: 360,
+                    color: color,
+                    opacity: 0.28,
+                  );
+                },
               ),
-              Expanded(
-                child: PageView.builder(
-                  controller: _controller,
-                  onPageChanged: (value) => setState(() => _page = value),
-                  itemCount: _items.length,
-                  itemBuilder: (context, index) {
-                    final item = _items[index];
-                    return SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            ),
+            SafeArea(
+              child: Column(
+                children: [
+                  FirebaseSetupBanner(appState: appState),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                    child: Row(
+                      children: [
+                        const Expanded(child: _AuthBrandMark()),
+                        _OnboardingStepPill(
+                          step: _page + 1,
+                          total: _items.length,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: PageView.builder(
+                      controller: _controller,
+                      onPageChanged: (value) => setState(() => _page = value),
+                      itemCount: _items.length,
+                      itemBuilder: (context, index) => _OnboardingPage(
+                        item: _items[index],
+                        index: index,
+                        controller: _controller,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 520),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(
-                            width: double.infinity,
-                            constraints: const BoxConstraints(maxWidth: 420),
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              gradient: const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Color(0xFF163D2C),
-                                  Color(0xFF176B45),
-                                  Color(0xFFE86F4A),
-                                ],
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List.generate(
+                              _items.length,
+                              (index) => AnimatedContainer(
+                                duration: const Duration(milliseconds: 320),
+                                curve: Curves.easeOutCubic,
+                                width: _page == index ? 30 : 8,
+                                height: 8,
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                decoration: BoxDecoration(
+                                  color: _page == index
+                                      ? current.colors[1]
+                                      : _authLine,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: _authPrimary.withValues(alpha: 0.2),
-                                  blurRadius: 28,
-                                  offset: const Offset(0, 16),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              children: [
-                                Container(
-                                  width: 94,
-                                  height: 94,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.18),
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    item.icon,
-                                    size: 48,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                const SizedBox(height: 24),
-                                Text(
-                                  context.t(item.title),
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineSmall
-                                      ?.copyWith(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: 0,
-                                      ),
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  context.t(item.message),
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.82),
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.4,
-                                  ),
-                                ),
-                              ],
                             ),
                           ),
                           const SizedBox(height: 18),
-                          const Wrap(
-                            alignment: WrapAlignment.center,
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _OnboardingChip(
-                                icon: Icons.eco_outlined,
-                                label: 'Fresh',
-                              ),
-                              _OnboardingChip(
-                                icon: Icons.flash_on_outlined,
-                                label: 'Fast',
-                              ),
-                              _OnboardingChip(
-                                icon: Icons.verified_outlined,
-                                label: 'Trusted',
-                              ),
-                            ],
+                          PrimaryActionButton(
+                            label: _page == _items.length - 1
+                                ? 'Get started'
+                                : 'Next',
+                            icon: Icons.arrow_forward,
+                            onPressed: () async {
+                              if (_page == _items.length - 1) {
+                                await context
+                                    .read<AppState>()
+                                    .markOnboardingComplete();
+                                return;
+                              }
+                              await _controller.nextPage(
+                                duration: const Duration(milliseconds: 280),
+                                curve: Curves.easeOutCubic,
+                              );
+                            },
                           ),
                         ],
                       ),
-                    );
-                  },
-                ),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  _items.length,
-                  (index) => AnimatedContainer(
-                    duration: const Duration(milliseconds: 240),
-                    curve: Curves.easeOutCubic,
-                    width: _page == index ? 28 : 8,
-                    height: 8,
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    decoration: BoxDecoration(
-                      color: _page == index ? _authPrimary : _authLine,
-                      borderRadius: BorderRadius.circular(20),
                     ),
                   ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OnboardingStepPill extends StatelessWidget {
+  const _OnboardingStepPill({required this.step, required this.total});
+
+  final int step;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: _authSurface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _authLine),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 260),
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween(
+                  begin: const Offset(0, 0.4),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            ),
+            child: Text(
+              step.toString().padLeft(2, '0'),
+              key: ValueKey(step),
+              style: const TextStyle(
+                color: _authInk,
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+                letterSpacing: 1,
+              ),
+            ),
+          ),
+          Text(
+            ' / ${total.toString().padLeft(2, '0')}',
+            style: const TextStyle(
+              color: _authMuted,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+              letterSpacing: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OnboardingPage extends StatelessWidget {
+  const _OnboardingPage({
+    required this.item,
+    required this.index,
+    required this.controller,
+  });
+
+  final _OnboardingItem item;
+  final int index;
+  final PageController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stageHeight = (constraints.maxHeight * 0.56).clamp(220.0, 400.0);
+        return AnimatedBuilder(
+          animation: controller,
+          builder: (context, _) {
+            var delta = 0.0;
+            if (controller.hasClients && controller.position.haveDimensions) {
+              delta = ((controller.page ?? index.toDouble()) - index)
+                  .clamp(-1.0, 1.0);
+            }
+            final textOpacity = (1 - delta.abs() * 1.4).clamp(0.0, 1.0);
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: math.max(0, constraints.maxHeight - 24),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 440),
+                      child: SizedBox(
+                        height: stageHeight,
+                        width: double.infinity,
+                        child: _OnboardingStage(item: item, delta: delta),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Opacity(
+                      opacity: textOpacity,
+                      child: Transform.translate(
+                        offset: Offset(delta * -60, 0),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 380),
+                          child: Column(
+                            children: [
+                              Text(
+                                context.t(item.title),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: _authInk,
+                                  fontSize: 26,
+                                  height: 1.2,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                context.t(item.message),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: _authMuted,
+                                  fontSize: 15,
+                                  height: 1.5,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 22),
+                              const Wrap(
+                                alignment: WrapAlignment.center,
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  _OnboardingChip(
+                                    icon: Icons.eco_outlined,
+                                    label: 'Fresh',
+                                  ),
+                                  _OnboardingChip(
+                                    icon: Icons.flash_on_outlined,
+                                    label: 'Fast',
+                                  ),
+                                  _OnboardingChip(
+                                    icon: Icons.verified_outlined,
+                                    label: 'Trusted',
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 520),
-                  child: PrimaryActionButton(
-                    label: _page == _items.length - 1 ? 'Get started' : 'Next',
-                    icon: Icons.arrow_forward,
-                    onPressed: () async {
-                      if (_page == _items.length - 1) {
-                        await context.read<AppState>().markOnboardingComplete();
-                        return;
-                      }
-                      await _controller.nextPage(
-                        duration: const Duration(milliseconds: 280),
-                        curve: Curves.easeOutCubic,
-                      );
-                    },
-                  ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _OnboardingStage extends StatelessWidget {
+  const _OnboardingStage({required this.item, required this.delta});
+
+  final _OnboardingItem item;
+  final double delta;
+
+  @override
+  Widget build(BuildContext context) {
+    final art = switch (item.art) {
+      _OnboardingArt.catalog => _CatalogArt(accent: item.colors[1]),
+      _OnboardingArt.list => _ShoppingListArt(accent: item.colors[2]),
+      _OnboardingArt.delivery => _DeliveryArt(accent: item.colors[2]),
+    };
+    return Transform.scale(
+      scale: 1 - delta.abs() * 0.06,
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: item.colors,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: item.colors.last.withValues(alpha: 0.28),
+              blurRadius: 36,
+              offset: const Offset(0, 18),
+            ),
+          ],
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            const CustomPaint(painter: _DotGridPainter()),
+            Positioned(
+              top: -70,
+              right: -50,
+              child: _OnboardingGlow(
+                size: 220,
+                color: item.glow,
+                opacity: 0.4,
+              ),
+            ),
+            const Positioned(
+              bottom: -90,
+              left: -70,
+              child: _OnboardingGlow(
+                size: 240,
+                color: Colors.white,
+                opacity: 0.14,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              // The art drifts against the swipe for a layered, parallax feel.
+              child: Transform.translate(
+                offset: Offset(delta * 120, 0),
+                child: FittedBox(
+                  child: SizedBox(width: 300, height: 260, child: art),
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OnboardingGlow extends StatelessWidget {
+  const _OnboardingGlow({
+    required this.size,
+    required this.color,
+    required this.opacity,
+  });
+
+  final double size;
+  final Color color;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [
+              color.withValues(alpha: opacity),
+              color.withValues(alpha: 0),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+class _DotGridPainter extends CustomPainter {
+  const _DotGridPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = Colors.white.withValues(alpha: 0.08);
+    const spacing = 18.0;
+    for (var y = spacing / 2; y < size.height; y += spacing) {
+      for (var x = spacing / 2; x < size.width; x += spacing) {
+        canvas.drawCircle(Offset(x, y), 1, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DotGridPainter oldDelegate) => false;
+}
+
+/// Runs one art piece's own endless loop, independent of the other pages,
+/// and holds a still frame when the system asks to reduce motion.
+abstract class _LoopingArtState<T extends StatefulWidget> extends State<T>
+    with SingleTickerProviderStateMixin {
+  Duration get loopDuration;
+
+  late final AnimationController loop = AnimationController(
+    vsync: this,
+    duration: loopDuration,
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.of(context).disableAnimations) {
+      loop
+        ..stop()
+        ..value = 0.6;
+    } else if (!loop.isAnimating) {
+      loop.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    loop.dispose();
+    super.dispose();
+  }
+}
+
+Widget _artBubble({
+  required IconData icon,
+  required Color color,
+  double size = 46,
+}) {
+  return Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: Colors.white,
+      shape: BoxShape.circle,
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.18),
+          blurRadius: 14,
+          offset: const Offset(0, 6),
+        ),
+      ],
+    ),
+    child: Icon(icon, color: color, size: size * 0.48),
+  );
+}
+
+class _CatalogArt extends StatefulWidget {
+  const _CatalogArt({required this.accent});
+
+  final Color accent;
+
+  @override
+  State<_CatalogArt> createState() => _CatalogArtState();
+}
+
+class _CatalogArtState extends _LoopingArtState<_CatalogArt> {
+  static const _center = Offset(150, 130);
+  static const _radius = 96.0;
+  static const _satellites = [
+    (Icons.eco_rounded, Color(0xFF16A34A)),
+    (Icons.local_drink_rounded, Color(0xFF2563EB)),
+    (Icons.bakery_dining_rounded, Color(0xFFD97706)),
+    (Icons.egg_rounded, Color(0xFFE86F4A)),
+  ];
+
+  @override
+  Duration get loopDuration => const Duration(seconds: 14);
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: loop,
+      builder: (context, _) {
+        final t = loop.value;
+        final breathe = 1 + 0.035 * math.sin(t * math.pi * 2 * 7);
+        final placed = [
+          for (var i = 0; i < _satellites.length; i++)
+            (i, t * math.pi * 2 + i * math.pi / 2),
+        ]..sort((a, b) => math.sin(a.$2).compareTo(math.sin(b.$2)));
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _OrbitPainter(
+                  center: _center,
+                  radius: _radius,
+                  rotation: t * math.pi * 2 * 2,
+                ),
+              ),
+            ),
+            Positioned(
+              left: _center.dx - 60,
+              top: _center.dy - 60,
+              child: Transform.scale(
+                scale: breathe,
+                child: Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.12),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.24),
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Container(
+                    width: 84,
+                    height: 84,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.storefront_rounded,
+                      size: 40,
+                      color: widget.accent,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            for (final (index, angle) in placed)
+              Builder(
+                builder: (context) {
+                  final depth = (math.sin(angle) + 1) / 2;
+                  final position = _center +
+                      Offset(
+                        math.cos(angle) * _radius,
+                        math.sin(angle) * _radius * 0.9,
+                      );
+                  final (icon, color) = _satellites[index];
+                  return Positioned(
+                    left: position.dx - 23,
+                    top: position.dy - 23,
+                    child: Opacity(
+                      opacity: 0.75 + 0.25 * depth,
+                      child: Transform.scale(
+                        scale: 0.82 + 0.2 * depth,
+                        child: _artBubble(icon: icon, color: color),
+                      ),
+                    ),
+                  );
+                },
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _OrbitPainter extends CustomPainter {
+  const _OrbitPainter({
+    required this.center,
+    required this.radius,
+    required this.rotation,
+  });
+
+  final Offset center;
+  final double radius;
+  final double rotation;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromCenter(
+      center: center,
+      width: radius * 2,
+      height: radius * 1.8,
+    );
+    canvas.drawOval(
+      rect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..color = Colors.white.withValues(alpha: 0.18),
+    );
+    canvas.drawOval(
+      rect.inflate(24),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = Colors.white.withValues(alpha: 0.07),
+    );
+    canvas.drawArc(
+      rect,
+      rotation,
+      1.1,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.4
+        ..strokeCap = StrokeCap.round
+        ..color = Colors.white.withValues(alpha: 0.55),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _OrbitPainter oldDelegate) =>
+      oldDelegate.rotation != rotation;
+}
+
+class _ShoppingListArt extends StatefulWidget {
+  const _ShoppingListArt({required this.accent});
+
+  final Color accent;
+
+  @override
+  State<_ShoppingListArt> createState() => _ShoppingListArtState();
+}
+
+class _ShoppingListArtState extends _LoopingArtState<_ShoppingListArt> {
+  static const _lineWidths = [88.0, 64.0, 96.0, 56.0, 78.0];
+
+  @override
+  Duration get loopDuration => const Duration(milliseconds: 4200);
+
+  @override
+  Widget build(BuildContext context) {
+    const mint = Color(0xFF5EEAD4);
+    return AnimatedBuilder(
+      animation: loop,
+      builder: (context, _) {
+        final t = loop.value;
+        final checked = (t * 7).floor().clamp(0, _lineWidths.length);
+        final scan = (t * 2) % 1;
+        final pulse = (t * 3) % 1;
+        final bob = math.sin(t * math.pi * 2) * 5;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Photo card peeking out behind the list.
+            Positioned(
+              left: 96,
+              top: 16,
+              child: Transform.rotate(
+                angle: 0.13,
+                child: Container(
+                  width: 150,
+                  height: 200,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.22),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 66,
+              top: 24,
+              child: Transform.rotate(
+                angle: -0.05,
+                child: Container(
+                  width: 160,
+                  height: 212,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.22),
+                        blurRadius: 24,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    color: widget.accent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  width: 70,
+                                  height: 9,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1F2937),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            for (var i = 0; i < _lineWidths.length; i++)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: Row(
+                                  children: [
+                                    AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 260),
+                                      curve: Curves.easeOutBack,
+                                      width: 18,
+                                      height: 18,
+                                      decoration: BoxDecoration(
+                                        color: i < checked
+                                            ? widget.accent
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(5),
+                                        border: Border.all(
+                                          color: i < checked
+                                              ? widget.accent
+                                              : const Color(0xFFCBD5E1),
+                                          width: 1.6,
+                                        ),
+                                      ),
+                                      child: i < checked
+                                          ? const Icon(
+                                              Icons.check_rounded,
+                                              size: 13,
+                                              color: Colors.white,
+                                            )
+                                          : null,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 260),
+                                      width: _lineWidths[i],
+                                      height: 8,
+                                      decoration: BoxDecoration(
+                                        color: i < checked
+                                            ? const Color(0xFFCBD5E1)
+                                            : const Color(0xFFE2E8F0),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      // Scanner sweep reading the list.
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: -30 + scan * 250,
+                        child: Container(
+                          height: 30,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                mint.withValues(alpha: 0),
+                                mint.withValues(alpha: 0.35),
+                              ],
+                            ),
+                            border: const Border(
+                              bottom: BorderSide(color: mint, width: 2),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Camera badge with a steady capture pulse.
+            Positioned(
+              left: 196,
+              top: 6,
+              child: SizedBox(
+                width: 60,
+                height: 60,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 52 + 30 * pulse,
+                      height: 52 + 30 * pulse,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withValues(
+                            alpha: 0.5 * (1 - pulse),
+                          ),
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    _artBubble(
+                      icon: Icons.photo_camera_rounded,
+                      color: widget.accent,
+                      size: 52,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              left: 18,
+              top: 170 + bob,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.28),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.cloud_upload_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DeliveryArt extends StatefulWidget {
+  const _DeliveryArt({required this.accent});
+
+  final Color accent;
+
+  @override
+  State<_DeliveryArt> createState() => _DeliveryArtState();
+}
+
+class _DeliveryArtState extends _LoopingArtState<_DeliveryArt> {
+  static const _start = Offset(52, 204);
+  static const _end = Offset(248, 56);
+
+  static final Path _route = Path()
+    ..moveTo(_start.dx, _start.dy)
+    ..cubicTo(120, 206, 84, 104, 158, 116)
+    ..cubicTo(230, 128, 210, 60, _end.dx, _end.dy);
+  static final PathMetric _metric = _route.computeMetrics().first;
+
+  @override
+  Duration get loopDuration => const Duration(milliseconds: 4600);
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: loop,
+      builder: (context, _) {
+        final t = loop.value;
+        final progress =
+            Curves.easeInOutCubic.transform((t / 0.78).clamp(0.0, 1.0));
+        final rider =
+            _metric.getTangentForOffset(_metric.length * progress)!.position;
+        final riderOpacity = t < 0.06
+            ? t / 0.06
+            : t > 0.92
+                ? (1 - t) / 0.08
+                : 1.0;
+        final arrived = t > 0.78 ? (t - 0.78) / 0.22 : 0.0;
+        final bob = math.sin(t * math.pi * 4) * 4;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _RoutePainter(
+                  route: _route,
+                  metric: _metric,
+                  progress: progress,
+                ),
+              ),
+            ),
+            Positioned(
+              left: _start.dx - 24,
+              top: _start.dy - 24,
+              child: _artBubble(
+                icon: Icons.storefront_rounded,
+                color: const Color(0xFF136B43),
+                size: 48,
+              ),
+            ),
+            Positioned(
+              left: _end.dx - 34,
+              top: _end.dy - 34,
+              child: SizedBox(
+                width: 68,
+                height: 68,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 50 + 36 * arrived,
+                      height: 50 + 36 * arrived,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(
+                          alpha: arrived > 0 ? 0.3 * (1 - arrived) : 0,
+                        ),
+                      ),
+                    ),
+                    _artBubble(
+                      icon: Icons.home_rounded,
+                      color: widget.accent,
+                      size: 50,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              left: rider.dx - 25,
+              top: rider.dy - 31,
+              child: Opacity(
+                opacity: riderOpacity.clamp(0.0, 1.0),
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color.lerp(widget.accent, Colors.white, 0.2)!,
+                        widget.accent,
+                      ],
+                    ),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.delivery_dining_rounded,
+                    color: Colors.white,
+                    size: 26,
+                  ),
+                ),
+              ),
+            ),
+            // Cash card floating in the corner.
+            Positioned(
+              left: 188,
+              top: 176 + bob,
+              child: Transform.rotate(
+                angle: -0.06,
+                child: Container(
+                  width: 92,
+                  height: 58,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.32),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.payments_rounded,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            FractionallySizedBox(
+                              widthFactor: 0.6,
+                              child: Container(
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.45),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _RoutePainter extends CustomPainter {
+  const _RoutePainter({
+    required this.route,
+    required this.metric,
+    required this.progress,
+  });
+
+  final Path route;
+  final PathMetric metric;
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final dash = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..color = Colors.white.withValues(alpha: 0.3);
+    for (var distance = 0.0; distance < metric.length; distance += 14) {
+      canvas.drawPath(
+        metric.extractPath(distance, math.min(distance + 7, metric.length)),
+        dash,
+      );
+    }
+
+    final travelled = metric.extractPath(0, metric.length * progress);
+    canvas.drawPath(
+      travelled,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 10
+        ..strokeCap = StrokeCap.round
+        ..color = Colors.white.withValues(alpha: 0.18)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+    );
+    canvas.drawPath(
+      travelled,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4
+        ..strokeCap = StrokeCap.round
+        ..color = Colors.white,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _RoutePainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 class _OnboardingChip extends StatelessWidget {
@@ -610,12 +1559,22 @@ class _OnboardingChip extends StatelessWidget {
   }
 }
 
-class _OnboardingItem {
-  const _OnboardingItem(this.icon, this.title, this.message);
+enum _OnboardingArt { catalog, list, delivery }
 
-  final IconData icon;
+class _OnboardingItem {
+  const _OnboardingItem({
+    required this.art,
+    required this.title,
+    required this.message,
+    required this.colors,
+    required this.glow,
+  });
+
+  final _OnboardingArt art;
   final String title;
   final String message;
+  final List<Color> colors;
+  final Color glow;
 }
 
 class LoginScreen extends StatefulWidget {
