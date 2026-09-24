@@ -619,8 +619,18 @@ exports.sendPushForNotification = onDocumentCreated(
     }
 
     const notification = snapshot.data();
-    const title = notification.title || "Puttalam Drop";
-    const body = notification.body || "You have a new update.";
+    const rawTitle = `${notification.title || ""}`.trim();
+    const body = `${notification.body || ""}`.trim();
+    // Never push a generic placeholder: a document with no text is a bad
+    // write, not something every customer should be woken up for.
+    if (!rawTitle && !body) {
+      console.warn("Skipping push for empty notification", {
+        notificationId: event.params.notificationId,
+        recipientRole: notification.recipientRole || "",
+      });
+      return;
+    }
+    const title = rawTitle || "Puttalam Drop";
     const tokens = await resolveTokens(notification);
     if (tokens.length === 0) {
       return;

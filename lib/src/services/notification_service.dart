@@ -308,14 +308,22 @@ class NotificationService {
   static Future<void> showLocalNotification(RemoteMessage message) async {
     final notificationId =
         message.data['notificationId']?.toString() ?? message.messageId;
+    final title = (message.notification?.title ??
+            message.data['title']?.toString() ??
+            '')
+        .trim();
+    final body = (message.notification?.body ??
+            message.data['body']?.toString() ??
+            '')
+        .trim();
+    // Pushes with no text are ignored instead of shown as a generic update.
+    if (title.isEmpty && body.isEmpty) {
+      return;
+    }
     await _showLocalNotificationDetails(
       notificationKey: notificationId,
-      title: message.notification?.title ??
-          message.data['title']?.toString() ??
-          'Puttalam Drop',
-      body: message.notification?.body ??
-          message.data['body']?.toString() ??
-          'You have a new update.',
+      title: title.isNotEmpty ? title : 'Puttalam Drop',
+      body: body,
       payload: message.data['relatedId']?.toString(),
     );
   }
@@ -323,13 +331,14 @@ class NotificationService {
   static Future<void> showAppNotification(
     AppNotification notification,
   ) async {
+    if (notification.title.trim().isEmpty && notification.body.trim().isEmpty) {
+      return;
+    }
     await _showLocalNotificationDetails(
       notificationKey: notification.notificationId,
       title:
           notification.title.isNotEmpty ? notification.title : 'Puttalam Drop',
-      body: notification.body.isNotEmpty
-          ? notification.body
-          : 'You have a new update.',
+      body: notification.body,
       payload: notification.relatedId,
     );
   }
