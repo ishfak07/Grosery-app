@@ -4,6 +4,7 @@ const {defineSecret, defineString} = require("firebase-functions/params");
 const {
   onDocumentCreated,
   onDocumentUpdated,
+  onDocumentWritten,
 } = require("firebase-functions/v2/firestore");
 const {HttpsError, onCall, onRequest} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
@@ -27,6 +28,7 @@ const {
   interpretCloudinaryDestroyResult,
 } = require("./lib/cloudinaryCleanup");
 const {isCodPaymentPendingForDelivery} = require("./lib/deliveryCompletion");
+const {claimedPushTokens, tokenRemovalUpdate} = require("./lib/pushTokens");
 
 admin.initializeApp();
 
@@ -682,6 +684,60 @@ exports.sendPushForNotification = onDocumentCreated(
         notification,
       );
     }
+  },
+);
+
+// A push token belongs to a phone, not to an account. When a user document
+// claims a token (login / token refresh), strip that token from every other
+// account so a shared device only receives the signed-in account's pushes.
+// The removal writes never claim tokens themselves, so this cannot loop.
+exports.dedupePushTokensOnUserWrite = onDocumentWritten(
+  "users/{uid}",
+  async (event) => {
+    const before = event.data?.before?.exists ?
+      event.data.before.data() :
+      null;
+    const after = event.data?.after?.exists ? event.data.after.data() : null;
+    const claimed = claimedPushTokens(before, after);
+    if (claimed.length === 0) {
+      return;
+    }
+
+    const uid = event.params.uid;
+    const users = admin.firestore().collection("users");
+    const owners = new Map();
+    for (const tokenBatch of chunk(claimed, 30)) {
+      const [byList, byPrimary] = await Promise.all([
+        users.where("fcmTokens", "array-contains-any", tokenBatch).get(),
+        users.where("fcmToken", "in", tokenBatch).get(),
+      ]);
+      for (const doc of [...byList.docs, ...byPrimary.docs]) {
+        if (doc.id !== uid) {
+          owners.set(doc.id, doc);
+        }
+      }
+    }
+
+    await Promise.all(
+      [...owners.values()].map(async (doc) => {
+        const updates = tokenRemovalUpdate(
+          doc.data(),
+          claimed,
+          admin.firestore.FieldValue,
+        );
+        if (!updates) {
+          return;
+        }
+        try {
+          await doc.ref.update(updates);
+        } catch (error) {
+          console.error("Failed to release push token from user", {
+            uid: doc.id,
+            error: error.message,
+          });
+        }
+      }),
+    );
   },
 );
 

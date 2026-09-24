@@ -519,7 +519,9 @@ class AppState extends ChangeNotifier {
       _catalogById = const <String, Product>{};
       _categories = const <Shop>[];
       _notificationsConfiguredForProfileKey = null;
-      unawaited(notificationService.detachUser());
+      // Signed out (logout, expired or revoked session): this device must
+      // stop receiving any account's pushes.
+      unawaited(notificationService.releaseDevice());
       _isInitializing = false;
       notifyListeners();
       return;
@@ -892,6 +894,7 @@ class AppState extends ChangeNotifier {
           // Push-token cleanup should not block logout.
         }
       }
+      await notificationService.releaseDevice();
       await _checkoutChargeSettingsSubscription?.cancel();
       await _shopHoursSettingsSubscription?.cancel();
       await _paymentSettingsSubscription?.cancel();
@@ -918,7 +921,7 @@ class AppState extends ChangeNotifier {
       await _paymentSettingsSubscription?.cancel();
       await _productCatalogSubscription?.cancel();
       await _categoriesSubscription?.cancel();
-      await notificationService.detachUser();
+      await notificationService.releaseDevice();
       await localStorageService.clearPrivateAccountData();
       _profile = null;
       _cartItems = const <CartItem>[];
@@ -954,7 +957,7 @@ class AppState extends ChangeNotifier {
       await _paymentSettingsSubscription?.cancel();
       await _productCatalogSubscription?.cancel();
       await _categoriesSubscription?.cancel();
-      await notificationService.detachUser();
+      await notificationService.releaseDevice();
       await localStorageService.clearPrivateAccountData();
       _profile = null;
       _cartItems = const <CartItem>[];

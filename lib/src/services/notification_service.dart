@@ -52,6 +52,7 @@ class NotificationService {
   final bool _firebaseAvailable;
   String? _configuredUserId;
   StreamSubscription<String>? _tokenRefreshSubscription;
+  Future<void>? _pendingTokenRelease;
   var _foregroundListenerConfigured = false;
 
   static void registerBackgroundHandler() {
@@ -83,6 +84,9 @@ class NotificationService {
     }
 
     await initialize(requestPermission: true);
+    // A token being deleted for the previous session must be gone before
+    // this account reads (and saves) the device token.
+    await _pendingTokenRelease;
 
     if (_configuredUserId != uid) {
       _configuredUserId = uid;
@@ -150,6 +154,37 @@ class NotificationService {
     _configuredUserId = null;
     await _tokenRefreshSubscription?.cancel();
     _tokenRefreshSubscription = null;
+  }
+
+  /// Detaches the signed-in account and deletes this device's push token.
+  ///
+  /// The push token belongs to the phone, not the account, so a signed-out
+  /// device must not keep one: any account document still holding the old
+  /// token (a failed cleanup, an expired session, an older app build) then
+  /// points at a dead token, which the server prunes on its next send. The
+  /// next login gets a fresh token.
+  Future<void> releaseDevice() async {
+    await detachUser();
+    if (!_firebaseAvailable) {
+      return;
+    }
+    final pending = _pendingTokenRelease ??= _deleteDeviceToken();
+    try {
+      await pending;
+    } finally {
+      if (identical(_pendingTokenRelease, pending)) {
+        _pendingTokenRelease = null;
+      }
+    }
+  }
+
+  Future<void> _deleteDeviceToken() async {
+    try {
+      await FirebaseMessaging.instance.deleteToken();
+    } catch (_) {
+      // Best-effort: the server also removes this device's token from other
+      // accounts whenever a new account claims it.
+    }
   }
 
   static Future<void> _configureLocalNotifications() async {
@@ -245,9 +280,14 @@ class NotificationService {
       return;
     }
     _foregroundListenerConfigured = true;
-    FirebaseMessaging.onMessage.listen(
-      (message) => unawaited(showLocalNotification(message)),
-    );
+    FirebaseMessaging.onMessage.listen((message) {
+      // Nobody is signed in on this device: an in-app push can only be a
+      // leftover addressed to a previous session.
+      if (_configuredUserId == null) {
+        return;
+      }
+      unawaited(showLocalNotification(message));
+    });
   }
 
   Future<void> _saveToken(String uid, String? token) async {
