@@ -166,6 +166,11 @@ const _tamil = <String, String>{
   'Full name': 'முழுப் பெயர்',
   'Delivery address': 'விநியோக முகவரி',
   'Confirm password': 'கடவுச்சொல்லை உறுதிப்படுத்து',
+  'Account created successfully!': 'கணக்கு வெற்றிகரமாக உருவாக்கப்பட்டது!',
+  'Your account is ready. Please log in with your phone number and password to continue.':
+      'உங்கள் கணக்கு தயாராக உள்ளது. தொடர உங்கள் தொலைபேசி எண் மற்றும் கடவுச்சொல்லுடன் உள்நுழையுங்கள்.',
+  'Go to login': 'உள்நுழைவுக்குச் செல்',
+  'How it works': 'இது எப்படி வேலை செய்கிறது',
   'Set new password': 'புதிய கடவுச்சொல் அமை',
   'Password reset': 'கடவுச்சொல் மீட்டமைப்பு',
   'New password': 'புதிய கடவுச்சொல்',

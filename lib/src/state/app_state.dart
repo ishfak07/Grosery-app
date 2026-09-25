@@ -149,11 +149,17 @@ class AppState extends ChangeNotifier {
   bool _isInitializing = true;
   bool _isLoggingOut = false;
 
-  /// True while completeRegistration is between creating the Auth account
-  /// and saving its profile document. The profile watcher must not treat
-  /// the not-yet-written document as a broken session during that window.
+  /// True for the whole of completeRegistration: from creating the Auth
+  /// account, through saving its profile document, to signing that fresh
+  /// session back out. Auth events for the new account are ignored during
+  /// that window so the app never jumps into the customer home - a new
+  /// customer is sent back to Login instead.
   bool _isCompletingRegistration = false;
   bool _hasSeenOnboarding = false;
+
+  /// True when the customer went back from Login to view the intro screens
+  /// again (as opposed to the first-install onboarding).
+  bool _isReplayingOnboarding = false;
   bool _hasInternetConnection = true;
   UserProfile? _profile;
   List<CartItem> _cartItems = const <CartItem>[];
@@ -177,6 +183,7 @@ class AppState extends ChangeNotifier {
   bool get isInitializing => _isInitializing;
   bool get isLoggingOut => _isLoggingOut;
   bool get hasSeenOnboarding => _hasSeenOnboarding;
+  bool get isReplayingOnboarding => _isReplayingOnboarding;
   bool get hasInternetConnection => _hasInternetConnection;
   UserProfile? get profile => _profile;
   bool get isLoggedIn => _profile != null;
@@ -495,7 +502,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _handleAuthUser(User? user) async {
-    if (_isLoggingOut && user != null) {
+    if ((_isLoggingOut || _isCompletingRegistration) && user != null) {
       return;
     }
     if (!_isCurrentAuthUser(user)) {
@@ -732,8 +739,21 @@ class AppState extends ChangeNotifier {
 
   Future<void> markOnboardingComplete() async {
     _hasSeenOnboarding = true;
+    _isReplayingOnboarding = false;
     notifyListeners();
     await localStorageService.setOnboardingSeen();
+  }
+
+  /// Shows the intro screens again when the customer goes back from Login.
+  /// Only the in-memory flag changes: finishing them (or going back again)
+  /// returns to Login, and a relaunch still opens straight on Login.
+  void replayOnboarding() {
+    if (isLoggedIn || !_hasSeenOnboarding) {
+      return;
+    }
+    _hasSeenOnboarding = false;
+    _isReplayingOnboarding = true;
+    notifyListeners();
   }
 
   Future<void> refreshProfile() async {
@@ -1011,25 +1031,27 @@ class AppState extends ChangeNotifier {
     final languageCode = AppLanguageCodes.normalize(preferredLanguageCode);
     _isCompletingRegistration = true;
     try {
-      _profile = await authService.completeRegistration(
+      await authService.completeRegistration(
         fullName: fullName,
         phone: phone,
         address: address,
         password: password,
         preferredLanguageCode: languageCode,
       );
+      // Creating the account signs it in; sign it straight back out so the
+      // new customer confirms their details by logging in themselves.
+      try {
+        await authService.logout();
+      } catch (_) {
+        // The account exists either way; a leftover session is picked up
+        // by the auth listener once this flag clears.
+      }
     } finally {
       _isCompletingRegistration = false;
     }
     _preferredLanguageCode = languageCode;
     await localStorageService.savePreferredLanguageCode(languageCode);
-    _watchCheckoutChargeSettings();
-    _watchShopHoursSettings();
-    _watchPaymentSettings();
-    _watchProductCatalog();
-    _watchCategories();
     notifyListeners();
-    _configureNotificationsInBackground(_profile);
   }
 
   Future<void> updateCheckoutChargeSettings({

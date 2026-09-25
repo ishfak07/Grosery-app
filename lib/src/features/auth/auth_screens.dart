@@ -2771,117 +2771,135 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final current = _items[_page];
-    return Scaffold(
-      backgroundColor: _authBackground,
-      body: _AuthBackdrop(
-        child: Stack(
-          children: [
-            // Soft page-tinted light that blends between pages while swiping.
-            Positioned(
-              top: -140,
-              right: -120,
-              child: AnimatedBuilder(
-                animation: _controller,
-                builder: (context, _) {
-                  final position =
-                      _pagePosition.clamp(0.0, _items.length - 1.0);
-                  final from = position.floor();
-                  final to = math.min(from + 1, _items.length - 1);
-                  final color = Color.lerp(
-                    _items[from].glow,
-                    _items[to].glow,
-                    position - from,
-                  )!;
-                  return _OnboardingGlow(
-                    size: 360,
-                    color: color,
-                    opacity: 0.28,
-                  );
-                },
+    // Back steps through the pages; from the first page it returns to Login
+    // when the intro was reopened from there (on first install it exits).
+    return PopScope(
+      canPop: _page == 0 && !appState.isReplayingOnboarding,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          return;
+        }
+        if (_page > 0) {
+          _controller.previousPage(
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+          );
+          return;
+        }
+        appState.markOnboardingComplete();
+      },
+      child: Scaffold(
+        backgroundColor: _authBackground,
+        body: _AuthBackdrop(
+          child: Stack(
+            children: [
+              // Soft page-tinted light that blends between pages while swiping.
+              Positioned(
+                top: -140,
+                right: -120,
+                child: AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, _) {
+                    final position =
+                        _pagePosition.clamp(0.0, _items.length - 1.0);
+                    final from = position.floor();
+                    final to = math.min(from + 1, _items.length - 1);
+                    final color = Color.lerp(
+                      _items[from].glow,
+                      _items[to].glow,
+                      position - from,
+                    )!;
+                    return _OnboardingGlow(
+                      size: 360,
+                      color: color,
+                      opacity: 0.28,
+                    );
+                  },
+                ),
               ),
-            ),
-            SafeArea(
-              child: Column(
-                children: [
-                  FirebaseSetupBanner(appState: appState),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                    child: Row(
-                      children: [
-                        const Expanded(child: _AuthBrandMark()),
-                        _OnboardingStepPill(
-                          step: _page + 1,
-                          total: _items.length,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: PageView.builder(
-                      controller: _controller,
-                      onPageChanged: (value) => setState(() => _page = value),
-                      itemCount: _items.length,
-                      itemBuilder: (context, index) => _OnboardingPage(
-                        item: _items[index],
-                        index: index,
-                        controller: _controller,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 520),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+              SafeArea(
+                child: Column(
+                  children: [
+                    FirebaseSetupBanner(appState: appState),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                      child: Row(
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: List.generate(
-                              _items.length,
-                              (index) => AnimatedContainer(
-                                duration: const Duration(milliseconds: 320),
-                                curve: Curves.easeOutCubic,
-                                width: _page == index ? 30 : 8,
-                                height: 8,
-                                margin:
-                                    const EdgeInsets.symmetric(horizontal: 4),
-                                decoration: BoxDecoration(
-                                  color: _page == index
-                                      ? current.colors[1]
-                                      : _authLine,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          PrimaryActionButton(
-                            label: _page == _items.length - 1
-                                ? 'Get started'
-                                : 'Next',
-                            icon: Icons.arrow_forward,
-                            onPressed: () async {
-                              if (_page == _items.length - 1) {
-                                await context
-                                    .read<AppState>()
-                                    .markOnboardingComplete();
-                                return;
-                              }
-                              await _controller.nextPage(
-                                duration: const Duration(milliseconds: 280),
-                                curve: Curves.easeOutCubic,
-                              );
-                            },
+                          const Expanded(child: _AuthBrandMark()),
+                          _OnboardingStepPill(
+                            step: _page + 1,
+                            total: _items.length,
                           ),
                         ],
                       ),
                     ),
-                  ),
-                ],
+                    Expanded(
+                      child: PageView.builder(
+                        controller: _controller,
+                        onPageChanged: (value) => setState(() => _page = value),
+                        itemCount: _items.length,
+                        itemBuilder: (context, index) => _OnboardingPage(
+                          item: _items[index],
+                          index: index,
+                          controller: _controller,
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 520),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(
+                                _items.length,
+                                (index) => AnimatedContainer(
+                                  duration: const Duration(milliseconds: 320),
+                                  curve: Curves.easeOutCubic,
+                                  width: _page == index ? 30 : 8,
+                                  height: 8,
+                                  margin:
+                                      const EdgeInsets.symmetric(horizontal: 4),
+                                  decoration: BoxDecoration(
+                                    color: _page == index
+                                        ? current.colors[1]
+                                        : _authLine,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            PrimaryActionButton(
+                              label: _page == _items.length - 1
+                                  ? 'Get started'
+                                  : 'Next',
+                              icon: Icons.arrow_forward,
+                              onPressed: () async {
+                                if (_page == _items.length - 1) {
+                                  await context
+                                      .read<AppState>()
+                                      .markOnboardingComplete();
+                                  return;
+                                }
+                                await _controller.nextPage(
+                                  duration: const Duration(milliseconds: 280),
+                                  curve: Curves.easeOutCubic,
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -3944,6 +3962,19 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    // Back from Login reopens the three intro screens instead of exiting.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          appState.replayOnboarding();
+        }
+      },
+      child: _buildForm(context, appState),
+    );
+  }
+
+  Widget _buildForm(BuildContext context, AppState appState) {
     return _AuthScaffold(
       title: 'Welcome back',
       hero: const _AuthHero(
@@ -4007,6 +4038,15 @@ class _LoginScreenState extends State<LoginScreen> {
               : null,
           icon: const Icon(Icons.person_add_alt_1_rounded),
           label: Text(context.t('Create account')),
+        ),
+        const SizedBox(height: 4),
+        Center(
+          child: TextButton.icon(
+            onPressed: appState.replayOnboarding,
+            style: TextButton.styleFrom(foregroundColor: _authMuted),
+            icon: const Icon(Icons.play_circle_outline_rounded, size: 20),
+            label: Text(context.t('How it works')),
+          ),
         ),
         if (appState.passwordResetTracker != null) ...[
           const SizedBox(height: 12),
@@ -4436,6 +4476,31 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
             password: _password.text,
             preferredLanguageCode: _preferredLanguageCode,
           );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _isLoading = false);
+      await showGeneralDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: _authNight.withValues(alpha: 0.55),
+        transitionDuration: const Duration(milliseconds: 380),
+        pageBuilder: (_, __, ___) => const _RegistrationSuccessDialog(),
+        transitionBuilder: (context, animation, _, child) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutBack,
+            reverseCurve: Curves.easeInCubic,
+          );
+          return FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.82, end: 1).animate(curved),
+              child: child,
+            ),
+          );
+        },
+      );
       if (mounted) {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
@@ -4449,6 +4514,242 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
       }
     }
   }
+}
+
+/// Shown once a new account is saved. The customer is not signed in yet:
+/// the only way forward is the Login page.
+class _RegistrationSuccessDialog extends StatefulWidget {
+  const _RegistrationSuccessDialog();
+
+  @override
+  State<_RegistrationSuccessDialog> createState() =>
+      _RegistrationSuccessDialogState();
+}
+
+class _RegistrationSuccessDialogState extends State<_RegistrationSuccessDialog>
+    with TickerProviderStateMixin {
+  late final AnimationController _intro = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..forward();
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2200),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _intro.dispose();
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Material(
+              color: _authSheet,
+              borderRadius: BorderRadius.circular(30),
+              clipBehavior: Clip.antiAlias,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: SizedBox.square(
+                        dimension: 150,
+                        child: AnimatedBuilder(
+                          animation: Listenable.merge([_intro, _pulse]),
+                          builder: (context, _) => CustomPaint(
+                            painter: _SuccessBadgePainter(
+                              intro: _intro.value,
+                              pulse: _pulse.value,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      context.t('Account created successfully!'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: _authInk,
+                        fontSize: 22,
+                        height: 1.25,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    )
+                        .animate()
+                        .fadeIn(delay: 650.ms, duration: 400.ms)
+                        .slideY(begin: 0.3, end: 0, delay: 650.ms),
+                    const SizedBox(height: 10),
+                    Text(
+                      context.t(
+                        'Your account is ready. Please log in with your phone number and password to continue.',
+                      ),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: _authMuted,
+                        fontSize: 14.5,
+                        height: 1.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    )
+                        .animate()
+                        .fadeIn(delay: 800.ms, duration: 400.ms)
+                        .slideY(begin: 0.3, end: 0, delay: 800.ms),
+                    const SizedBox(height: 24),
+                    _AuthPrimaryButton(
+                      label: 'Go to login',
+                      icon: Icons.login_rounded,
+                      onPressed: () => Navigator.of(context).pop(),
+                    )
+                        .animate()
+                        .fadeIn(delay: 950.ms, duration: 400.ms)
+                        .slideY(begin: 0.4, end: 0, delay: 950.ms),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Success badge: a disc that springs in, a tick that draws itself, a burst
+/// of confetti, then soft rings that keep pulsing outward.
+class _SuccessBadgePainter extends CustomPainter {
+  const _SuccessBadgePainter({required this.intro, required this.pulse});
+
+  final double intro;
+  final double pulse;
+
+  static const _confettiColors = [
+    _authLime,
+    _authAccent,
+    _authPrimary,
+    Color(0xFFFFC857),
+  ];
+
+  static double _segment(double t, double start, double end) =>
+      ((t - start) / (end - start)).clamp(0.0, 1.0);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide * 0.3;
+
+    // Pulsing rings, once the disc has landed.
+    final ringsIn = _segment(intro, 0.45, 0.8);
+    if (ringsIn > 0) {
+      for (var i = 0; i < 2; i++) {
+        final t = (pulse + i / 2) % 1;
+        canvas.drawCircle(
+          center,
+          radius * (1 + t * 0.62),
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.5 * (1 - t)
+            ..color = _authPrimary.withValues(alpha: 0.35 * (1 - t) * ringsIn),
+        );
+      }
+    }
+
+    // Confetti burst.
+    final burst = _segment(intro, 0.3, 0.9);
+    if (burst > 0 && burst < 1) {
+      final eased = Curves.easeOutCubic.transform(burst);
+      for (var i = 0; i < 14; i++) {
+        final angle = i / 14 * math.pi * 2 + (i.isEven ? 0.12 : -0.12);
+        final distance = radius * (0.9 + eased * (i.isEven ? 0.8 : 0.62));
+        final position =
+            center + Offset(math.cos(angle), math.sin(angle)) * distance;
+        final paint = Paint()
+          ..color = _confettiColors[i % _confettiColors.length]
+              .withValues(alpha: 1 - burst);
+        if (i % 3 == 0) {
+          canvas.save();
+          canvas.translate(position.dx, position.dy);
+          canvas.rotate(angle + eased * math.pi);
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              const Rect.fromLTWH(-4, -1.8, 8, 3.6),
+              const Radius.circular(2),
+            ),
+            paint,
+          );
+          canvas.restore();
+        } else {
+          canvas.drawCircle(position, i.isEven ? 3.6 : 2.6, paint);
+        }
+      }
+    }
+
+    // Disc springs in.
+    final scale = Curves.elasticOut.transform(_segment(intro, 0, 0.55));
+    if (scale > 0) {
+      final discRect = Rect.fromCircle(center: center, radius: radius * scale);
+      canvas.drawCircle(
+        center + const Offset(0, 6),
+        radius * scale,
+        Paint()
+          ..color = _authPrimary.withValues(alpha: 0.25)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+      );
+      canvas.drawCircle(
+        center,
+        radius * scale,
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF2F9E62), _authPrimary],
+          ).createShader(discRect),
+      );
+    }
+
+    // Tick draws itself.
+    final tick = Curves.easeInOutCubic.transform(_segment(intro, 0.35, 0.7));
+    if (tick > 0) {
+      final path = Path()
+        ..moveTo(center.dx - radius * 0.42, center.dy + radius * 0.02)
+        ..lineTo(center.dx - radius * 0.1, center.dy + radius * 0.34)
+        ..lineTo(center.dx + radius * 0.46, center.dy - radius * 0.3);
+      final tickPaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = radius * 0.16
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..color = Colors.white;
+      var remaining = path
+              .computeMetrics()
+              .fold<double>(0, (sum, metric) => sum + metric.length) *
+          tick;
+      for (final PathMetric metric in path.computeMetrics()) {
+        if (remaining <= 0) {
+          break;
+        }
+        final length = math.min(remaining, metric.length);
+        canvas.drawPath(metric.extractPath(0, length), tickPaint);
+        remaining -= length;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SuccessBadgePainter oldDelegate) =>
+      oldDelegate.intro != intro || oldDelegate.pulse != pulse;
 }
 
 class ResetPasswordScreen extends StatefulWidget {
