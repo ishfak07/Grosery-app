@@ -109,6 +109,15 @@ const _tamil = <String, String>{
   'Check your connection and try again.':
       'உங்கள் இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
   'Retry': 'மீண்டும் முயற்சி',
+  "Looks like you're offline. Check your network and we'll get you back to shopping.":
+      'நீங்கள் ஆஃப்லைனில் இருப்பதாகத் தெரிகிறது. உங்கள் நெட்வொர்க்கைச் சரிபார்த்தால் மீண்டும் ஷாப்பிங் செய்யலாம்.',
+  'Still offline. Please try again in a moment.':
+      'இன்னும் இணைப்பு இல்லை. சிறிது நேரத்தில் மீண்டும் முயற்சிக்கவும்.',
+  'Offline': 'ஆஃப்லைன்',
+  'Checking...': 'சரிபார்க்கிறது...',
+  'Wi-Fi': 'வைஃபை',
+  'Mobile data': 'மொபைல் டேட்டா',
+  'Airplane mode': 'விமானப் பயன்முறை',
   'Saving': 'சேமிக்கிறது',
   'Something went wrong. Please try again.':
       'ஏதோ தவறு ஏற்பட்டது. மீண்டும் முயற்சிக்கவும்.',

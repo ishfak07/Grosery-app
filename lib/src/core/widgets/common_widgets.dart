@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -243,24 +245,14 @@ class OfflineConnectionOverlay extends StatelessWidget {
         child,
         Positioned.fill(
           child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 280),
-            reverseDuration: const Duration(milliseconds: 220),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) {
-              final curved = CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-                reverseCurve: Curves.easeInCubic,
-              );
-              return FadeTransition(
-                opacity: curved,
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
-                  child: child,
-                ),
-              );
-            },
+            duration: const Duration(milliseconds: 260),
+            reverseDuration: const Duration(milliseconds: 240),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            // The message runs its own staggered entrance, so the switcher
+            // only needs to fade the layer in and out.
+            transitionBuilder: (child, animation) =>
+                FadeTransition(opacity: animation, child: child),
             child: isOffline
                 ? _OfflineConnectionMessage(
                     key: const ValueKey('offline-message'),
@@ -270,6 +262,7 @@ class OfflineConnectionOverlay extends StatelessWidget {
                       if (recovered) {
                         await appState.refreshVisibleData();
                       }
+                      return recovered;
                     },
                   )
                 : const SizedBox.shrink(key: ValueKey('online-message')),
@@ -280,13 +273,21 @@ class OfflineConnectionOverlay extends StatelessWidget {
   }
 }
 
+const _offlineBrand = Color(0xFF176B45);
+const _offlineBrandDeep = Color(0xFF0E4F32);
+const _offlineInk = Color(0xFF10231A);
+const _offlineMuted = Color(0xFF66736B);
+const _offlineAlert = Color(0xFFE86F4A);
+const _offlineAlertDeep = Color(0xFFC8502D);
+
 class _OfflineConnectionMessage extends StatefulWidget {
   const _OfflineConnectionMessage({
     super.key,
     required this.onRetry,
   });
 
-  final Future<void> Function() onRetry;
+  /// Returns `true` when the connection came back.
+  final Future<bool> Function() onRetry;
 
   @override
   State<_OfflineConnectionMessage> createState() =>
@@ -294,26 +295,75 @@ class _OfflineConnectionMessage extends StatefulWidget {
 }
 
 class _OfflineConnectionMessageState extends State<_OfflineConnectionMessage>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulseController;
-  late final Animation<double> _pulse;
+    with TickerProviderStateMixin {
+  late final AnimationController _entrance;
+  late final AnimationController _ripple;
+  late final AnimationController _signal;
+  late final AnimationController _float;
+  late final AnimationController _shake;
+  late final AnimationController _spin;
   var _isRetrying = false;
+  var _stillOffline = false;
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
+    _entrance = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
-    _pulse = Tween<double>(begin: 0.94, end: 1).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+      duration: const Duration(milliseconds: 950),
+    )..forward();
+    _ripple = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    );
+    _signal = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1900),
+    );
+    _float = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2800),
+    );
+    _shake = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 520),
+    );
+    _spin = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 850),
     );
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    if (reduceMotion) {
+      _ripple.stop();
+      _signal.stop();
+      _float.stop();
+      _entrance.value = 1;
+      return;
+    }
+    if (!_ripple.isAnimating) {
+      _ripple.repeat();
+    }
+    if (!_signal.isAnimating) {
+      _signal.repeat();
+    }
+    if (!_float.isAnimating) {
+      _float.repeat(reverse: true);
+    }
+  }
+
+  @override
   void dispose() {
-    _pulseController.dispose();
+    _entrance.dispose();
+    _ripple.dispose();
+    _signal.dispose();
+    _float.dispose();
+    _shake.dispose();
+    _spin.dispose();
     super.dispose();
   }
 
@@ -321,14 +371,58 @@ class _OfflineConnectionMessageState extends State<_OfflineConnectionMessage>
     if (_isRetrying) {
       return;
     }
-    setState(() => _isRetrying = true);
+    setState(() {
+      _isRetrying = true;
+      _stillOffline = false;
+    });
+    _spin.repeat();
+    var recovered = false;
     try {
-      await widget.onRetry();
+      recovered = await widget.onRetry();
+    } catch (_) {
+      recovered = false;
     } finally {
+      _spin
+        ..stop()
+        ..reset();
       if (mounted) {
-        setState(() => _isRetrying = false);
+        setState(() {
+          _isRetrying = false;
+          _stillOffline = !recovered;
+        });
+        if (!recovered) {
+          HapticFeedback.lightImpact();
+          _shake.forward(from: 0);
+        }
       }
     }
+  }
+
+  /// Progress (0..1) of one staggered entrance step.
+  double _step(double begin, double end, [Curve curve = Curves.easeOutCubic]) {
+    return Interval(begin, end, curve: curve).transform(_entrance.value);
+  }
+
+  Widget _reveal({
+    required double begin,
+    required double end,
+    required Widget child,
+    double offsetY = 16,
+  }) {
+    return AnimatedBuilder(
+      animation: _entrance,
+      child: child,
+      builder: (context, child) {
+        final t = _step(begin, end);
+        return Opacity(
+          opacity: t,
+          child: Transform.translate(
+            offset: Offset(0, offsetY * (1 - t)),
+            child: child,
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -337,103 +431,498 @@ class _OfflineConnectionMessageState extends State<_OfflineConnectionMessage>
     final theme = Theme.of(context);
     final textScaler = MediaQuery.textScalerOf(context).clamp(
       minScaleFactor: 1,
-      maxScaleFactor: 1.18,
+      maxScaleFactor: 1.15,
     );
     return Material(
-      color: const Color(0xFF10231A).withValues(alpha: 0.22),
-      child: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: media.size.width < 520 ? media.size.width - 40 : 420,
-              ),
-              child: MediaQuery(
-                data: media.copyWith(textScaler: textScaler),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF10231A).withValues(alpha: 0.98),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.12),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF10231A).withValues(alpha: 0.28),
-                        blurRadius: 28,
-                        offset: const Offset(0, 14),
-                      ),
-                    ],
+      type: MaterialType.transparency,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _entrance,
+              builder: (context, _) {
+                final t = _step(0, 0.55, Curves.easeOut);
+                return BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 7 * t, sigmaY: 7 * t),
+                  child: ColoredBox(
+                    color: _offlineInk.withValues(alpha: 0.42 * t),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ScaleTransition(
-                          scale: _pulse,
-                          child: Container(
-                            width: 58,
-                            height: 58,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE86F4A)
-                                  .withValues(alpha: 0.18),
-                              borderRadius: BorderRadius.circular(8),
+                );
+              },
+            ),
+          ),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: media.size.width < 480 ? media.size.width : 400,
+                  ),
+                  child: MediaQuery(
+                    data: media.copyWith(textScaler: textScaler),
+                    child: AnimatedBuilder(
+                      animation: Listenable.merge([_entrance, _shake]),
+                      child: _buildCard(context, theme),
+                      builder: (context, child) {
+                        final enter = _step(0, 0.7, Curves.easeOutBack);
+                        final fade = _step(0, 0.4);
+                        final shake = _shake.value;
+                        final shakeX =
+                            math.sin(shake * math.pi * 6) * 12 * (1 - shake);
+                        return Opacity(
+                          opacity: fade,
+                          child: Transform.translate(
+                            offset: Offset(shakeX, 48 * (1 - enter)),
+                            child: Transform.scale(
+                              scale: 0.88 + 0.12 * enter,
+                              child: child,
                             ),
-                            child: const Icon(
-                              Icons.wifi_off_rounded,
-                              color: Color(0xFFFFC9BA),
-                              size: 30,
-                            ),
                           ),
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          context.t('No Internet Connection'),
-                          textAlign: TextAlign.center,
-                          style: (theme.textTheme.titleMedium ??
-                                  const TextStyle(fontSize: 16))
-                              .copyWith(
-                            color: Colors.white,
-                            decoration: TextDecoration.none,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0,
-                            height: 1.12,
-                          ),
-                        ),
-                        const SizedBox(height: 7),
-                        Text(
-                          context.t('Check your connection and try again.'),
-                          textAlign: TextAlign.center,
-                          style: (theme.textTheme.bodyMedium ??
-                                  const TextStyle(fontSize: 14))
-                              .copyWith(
-                            color: Colors.white.withValues(alpha: 0.78),
-                            decoration: TextDecoration.none,
-                            fontWeight: FontWeight.w700,
-                            height: 1.32,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: _isRetrying ? null : _retry,
-                            icon: _isRetrying
-                                ? const SizedBox(
-                                    width: 17,
-                                    height: 17,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCard(BuildContext context, ThemeData theme) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: _offlineInk.withValues(alpha: 0.28),
+            blurRadius: 44,
+            offset: const Offset(0, 22),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DecoratedBox(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFFFEEE7), Colors.white],
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 18),
+              child: Center(child: _buildIllustration()),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 2, 22, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _reveal(
+                  begin: 0.3,
+                  end: 0.7,
+                  child: Center(child: _buildStatusPill()),
+                ),
+                const SizedBox(height: 12),
+                _reveal(
+                  begin: 0.36,
+                  end: 0.76,
+                  child: Text(
+                    context.t('No Internet Connection'),
+                    textAlign: TextAlign.center,
+                    style: (theme.textTheme.titleLarge ??
+                            const TextStyle(fontSize: 20))
+                        .copyWith(
+                      color: _offlineInk,
+                      decoration: TextDecoration.none,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.2,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _reveal(
+                  begin: 0.42,
+                  end: 0.82,
+                  child: Text(
+                    context.t(
+                      "Looks like you're offline. Check your network and we'll get you back to shopping.",
+                    ),
+                    textAlign: TextAlign.center,
+                    style: (theme.textTheme.bodyMedium ??
+                            const TextStyle(fontSize: 14))
+                        .copyWith(
+                      color: _offlineMuted,
+                      decoration: TextDecoration.none,
+                      fontWeight: FontWeight.w600,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _reveal(
+                  begin: 0.5,
+                  end: 0.9,
+                  child: _buildQuickChecks(theme),
+                ),
+                const SizedBox(height: 18),
+                _reveal(
+                  begin: 0.58,
+                  end: 1,
+                  offsetY: 22,
+                  child: _buildRetryButton(context),
+                ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOutCubic,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 240),
+                    child: _stillOffline
+                        ? Padding(
+                            key: const ValueKey('still-offline'),
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.info_outline_rounded,
+                                  size: 16,
+                                  color: _offlineAlertDeep,
+                                ),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    context.t(
+                                      'Still offline. Please try again in a moment.',
                                     ),
-                                  )
-                                : const Icon(Icons.refresh),
-                            label: Text(context.t('Retry')),
+                                    style: const TextStyle(
+                                      color: _offlineAlertDeep,
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w700,
+                                      decoration: TextDecoration.none,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : const SizedBox(
+                            key: ValueKey('still-offline-hidden'),
+                            width: double.infinity,
                           ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIllustration() {
+    return SizedBox(
+      width: 150,
+      height: 150,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned.fill(
+            child: RepaintBoundary(
+              child: CustomPaint(
+                painter: _OfflineRipplePainter(
+                  progress: _ripple,
+                  color: _offlineAlert,
+                ),
+              ),
+            ),
+          ),
+          AnimatedBuilder(
+            animation: Listenable.merge([_entrance, _float]),
+            builder: (context, child) {
+              final pop = _step(0.12, 0.62, Curves.elasticOut);
+              final bob = Curves.easeInOut.transform(_float.value);
+              return Transform.translate(
+                offset: Offset(0, -5 + 10 * bob),
+                child: Transform.scale(scale: pop, child: child),
+              );
+            },
+            child: SizedBox(
+              width: 92,
+              height: 92,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Colors.white, Color(0xFFFFF3EE)],
+                      ),
+                      border: Border.all(
+                        color: _offlineAlert.withValues(alpha: 0.18),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _offlineAlert.withValues(alpha: 0.28),
+                          blurRadius: 24,
+                          offset: const Offset(0, 10),
                         ),
                       ],
                     ),
+                    child: Center(
+                      child: RepaintBoundary(
+                        child: CustomPaint(
+                          size: const Size(48, 48),
+                          painter: _WifiSignalPainter(
+                            progress: _signal,
+                            idleColor: _offlineMuted.withValues(alpha: 0.22),
+                            activeColor: _offlineAlert,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: -2,
+                    bottom: 2,
+                    child: AnimatedBuilder(
+                      animation: Listenable.merge([_entrance, _ripple]),
+                      builder: (context, child) {
+                        final pop = _step(0.4, 0.8, Curves.elasticOut);
+                        final beat = 1 +
+                            0.08 * math.sin(_ripple.value * math.pi * 2).abs();
+                        return Transform.scale(scale: pop * beat, child: child);
+                      },
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [_offlineAlert, _offlineAlertDeep],
+                          ),
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _offlineAlertDeep.withValues(alpha: 0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusPill() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+      decoration: BoxDecoration(
+        color: _offlineAlert.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: _offlineAlert.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedBuilder(
+            animation: _signal,
+            builder: (context, child) {
+              final blink = 0.5 + 0.5 * math.cos(_signal.value * math.pi * 2);
+              return Opacity(opacity: 0.35 + 0.65 * blink, child: child);
+            },
+            child: Container(
+              width: 7,
+              height: 7,
+              decoration: const BoxDecoration(
+                color: _offlineAlertDeep,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            context.t('Offline'),
+            style: const TextStyle(
+              color: _offlineAlertDeep,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
+              decoration: TextDecoration.none,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickChecks(ThemeData theme) {
+    const checks = [
+      (Icons.wifi_rounded, 'Wi-Fi'),
+      (Icons.signal_cellular_alt_rounded, 'Mobile data'),
+      (Icons.airplanemode_inactive_rounded, 'Airplane mode'),
+    ];
+    return Row(
+      children: [
+        for (var i = 0; i < checks.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          Expanded(
+            child: AnimatedBuilder(
+              animation: _entrance,
+              builder: (context, child) {
+                final t =
+                    _step(0.52 + i * 0.08, 0.86 + i * 0.05, Curves.easeOutBack);
+                return Transform.scale(
+                  scale: 0.7 + 0.3 * t,
+                  child: Opacity(opacity: t.clamp(0.0, 1.0), child: child),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 11,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4F8F5),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE1EAE3)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: _offlineBrand.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        checks[i].$1,
+                        size: 17,
+                        color: _offlineBrand,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      context.t(checks[i].$2),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _offlineInk,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                        decoration: TextDecoration.none,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildRetryButton(BuildContext context) {
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 200),
+      opacity: _isRetrying ? 0.86 : 1,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [_offlineBrand, _offlineBrandDeep],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: _offlineBrand.withValues(alpha: 0.35),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: _isRetrying ? null : _retry,
+            borderRadius: BorderRadius.circular(16),
+            splashColor: Colors.white.withValues(alpha: 0.18),
+            child: SizedBox(
+              height: 54,
+              child: Center(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, 0.35),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  ),
+                  child: Row(
+                    key: ValueKey(_isRetrying),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      RotationTransition(
+                        turns: _spin,
+                        child: const Icon(
+                          Icons.refresh_rounded,
+                          color: Colors.white,
+                          size: 21,
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                      Text(
+                        context.t(_isRetrying ? 'Checking...' : 'Retry'),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.2,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -443,6 +932,97 @@ class _OfflineConnectionMessageState extends State<_OfflineConnectionMessage>
       ),
     );
   }
+}
+
+/// Soft rings that keep radiating out from behind the offline badge.
+class _OfflineRipplePainter extends CustomPainter {
+  _OfflineRipplePainter({required this.progress, required this.color})
+      : super(repaint: progress);
+
+  final Animation<double> progress;
+  final Color color;
+
+  static const _ringCount = 3;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final maxRadius = size.shortestSide / 2;
+    final minRadius = maxRadius * 0.56;
+    for (var i = 0; i < _ringCount; i++) {
+      final t = (progress.value + i / _ringCount) % 1;
+      final radius =
+          minRadius + (maxRadius - minRadius) * Curves.easeOut.transform(t);
+      final alpha = (1 - t) * 0.32;
+      canvas
+        ..drawCircle(
+          center,
+          radius,
+          Paint()..color = color.withValues(alpha: alpha * 0.35),
+        )
+        ..drawCircle(
+          center,
+          radius,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.4
+            ..color = color.withValues(alpha: alpha),
+        );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_OfflineRipplePainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.progress != progress;
+}
+
+/// Wi-Fi glyph whose bars light up one after another, like a device
+/// searching for a signal.
+class _WifiSignalPainter extends CustomPainter {
+  _WifiSignalPainter({
+    required this.progress,
+    required this.idleColor,
+    required this.activeColor,
+  }) : super(repaint: progress);
+
+  final Animation<double> progress;
+  final Color idleColor;
+  final Color activeColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height * 0.84);
+    final stroke = size.width * 0.1;
+    // Four signal elements (dot + three arcs) plus one beat of rest.
+    final phase = progress.value * 5;
+
+    Color colorFor(int index) {
+      final glow = (1 - (phase - index).abs()).clamp(0.0, 1.0);
+      return Color.lerp(idleColor, activeColor, glow)!;
+    }
+
+    canvas.drawCircle(center, stroke * 0.8, Paint()..color = colorFor(0));
+    for (var i = 1; i <= 3; i++) {
+      final radius = size.width * 0.22 * i;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        -math.pi * 0.75,
+        math.pi * 0.5,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke
+          ..strokeCap = StrokeCap.round
+          ..color = colorFor(i),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WifiSignalPainter oldDelegate) =>
+      oldDelegate.progress != progress ||
+      oldDelegate.idleColor != idleColor ||
+      oldDelegate.activeColor != activeColor;
 }
 
 class RefreshableCenteredContent extends StatelessWidget {
