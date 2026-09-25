@@ -62,10 +62,9 @@ class _AuthHero {
 }
 
 /// Which illustrated delivery header an auth screen shows.
-enum _AuthSceneStyle { morningRide, dayRide, deliveryMap }
+enum _AuthSceneStyle { morningRide, packingBag, deliveryMap }
 
-/// Colours for the delivery-ride header; login and sign-up differ by time
-/// of day.
+/// Colours for the delivery-ride header.
 class _RidePalette {
   const _RidePalette({
     required this.sky,
@@ -90,15 +89,6 @@ class _RidePalette {
     walls: [Color(0xFFFFF3E3), Color(0xFFF9E1CB), Color(0xFFFFF8EE)],
     palm: Color(0xFF1F3B33),
     road: Color(0xFF3B4A43),
-  );
-
-  static const day = _RidePalette(
-    sky: [Color(0xFFCDEEEB), Color(0xFFF1FAF5)],
-    cloud: Colors.white,
-    skyline: Color(0xFFBEDDCB),
-    walls: [Color(0xFFFFFDF6), Color(0xFFE6F2EA), Color(0xFFFFF4E6)],
-    palm: Color(0xFF1C3E30),
-    road: Color(0xFF34443D),
   );
 }
 
@@ -511,9 +501,11 @@ class _AuthSceneView extends StatefulWidget {
 
 class _AuthSceneViewState extends _LoopingArtState<_AuthSceneView> {
   @override
-  Duration get loopDuration => widget.style == _AuthSceneStyle.deliveryMap
-      ? const Duration(milliseconds: 7200)
-      : const Duration(seconds: 16);
+  Duration get loopDuration => switch (widget.style) {
+        _AuthSceneStyle.morningRide => const Duration(seconds: 16),
+        _AuthSceneStyle.packingBag => const Duration(seconds: 10),
+        _AuthSceneStyle.deliveryMap => const Duration(milliseconds: 7200),
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -522,8 +514,7 @@ class _AuthSceneViewState extends _LoopingArtState<_AuthSceneView> {
         painter: switch (widget.style) {
           _AuthSceneStyle.morningRide =>
             _RideScenePainter(palette: _RidePalette.morning, animation: loop),
-          _AuthSceneStyle.dayRide =>
-            _RideScenePainter(palette: _RidePalette.day, animation: loop),
+          _AuthSceneStyle.packingBag => _BagScenePainter(animation: loop),
           _AuthSceneStyle.deliveryMap => _MapScenePainter(animation: loop),
         },
       ),
@@ -1377,6 +1368,782 @@ class _RideScenePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _RideScenePainter oldDelegate) =>
       oldDelegate.palette != palette || oldDelegate.animation != animation;
+}
+
+/// Create-account header: packing the new customer's first order. A fresh
+/// Puttalam Drop bag bounces onto the counter, each grocery flies out of
+/// its row on the shopping list into the bag, the profile card gets
+/// verified, and the full bag launches off on its way before the next one
+/// drops in.
+class _BagScenePainter extends CustomPainter {
+  _BagScenePainter({required this.animation}) : super(repaint: animation);
+
+  final Animation<double> animation;
+
+  static const _items = 5;
+  static const _firstLaunch = 0.1;
+  static const _launchGap = 0.115;
+  static const _flight = 0.085;
+  static const _verifyAt = 0.68;
+  static const _squatAt = 0.8;
+  static const _flyAt = 0.845;
+  static const _flyEnd = 0.95;
+  static const _resetAt = 0.93;
+
+  static const _bagDark = Color(0xFF0F4F32);
+  static const _bagLight = Color(0xFF218A58);
+  static const _counter = Color(0xFFE3C9A0);
+  static const _counterTop = Color(0xFFF0DDBE);
+  static const _sparks = [
+    _authLime,
+    _authAccent,
+    Color(0xFFFFC34D),
+    _authPrimary,
+  ];
+
+  /// Where each grocery settles over the rim: x in bag widths from the
+  /// centre, y in scaled units from the rim, and its resting tilt.
+  static const _rest = [
+    (0.04, 1.0, 0.0),
+    (0.3, -3.0, 0.3),
+    (-0.08, -5.0, -0.08),
+    (-0.28, -1.0, -0.5),
+    (0.16, -9.0, 0.45),
+  ];
+  static const _spin = [5.5, -6.0, 4.5, -5.0, 6.5];
+  static const _floaters = [
+    Icons.eco_rounded,
+    Icons.shopping_basket_rounded,
+    Icons.local_grocery_store_rounded,
+    Icons.egg_rounded,
+    Icons.local_drink_rounded,
+    Icons.bakery_dining_rounded,
+  ];
+
+  static double _launchAt(int i) => _firstLaunch + i * _launchGap;
+  static double _landAt(int i) => _launchAt(i) + _flight;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final t = animation.value;
+    final w = size.width;
+    final h = size.height;
+    final s = (h / 280).clamp(0.85, 1.25);
+    final c = math.min(s, w / 380);
+    final bottom = h - _AuthScaffold._sheetOverlap;
+    final counterY = bottom - 30 * s;
+    final cx = w / 2;
+    final bw = 100 * s;
+    final bh = 86 * s;
+    final restBottom = counterY + 8 * s;
+    final restRimY = restBottom - bh;
+    final resetFade = 1 - _phase(t, _resetAt, 0.99);
+
+    // Bag motion: bounce in, wobble on each landing, squat, then launch.
+    var squash = 0.0;
+    var tilt = 0.0;
+    for (var i = 0; i < _items; i++) {
+      final k = (t - _landAt(i)) * 10;
+      if (k > 0 && k < 1.2) {
+        final wave = math.exp(-k * 5) * math.sin(k * 22);
+        squash += wave * 0.08;
+        tilt += wave * 0.05 * (i.isEven ? 1 : -1);
+      }
+    }
+    final drop = Curves.bounceOut.transform(_phase(t, 0, 0.09));
+    final squat = Curves.easeOut.transform(_phase(t, _squatAt, _flyAt));
+    final fly = Curves.easeInCubic.transform(_phase(t, _flyAt, _flyEnd));
+    squash += squat * 0.12 * (1 - fly) - fly * 0.14;
+    tilt += fly * 0.35;
+    final bagCx = cx + fly * w * 0.62;
+    final bagBottom = restBottom -
+        (1 - drop) * (restBottom + 30 * s) -
+        fly * (restBottom + bh + 40 * s);
+
+    void inBag(void Function() draw) {
+      canvas.save();
+      canvas.translate(bagCx, bagBottom);
+      canvas.rotate(tilt);
+      canvas.scale(1 + squash * 0.6, 1 - squash);
+      canvas.translate(-cx, -restBottom);
+      draw();
+      canvas.restore();
+    }
+
+    Offset restPoint(int i) =>
+        Offset(cx + _rest[i].$1 * bw, restRimY + _rest[i].$2 * s);
+
+    // Mint backdrop, slow sun rays behind the bag, drifting icons.
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFD7F0E1), Color(0xFFF7FBF3)],
+        ).createShader(Offset.zero & size),
+    );
+    final rayCenter = Offset(cx, restRimY + bh * 0.2);
+    final rayLength = math.max(w, h) * 0.75;
+    canvas.save();
+    canvas.translate(rayCenter.dx, rayCenter.dy);
+    canvas.rotate(t * _tau / 12);
+    final rays = Path();
+    for (var i = 0; i < 12; i++) {
+      final a = i * _tau / 12;
+      rays
+        ..moveTo(0, 0)
+        ..lineTo(
+          math.cos(a - 0.1) * rayLength,
+          math.sin(a - 0.1) * rayLength,
+        )
+        ..lineTo(
+          math.cos(a + 0.1) * rayLength,
+          math.sin(a + 0.1) * rayLength,
+        )
+        ..close();
+    }
+    canvas.drawPath(
+      rays,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.7),
+            Colors.white.withValues(alpha: 0),
+          ],
+        ).createShader(Rect.fromCircle(center: Offset.zero, radius: rayLength)),
+    );
+    canvas.restore();
+    canvas.drawCircle(
+      rayCenter,
+      bw * 0.95,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            _authLime.withValues(alpha: 0.35),
+            _authLime.withValues(alpha: 0),
+          ],
+        ).createShader(Rect.fromCircle(center: rayCenter, radius: bw * 0.95)),
+    );
+    for (var k = 0; k < _floaters.length; k++) {
+      final f = _fract(t + k / _floaters.length);
+      _paintIcon(
+        canvas,
+        _floaters[k],
+        Offset(
+          w * (0.08 + k * 0.168) + math.sin(f * _tau + k) * 8,
+          bottom - f * (bottom + 30),
+        ),
+        17 * s,
+        _authPrimary.withValues(alpha: 0.13 * math.sin(f * math.pi)),
+      );
+    }
+
+    // Shop counter.
+    canvas.drawRect(
+      Rect.fromLTRB(0, counterY, w, h),
+      Paint()..color = _counter,
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(0, counterY, w, counterY + 5 * s),
+      Paint()..color = _counterTop,
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(0, counterY + 5 * s, w, counterY + 7 * s),
+      Paint()..color = Colors.black.withValues(alpha: 0.06),
+    );
+
+    // Shopping list: a row lights up as its item flies, ticks on landing.
+    final listCenter = Offset(w * 0.17, counterY - 4 * c - 52 * c);
+    _paintList(
+      canvas,
+      listCenter,
+      c,
+      t,
+      tick: (row) {
+        final since = t - _landAt(row);
+        if (since < 0) {
+          return 0;
+        }
+        return Curves.elasticOut.transform(math.min(1, since / 0.05)) *
+            resetFade;
+      },
+      glow: (row) => t >= _launchAt(row) && t < _landAt(row) + 0.02 ? 1.0 : 0.0,
+    );
+
+    // Profile card: verified once the order is packed.
+    final verifyPop = _phase(t, _verifyAt, _verifyAt + 0.08);
+    final profileCenter = Offset(w * 0.84, counterY - 26 * c - 32 * c);
+    _paintProfile(
+      canvas,
+      profileCenter,
+      c,
+      t,
+      verified: verifyPop > 0
+          ? Curves.elasticOut.transform(verifyPop) * resetFade
+          : 0,
+      bump: math.sin(math.pi * _phase(t, _verifyAt, _verifyAt + 0.05)),
+    );
+    final verifyBurst = _phase(t, _verifyAt, _verifyAt + 0.07);
+    if (verifyBurst > 0 && verifyBurst < 1) {
+      _burst(
+        canvas,
+        profileCenter + Offset(46 * c, -26 * c),
+        verifyBurst,
+        s,
+        30 * c,
+      );
+    }
+
+    // Shadow on the counter, shrinking as the bag leaves it.
+    final lift = ((restBottom - bagBottom) / (120 * s)).clamp(0.0, 1.0);
+    if (lift < 1) {
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(bagCx, restBottom),
+          width: bw * (1.15 + squash) * (1 - lift * 0.6),
+          height: 10 * s * (1 - lift * 0.5),
+        ),
+        Paint()..color = Colors.black.withValues(alpha: 0.16 * (1 - lift)),
+      );
+    }
+
+    // Take-off dust.
+    final dust = _phase(t, _flyAt, _flyAt + 0.07);
+    if (dust > 0 && dust < 1) {
+      for (var k = 0; k < 6; k++) {
+        final side = k.isEven ? 1.0 : -1.0;
+        final spread =
+            (bw * 0.4 + (10 + k * 6) * s) * Curves.easeOutCubic.transform(dust);
+        canvas.drawCircle(
+          Offset(cx + side * spread, restBottom - (2 + k) * s * dust),
+          (3 + k * 0.8 + dust * 5) * s,
+          Paint()..color = Colors.white.withValues(alpha: 0.8 * (1 - dust)),
+        );
+      }
+    }
+
+    // Motion streaks while the bag flies away.
+    if (fly > 0.08 && fly < 1) {
+      final streak = Paint()
+        ..color = Colors.white.withValues(alpha: 0.85 * math.sin(fly * math.pi))
+        ..strokeWidth = 3 * s
+        ..strokeCap = StrokeCap.round;
+      final back = Offset(-w * 0.62, restBottom + bh + 40 * s);
+      final direction = back / back.distance;
+      for (var k = 0; k < 4; k++) {
+        final from = Offset(
+          bagCx + (k - 1.5) * 16 * s,
+          bagBottom - bh * 0.4 + (k - 1.5) * 10 * s,
+        );
+        canvas.drawLine(
+          from + direction * 20 * s,
+          from + direction * (60 + k * 12) * s,
+          streak,
+        );
+      }
+    }
+
+    // Back of the bag with everything packed so far.
+    inBag(() {
+      canvas.drawArc(
+        Rect.fromCenter(
+          center: Offset(cx, restRimY - 7 * s),
+          width: bw * 0.56,
+          height: 64 * s,
+        ),
+        math.pi,
+        math.pi,
+        false,
+        Paint()
+          ..color = _bagDark
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 5.5 * s
+          ..strokeCap = StrokeCap.round,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndCorners(
+          Rect.fromLTRB(cx - bw / 2, restRimY - 7 * s, cx + bw / 2, restBottom),
+          topLeft: Radius.circular(6 * s),
+          topRight: Radius.circular(6 * s),
+        ),
+        Paint()..color = _bagDark,
+      );
+      for (var i = 0; i < _items; i++) {
+        if (t >= _landAt(i)) {
+          _drawItem(
+            canvas,
+            restPoint(i),
+            s,
+            _rest[i].$3,
+            (item) => _paintGrocery(item, i),
+          );
+        }
+      }
+    });
+
+    // The grocery in flight, arcing out of its list row.
+    for (var i = 0; i < _items; i++) {
+      final f = _phase(t, _launchAt(i), _landAt(i));
+      if (f <= 0 || f >= 1) {
+        continue;
+      }
+      final start = _listPoint(listCenter, c, t, i);
+      final end = restPoint(i);
+      // Keep the arc clear of the back button and title chip.
+      final arc = (math.min(start.dy, end.dy) - 96).clamp(24 * s, 84 * s);
+      Offset along(double x) =>
+          Offset.lerp(start, end, x)! + Offset(0, -arc * 4 * x * (1 - x));
+      for (var j = 1; j <= 6; j++) {
+        final back = f - j * 0.06;
+        if (back > 0) {
+          canvas.drawCircle(
+            along(back),
+            (3.4 - j * 0.45) * s,
+            Paint()
+              ..color = _sparks[j % _sparks.length]
+                  .withValues(alpha: 0.75 * (1 - j / 7)),
+          );
+        }
+      }
+      _drawItem(
+        canvas,
+        along(f),
+        s * (0.55 + 0.45 * f + 0.3 * math.sin(f * math.pi)),
+        _spin[i] * (1 - f) + _rest[i].$3 * f,
+        (item) => _paintGrocery(item, i),
+      );
+    }
+
+    // Front of the bag with the Puttalam Drop mark.
+    inBag(() {
+      final front = Path()
+        ..moveTo(cx - bw / 2, restRimY)
+        ..lineTo(cx + bw / 2, restRimY)
+        ..lineTo(cx + bw * 0.46, restBottom)
+        ..lineTo(cx - bw * 0.46, restBottom)
+        ..close();
+      final frontRect =
+          Rect.fromLTRB(cx - bw / 2, restRimY, cx + bw / 2, restBottom);
+      canvas.drawPath(
+        front,
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [_bagLight, _authPrimary, _authPrimary, _bagDark],
+            stops: [0, 0.35, 0.75, 1],
+          ).createShader(frontRect),
+      );
+      canvas.drawRect(
+        Rect.fromLTRB(
+          cx - bw * 0.36,
+          restRimY + 12 * s,
+          cx - bw * 0.3,
+          restBottom - 8 * s,
+        ),
+        Paint()..color = Colors.white.withValues(alpha: 0.1),
+      );
+      canvas.drawRect(
+        Rect.fromLTRB(cx - bw / 2, restRimY, cx + bw / 2, restRimY + 8 * s),
+        Paint()..color = _authLime,
+      );
+      canvas.drawRect(
+        Rect.fromLTRB(
+          cx - bw / 2,
+          restRimY + 8 * s,
+          cx + bw / 2,
+          restRimY + 10 * s,
+        ),
+        Paint()..color = _bagDark.withValues(alpha: 0.25),
+      );
+      _paintDropPin(
+        canvas,
+        Offset(cx, restRimY + bh * 0.6),
+        11 * s,
+        color: Colors.white,
+        hole: _authPrimary,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(cx, restRimY + bh * 0.76),
+            width: 42 * s,
+            height: 4 * s,
+          ),
+          Radius.circular(2 * s),
+        ),
+        Paint()..color = Colors.white.withValues(alpha: 0.75),
+      );
+    });
+
+    // Star burst and ring where each grocery lands.
+    for (var i = 0; i < _items; i++) {
+      final since = (t - _landAt(i)) / 0.05;
+      if (since > 0 && since < 1) {
+        final at = restPoint(i);
+        canvas.drawCircle(
+          at,
+          (8 + since * 30) * s,
+          Paint()
+            ..color = _authLime.withValues(alpha: 0.8 * (1 - since))
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.5 * s * (1 - since),
+        );
+        _burst(canvas, at, since, s, 42 * s);
+      }
+    }
+  }
+
+  /// World position of a row's checkbox on the tilted, bobbing list card.
+  Offset _listPoint(Offset center, double c, double t, int row) {
+    final local = Offset(-31 * c, -22 * c + row * 14.5 * c);
+    const angle = -0.06;
+    return center +
+        Offset(0, math.sin(t * _tau * 2) * 2 * c) +
+        Offset(
+          local.dx * math.cos(angle) - local.dy * math.sin(angle),
+          local.dx * math.sin(angle) + local.dy * math.cos(angle),
+        );
+  }
+
+  /// Ring of four-point sparkles flying out from [center].
+  void _burst(
+    Canvas canvas,
+    Offset center,
+    double progress,
+    double s,
+    double reach,
+  ) {
+    final travel = Curves.easeOutCubic.transform(progress);
+    for (var k = 0; k < 8; k++) {
+      final angle = -math.pi / 2 + (k - 3.5) * 0.42;
+      final at = center +
+          Offset(math.cos(angle), math.sin(angle)) *
+              (6 * s + reach * travel * (k.isEven ? 1 : 0.7));
+      final r = (k.isEven ? 5.5 : 3.8) * s * (1 - progress);
+      final star = Path();
+      for (var p = 0; p < 8; p++) {
+        final a = progress * 2 + p * math.pi / 4;
+        final radius = p.isEven ? r : r * 0.35;
+        final point = at + Offset(math.cos(a), math.sin(a)) * radius;
+        if (p == 0) {
+          star.moveTo(point.dx, point.dy);
+        } else {
+          star.lineTo(point.dx, point.dy);
+        }
+      }
+      star.close();
+      canvas.drawPath(star, Paint()..color = _sparks[k % _sparks.length]);
+    }
+  }
+
+  void _drawItem(
+    Canvas canvas,
+    Offset center,
+    double scale,
+    double angle,
+    void Function(Canvas canvas) draw,
+  ) {
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(angle);
+    canvas.scale(scale);
+    draw(canvas);
+    canvas.restore();
+  }
+
+  /// One grocery, drawn around the origin at roughly 28 units tall.
+  void _paintGrocery(Canvas canvas, int kind) {
+    switch (kind) {
+      case 0: // Apple.
+        canvas.drawLine(
+          const Offset(0, -9),
+          const Offset(1.5, -15),
+          Paint()
+            ..color = const Color(0xFF7A4B2A)
+            ..strokeWidth = 2
+            ..strokeCap = StrokeCap.round,
+        );
+        canvas.save();
+        canvas.translate(6, -13);
+        canvas.rotate(-0.5);
+        canvas.drawOval(
+          const Rect.fromLTWH(-5, -2.5, 10, 5),
+          Paint()..color = const Color(0xFF7CC15B),
+        );
+        canvas.restore();
+        canvas.drawCircle(
+          Offset.zero,
+          11,
+          Paint()..color = const Color(0xFFE8563F),
+        );
+        canvas.drawCircle(
+          const Offset(-4, -4),
+          3,
+          Paint()..color = Colors.white.withValues(alpha: 0.45),
+        );
+      case 1: // Carrot.
+        final leaf = Paint()..color = const Color(0xFF5FA842);
+        for (final a in [-0.45, 0.0, 0.45]) {
+          canvas.save();
+          canvas.translate(0, -10);
+          canvas.rotate(a);
+          canvas.drawOval(const Rect.fromLTWH(-2.5, -11, 5, 11), leaf);
+          canvas.restore();
+        }
+        canvas.drawPath(
+          Path()
+            ..moveTo(-7, -10)
+            ..quadraticBezierTo(0, -13, 7, -10)
+            ..lineTo(1, 17)
+            ..quadraticBezierTo(0, 18, -1, 17)
+            ..close(),
+          Paint()..color = const Color(0xFFF08A2B),
+        );
+        final ridge = Paint()
+          ..color = const Color(0xFFC8691A)
+          ..strokeWidth = 1.2
+          ..strokeCap = StrokeCap.round;
+        canvas.drawLine(const Offset(-4, -3), const Offset(0, -2), ridge);
+        canvas.drawLine(const Offset(1, 5), const Offset(4, 4), ridge);
+      case 2: // Milk carton.
+        canvas.drawPath(
+          Path()
+            ..moveTo(-9, -6)
+            ..lineTo(0, -14)
+            ..lineTo(9, -6)
+            ..close(),
+          Paint()..color = const Color(0xFFE9EEF2),
+        );
+        canvas.drawRect(
+          const Rect.fromLTWH(-2.5, -18, 5, 5),
+          Paint()..color = const Color(0xFF4A90D9),
+        );
+        canvas.drawRect(
+          const Rect.fromLTWH(-9, -6, 18, 22),
+          Paint()..color = Colors.white,
+        );
+        canvas.drawRect(
+          const Rect.fromLTWH(-9, 1, 18, 8),
+          Paint()..color = const Color(0xFF4A90D9),
+        );
+        canvas.drawRect(
+          const Rect.fromLTWH(-9, -6, 18, 22),
+          Paint()
+            ..color = const Color(0xFFCBD5DC)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1,
+        );
+      case 3: // Bread loaf.
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTWH(-15, -9, 30, 18),
+            const Radius.circular(9),
+          ),
+          Paint()..color = const Color(0xFFD9A15B),
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTWH(-13, -8, 26, 8),
+            const Radius.circular(6),
+          ),
+          Paint()..color = const Color(0xFFE8BC7C),
+        );
+        final score = Paint()
+          ..color = const Color(0xFFF6DDB0)
+          ..strokeWidth = 1.6
+          ..strokeCap = StrokeCap.round;
+        for (final x in [-7.0, 0.0, 7.0]) {
+          canvas.drawLine(Offset(x - 2, -2), Offset(x + 2, -7), score);
+        }
+      default: // Banana.
+        canvas.drawPath(
+          Path()
+            ..moveTo(-14, -6)
+            ..quadraticBezierTo(0, 16, 14, -6),
+          Paint()
+            ..color = const Color(0xFFF6CD3F)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 8
+            ..strokeCap = StrokeCap.round,
+        );
+        final tip = Paint()..color = const Color(0xFF6B4A2A);
+        canvas.drawCircle(const Offset(-14.5, -6.5), 2, tip);
+        canvas.drawCircle(const Offset(14.5, -6.5), 2, tip);
+    }
+  }
+
+  void _paintCard(Canvas canvas, Rect rect, double c) {
+    final shape = RRect.fromRectAndRadius(rect, Radius.circular(10 * c));
+    canvas.drawRRect(
+      shape.shift(Offset(0, 5 * c)),
+      Paint()
+        ..color = const Color(0xFF0F2A2E).withValues(alpha: 0.12)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+    canvas.drawRRect(shape, Paint()..color = Colors.white);
+  }
+
+  void _paintList(
+    Canvas canvas,
+    Offset center,
+    double c,
+    double t, {
+    required double Function(int row) tick,
+    required double Function(int row) glow,
+  }) {
+    canvas.save();
+    canvas.translate(center.dx, center.dy + math.sin(t * _tau * 2) * 2 * c);
+    canvas.rotate(-0.06);
+    final card = Rect.fromCenter(
+      center: Offset.zero,
+      width: 92 * c,
+      height: 104 * c,
+    );
+    _paintCard(canvas, card, c);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(card.left + 10 * c, card.top + 10 * c, 44 * c, 6 * c),
+        Radius.circular(3 * c),
+      ),
+      Paint()..color = _authInk,
+    );
+    const widths = [40.0, 30.0, 46.0, 26.0, 36.0];
+    for (var row = 0; row < _items; row++) {
+      final y = card.top + 30 * c + row * 14.5 * c;
+      if (glow(row) > 0) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(
+                card.left + 5 * c, y - 7 * c, card.width - 10 * c, 14 * c),
+            Radius.circular(5 * c),
+          ),
+          Paint()..color = _authLime.withValues(alpha: 0.45),
+        );
+      }
+      final box = Rect.fromLTWH(card.left + 10 * c, y - 5 * c, 10 * c, 10 * c);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(box, Radius.circular(3 * c)),
+        Paint()
+          ..color = const Color(0xFFBFCBC3)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4 * c,
+      );
+      final done = tick(row);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(box.right + 7 * c, y - 2 * c, widths[row] * c, 4 * c),
+          Radius.circular(2 * c),
+        ),
+        Paint()
+          ..color = Color.lerp(
+            const Color(0xFFDDE5DF),
+            const Color(0xFFB9DBC6),
+            done.clamp(0.0, 1.0),
+          )!,
+      );
+      if (done > 0) {
+        canvas.save();
+        canvas.translate(box.center.dx, box.center.dy);
+        canvas.scale(done);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(center: Offset.zero, width: 10 * c, height: 10 * c),
+            Radius.circular(3 * c),
+          ),
+          Paint()..color = _authPrimary,
+        );
+        canvas.drawPath(
+          Path()
+            ..moveTo(-2.6 * c, 0)
+            ..lineTo(-0.6 * c, 2.2 * c)
+            ..lineTo(2.8 * c, -2.2 * c),
+          Paint()
+            ..color = Colors.white
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.6 * c
+            ..strokeCap = StrokeCap.round
+            ..strokeJoin = StrokeJoin.round,
+        );
+        canvas.restore();
+      }
+    }
+    canvas.restore();
+  }
+
+  void _paintProfile(
+    Canvas canvas,
+    Offset center,
+    double c,
+    double t, {
+    required double verified,
+    required double bump,
+  }) {
+    canvas.save();
+    canvas.translate(
+      center.dx,
+      center.dy + math.sin(t * _tau * 2 + 1.6) * 3 * c,
+    );
+    canvas.rotate(0.05);
+    canvas.scale(1 + bump * 0.08);
+    final card = Rect.fromCenter(
+      center: Offset.zero,
+      width: 104 * c,
+      height: 64 * c,
+    );
+    if (verified > 0) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(card.inflate(4 * c), Radius.circular(13 * c)),
+        Paint()
+          ..color = _authLime.withValues(alpha: 0.55 * verified.clamp(0.0, 1.0))
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      );
+    }
+    _paintCard(canvas, card, c);
+    final avatar = Offset(card.left + 22 * c, card.top + 24 * c);
+    canvas.drawCircle(
+      avatar,
+      13 * c,
+      Paint()..color = _authLime.withValues(alpha: 0.45),
+    );
+    _paintIcon(canvas, Icons.person_rounded, avatar, 20 * c, _authPrimary);
+    for (final (dy, width, color) in [
+      (18.0, 46.0, _authInk),
+      (29.0, 34.0, const Color(0xFFCBD5CE)),
+    ]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+              card.left + 42 * c, card.top + dy * c, width * c, 5 * c),
+          Radius.circular(3 * c),
+        ),
+        Paint()..color = color,
+      );
+    }
+    final home = Offset(card.left + 16 * c, card.bottom - 13 * c);
+    _paintIcon(canvas, Icons.home_rounded, home, 13 * c, _authAccent);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(home.dx + 10 * c, home.dy - 2 * c, 58 * c, 4 * c),
+        Radius.circular(2 * c),
+      ),
+      Paint()..color = const Color(0xFFE6DDD0),
+    );
+    if (verified > 0) {
+      _paintTickBadge(
+        canvas,
+        Offset(card.right - 6 * c, card.top + 6 * c),
+        11 * c * verified,
+        opacity: verified.clamp(0.0, 1.0),
+      );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _BagScenePainter oldDelegate) =>
+      oldDelegate.animation != animation;
 }
 
 /// Password reset header: a little delivery map by Puttalam lagoon. A drop
@@ -3581,7 +4348,7 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
     return _AuthScaffold(
       appBarTitle: 'Complete profile',
       title: 'Create account',
-      scene: _AuthSceneStyle.dayRide,
+      scene: _AuthSceneStyle.packingBag,
       hero: const _AuthHero(
         title: 'Your shopping profile',
         message:
