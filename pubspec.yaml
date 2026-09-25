@@ -52,6 +52,7 @@ dependencies:
   pdf: ^3.11.3
   printing: ^5.14.3
   in_app_update: ^5.0.0
+  flutter_animate: ^4.5.2
 
 dev_dependencies:
   flutter_test:

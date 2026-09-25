@@ -3,6 +3,7 @@ import 'dart:ui' show PathMetric;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_constants.dart';
@@ -60,44 +61,44 @@ class _AuthHero {
   final String message;
 }
 
-/// Colours for the lagoon scene; each auth screen gets its own time of day.
-class _AuthScenePalette {
-  const _AuthScenePalette({
+/// Which illustrated delivery header an auth screen shows.
+enum _AuthSceneStyle { morningRide, dayRide, deliveryMap }
+
+/// Colours for the delivery-ride header; login and sign-up differ by time
+/// of day.
+class _RidePalette {
+  const _RidePalette({
     required this.sky,
-    required this.sun,
-    required this.hills,
-    required this.water,
+    required this.cloud,
+    required this.skyline,
+    required this.walls,
     required this.palm,
+    required this.road,
   });
 
   final List<Color> sky;
-  final Color sun;
-  final Color hills;
-  final List<Color> water;
+  final Color cloud;
+  final Color skyline;
+  final List<Color> walls;
   final Color palm;
+  final Color road;
 
-  static const dawn = _AuthScenePalette(
-    sky: [Color(0xFFFFD9BE), Color(0xFFFFF1E2)],
-    sun: Color(0xFFFF8A5B),
-    hills: Color(0xFFE8C4A6),
-    water: [Color(0xFFA3D7D1), Color(0xFF5FB2A9), Color(0xFF2F7F77)],
+  static const morning = _RidePalette(
+    sky: [Color(0xFFFFD9BE), Color(0xFFFFF4E8)],
+    cloud: Color(0xFFFFFBF6),
+    skyline: Color(0xFFEBCDB4),
+    walls: [Color(0xFFFFF3E3), Color(0xFFF9E1CB), Color(0xFFFFF8EE)],
     palm: Color(0xFF1F3B33),
+    road: Color(0xFF3B4A43),
   );
 
-  static const day = _AuthScenePalette(
+  static const day = _RidePalette(
     sky: [Color(0xFFCDEEEB), Color(0xFFF1FAF5)],
-    sun: Color(0xFFFFC34D),
-    hills: Color(0xFFB7DAC5),
-    water: [Color(0xFFA7DDD6), Color(0xFF5DB6AB), Color(0xFF2A8076)],
+    cloud: Colors.white,
+    skyline: Color(0xFFBEDDCB),
+    walls: [Color(0xFFFFFDF6), Color(0xFFE6F2EA), Color(0xFFFFF4E6)],
     palm: Color(0xFF1C3E30),
-  );
-
-  static const dusk = _AuthScenePalette(
-    sky: [Color(0xFFDCCFEF), Color(0xFFFCEBE0)],
-    sun: Color(0xFFF2876A),
-    hills: Color(0xFFD2BCD6),
-    water: [Color(0xFFB9C7E8), Color(0xFF7F9BCD), Color(0xFF4C6BA5)],
-    palm: Color(0xFF282C45),
+    road: Color(0xFF34443D),
   );
 }
 
@@ -105,7 +106,7 @@ class _AuthScaffold extends StatelessWidget {
   const _AuthScaffold({
     required this.title,
     required this.children,
-    this.scene = _AuthScenePalette.dawn,
+    this.scene = _AuthSceneStyle.morningRide,
     this.appBarTitle,
     this.hero,
   });
@@ -113,7 +114,7 @@ class _AuthScaffold extends StatelessWidget {
   final String title;
   final String? appBarTitle;
   final _AuthHero? hero;
-  final _AuthScenePalette scene;
+  final _AuthSceneStyle scene;
   final List<Widget> children;
 
   static const _sheetOverlap = 30.0;
@@ -142,16 +143,35 @@ class _AuthScaffold extends StatelessWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        _AuthScene(palette: scene),
+                        ClipRect(
+                          child: _AuthSceneView(style: scene)
+                              .animate()
+                              .fadeIn(duration: 650.ms)
+                              .scaleXY(
+                                begin: 1.08,
+                                end: 1,
+                                duration: 1100.ms,
+                                curve: Curves.easeOutCubic,
+                              ),
+                        ),
                         SafeArea(
                           bottom: false,
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
                             child: Align(
                               alignment: Alignment.topLeft,
-                              child: appBarTitle == null
-                                  ? const _AuthBrandMark()
-                                  : _AuthBackBar(title: appBarTitle!),
+                              child: (appBarTitle == null
+                                      ? const _AuthBrandMark()
+                                      : _AuthBackBar(title: appBarTitle!))
+                                  .animate()
+                                  .fadeIn(delay: 250.ms, duration: 450.ms)
+                                  .slideX(
+                                    begin: -0.12,
+                                    end: 0,
+                                    delay: 250.ms,
+                                    duration: 550.ms,
+                                    curve: Curves.easeOutCubic,
+                                  ),
                             ),
                           ),
                         ),
@@ -480,47 +500,260 @@ class _AuthTitleReveal extends StatelessWidget {
   }
 }
 
-class _AuthScene extends StatefulWidget {
-  const _AuthScene({required this.palette});
+class _AuthSceneView extends StatefulWidget {
+  const _AuthSceneView({required this.style});
 
-  final _AuthScenePalette palette;
+  final _AuthSceneStyle style;
 
   @override
-  State<_AuthScene> createState() => _AuthSceneState();
+  State<_AuthSceneView> createState() => _AuthSceneViewState();
 }
 
-class _AuthSceneState extends _LoopingArtState<_AuthScene> {
+class _AuthSceneViewState extends _LoopingArtState<_AuthSceneView> {
   @override
-  Duration get loopDuration => const Duration(seconds: 24);
+  Duration get loopDuration => widget.style == _AuthSceneStyle.deliveryMap
+      ? const Duration(milliseconds: 7200)
+      : const Duration(seconds: 16);
 
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: CustomPaint(
-        painter: _AuthScenePainter(palette: widget.palette, animation: loop),
+        painter: switch (widget.style) {
+          _AuthSceneStyle.morningRide =>
+            _RideScenePainter(palette: _RidePalette.morning, animation: loop),
+          _AuthSceneStyle.dayRide =>
+            _RideScenePainter(palette: _RidePalette.day, animation: loop),
+          _AuthSceneStyle.deliveryMap => _MapScenePainter(animation: loop),
+        },
       ),
     );
   }
 }
 
-/// Puttalam lagoon at a chosen time of day: sun, coconut palms, layered
-/// water, a passing oruwa and the Puttalam Drop pin. Every motion uses a
-/// whole number of cycles per loop so the scene repeats without a seam.
-class _AuthScenePainter extends CustomPainter {
-  _AuthScenePainter({required this.palette, required this.animation})
+const _tau = math.pi * 2;
+const _jacket = Color(0xFF2E8B5E);
+const _roof = Color(0xFFD9774F);
+const _tyre = Color(0xFF1B2620);
+
+/// Progress of [t] through the window [start]..[end], clamped to 0..1.
+double _phase(double t, double start, double end) =>
+    ((t - start) / (end - start)).clamp(0.0, 1.0);
+
+double _fract(double value) => value - value.floorToDouble();
+
+void _paintIcon(
+  Canvas canvas,
+  IconData icon,
+  Offset center,
+  double size,
+  Color color,
+) {
+  final painter = TextPainter(
+    text: TextSpan(
+      text: String.fromCharCode(icon.codePoint),
+      style: TextStyle(
+        fontFamily: icon.fontFamily,
+        package: icon.fontPackage,
+        fontSize: size,
+        height: 1,
+        color: color,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  painter.paint(
+    canvas,
+    center - Offset(painter.width / 2, painter.height / 2),
+  );
+  painter.dispose();
+}
+
+/// The Puttalam Drop map pin with its tip at [tip]; [size] is the head radius.
+void _paintDropPin(
+  Canvas canvas,
+  Offset tip,
+  double size, {
+  Color color = _authPrimary,
+  double opacity = 1,
+  Color hole = Colors.white,
+}) {
+  final head = tip.translate(0, -size * 1.5);
+  final paint = Paint()..color = color.withValues(alpha: opacity);
+  canvas.drawPath(
+    Path()
+      ..moveTo(head.dx - size * 0.82, head.dy + size * 0.5)
+      ..quadraticBezierTo(
+        head.dx - size * 0.5,
+        head.dy + size * 1.05,
+        tip.dx,
+        tip.dy,
+      )
+      ..quadraticBezierTo(
+        head.dx + size * 0.5,
+        head.dy + size * 1.05,
+        head.dx + size * 0.82,
+        head.dy + size * 0.5,
+      )
+      ..close(),
+    paint,
+  );
+  canvas.drawCircle(head, size, paint);
+  canvas.drawCircle(
+    head,
+    size * 0.42,
+    Paint()..color = hole.withValues(alpha: opacity),
+  );
+}
+
+/// Green "delivered" badge with a white tick.
+void _paintTickBadge(
+  Canvas canvas,
+  Offset center,
+  double radius, {
+  double opacity = 1,
+}) {
+  canvas.drawCircle(
+    center.translate(0, radius * 0.25),
+    radius * 1.1,
+    Paint()
+      ..color = Colors.black.withValues(alpha: 0.16 * opacity)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+  );
+  canvas.drawCircle(
+    center,
+    radius + radius * 0.22,
+    Paint()..color = Colors.white.withValues(alpha: opacity),
+  );
+  canvas.drawCircle(
+    center,
+    radius,
+    Paint()..color = _authPrimary.withValues(alpha: opacity),
+  );
+  canvas.drawPath(
+    Path()
+      ..moveTo(center.dx - radius * 0.45, center.dy + radius * 0.02)
+      ..lineTo(center.dx - radius * 0.1, center.dy + radius * 0.36)
+      ..lineTo(center.dx + radius * 0.48, center.dy - radius * 0.3),
+    Paint()
+      ..color = Colors.white.withValues(alpha: opacity)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = radius * 0.26
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round,
+  );
+}
+
+/// White map bubble with an icon, used for the shop and the home.
+void _paintMapBubble(
+  Canvas canvas,
+  Offset center,
+  double radius,
+  IconData icon,
+  Color color,
+) {
+  canvas.drawCircle(
+    center.translate(0, radius * 0.3),
+    radius,
+    Paint()
+      ..color = Colors.black.withValues(alpha: 0.16)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+  );
+  canvas.drawCircle(center, radius, Paint()..color = Colors.white);
+  _paintIcon(canvas, icon, center, radius * 1.1, color);
+}
+
+void _paintPalm(
+  Canvas canvas,
+  Offset base,
+  double height,
+  double lean,
+  double sway,
+  Color color,
+) {
+  final paint = Paint()..color = color;
+  final top = base + Offset(lean * height * 0.45, -height);
+  canvas.drawPath(
+    Path()
+      ..moveTo(base.dx, base.dy)
+      ..quadraticBezierTo(
+        base.dx + lean * height * 0.05,
+        base.dy - height * 0.55,
+        top.dx,
+        top.dy,
+      ),
+    Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(2.5, height * 0.05)
+      ..strokeCap = StrokeCap.round,
+  );
+
+  final length = height * 0.44;
+  const angles = [-2.9, -2.4, -1.95, -1.2, -0.75, -0.25];
+  for (final base in angles) {
+    final angle = base + sway;
+    final direction = Offset(math.cos(angle), math.sin(angle));
+    final normal = Offset(-direction.dy, direction.dx);
+    final end = top + direction * length + Offset(0, length * 0.38);
+    final control = top + direction * length * 0.6 + Offset(0, -length * 0.1);
+    canvas.drawPath(
+      Path()
+        ..moveTo(top.dx, top.dy)
+        ..quadraticBezierTo(
+          control.dx + normal.dx * length * 0.12,
+          control.dy + normal.dy * length * 0.12,
+          end.dx,
+          end.dy,
+        )
+        ..quadraticBezierTo(
+          control.dx - normal.dx * length * 0.08,
+          control.dy - normal.dy * length * 0.08,
+          top.dx,
+          top.dy,
+        )
+        ..close(),
+      paint,
+    );
+  }
+}
+
+/// Login and sign-up header: a Puttalam Drop rider scooting through town
+/// with a loaded delivery box. A drop pin lands on the next customer's home
+/// ahead, and turns into a delivered tick as the rider passes. Every layer
+/// scrolls a whole number of tiles per loop so the scene repeats without a
+/// seam.
+class _RideScenePainter extends CustomPainter {
+  _RideScenePainter({required this.palette, required this.animation})
       : super(repaint: animation);
 
-  final _AuthScenePalette palette;
+  final _RidePalette palette;
   final Animation<double> animation;
 
-  static const _tau = math.pi * 2;
+  /// Width of one repeating stretch of street, in design units.
+  static const _design = 360.0;
 
   @override
   void paint(Canvas canvas, Size size) {
     final t = animation.value;
     final w = size.width;
     final h = size.height;
-    final waterTop = h * 0.67;
+    final s = (h / 280).clamp(0.85, 1.25);
+    final groundY = h * 0.62;
+    final roadTop = groundY + 7 * s;
+    // The form sheet overlaps the bottom of the header; keep the rider above.
+    final visibleBottom = h - _AuthScaffold._sheetOverlap;
+    final wheelY = roadTop + (visibleBottom - roadTop) * 0.62;
+    final tile = w / math.max(1, (w / _design).round());
+    final u = tile / _design;
+    final riderX = math.max(w * 0.34, 112.0);
+
+    void eachTile(double tilesPerLoop, void Function(double x0) draw) {
+      final offset = (t * tilesPerLoop * tile) % tile;
+      for (var x0 = -offset - tile; x0 < w + tile; x0 += tile) {
+        draw(x0);
+      }
+    }
 
     // Sky.
     canvas.drawRect(
@@ -533,191 +766,919 @@ class _AuthScenePainter extends CustomPainter {
         ).createShader(Offset.zero & size),
     );
 
-    // Sun with a slow breathing glow.
-    final sunRadius = (math.min(w, h) * 0.11).clamp(24.0, 44.0);
-    final sun = Offset(w * 0.74, h * 0.4 + math.sin(t * _tau) * 4);
-    final glow = sunRadius * (2.6 + 0.2 * math.sin(t * _tau * 2));
-    canvas.drawCircle(
-      sun,
-      glow,
-      Paint()
-        ..shader = RadialGradient(
-          colors: [
-            palette.sun.withValues(alpha: 0.38),
-            palette.sun.withValues(alpha: 0),
-          ],
-        ).createShader(Rect.fromCircle(center: sun, radius: glow)),
-    );
-    canvas.drawCircle(sun, sunRadius, Paint()..color = palette.sun);
+    // Clouds drifting slowly.
+    final cloud = Paint()..color = palette.cloud.withValues(alpha: 0.92);
+    eachTile(1, (x0) {
+      _cloud(canvas, Offset(x0 + 70 * u, h * 0.2), 13 * s, cloud);
+      _cloud(canvas, Offset(x0 + 250 * u, h * 0.32), 9 * s, cloud);
+    });
 
-    // Far shore.
-    final hills = Path()
-      ..moveTo(0, h * 0.66)
-      ..cubicTo(w * 0.18, h * 0.54, w * 0.34, h * 0.6, w * 0.5, h * 0.6)
-      ..cubicTo(w * 0.68, h * 0.6, w * 0.82, h * 0.52, w, h * 0.62)
-      ..lineTo(w, h)
-      ..lineTo(0, h)
-      ..close();
-    canvas.drawPath(hills, Paint()..color = palette.hills);
-
-    // Drop pin standing on the shore, with its shadow.
-    final pinBob = (math.sin(t * _tau * 4) + 1) / 2 * 8;
-    final pinTip = Offset(w * 0.36, h * 0.6 - pinBob);
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(w * 0.36, h * 0.605),
-        width: 24 * (1 - pinBob / 18),
-        height: 6,
-      ),
-      Paint()..color = Colors.black.withValues(alpha: 0.14),
-    );
-    final pinHead = pinTip.translate(0, -24);
-    final pinPaint = Paint()..color = _authPrimary;
-    canvas.drawPath(
-      Path()
-        ..moveTo(pinHead.dx - 13, pinHead.dy + 8)
-        ..lineTo(pinTip.dx, pinTip.dy)
-        ..lineTo(pinHead.dx + 13, pinHead.dy + 8)
-        ..close(),
-      pinPaint,
-    );
-    canvas.drawCircle(pinHead, 16, pinPaint);
-    canvas.drawCircle(pinHead, 6.5, Paint()..color = Colors.white);
-
-    // Coconut palms swaying out of step with each other.
-    _palm(canvas, Offset(w * 0.09, h * 0.7), h * 0.36, 0.35,
-        math.sin(t * _tau * 3) * 0.05);
-    _palm(canvas, Offset(w * 0.19, h * 0.71), h * 0.25, 0.15,
-        math.sin(t * _tau * 3 + 1.4) * 0.05);
-    _palm(canvas, Offset(w * 0.93, h * 0.7), h * 0.3, -0.3,
-        math.sin(t * _tau * 3 + 2.6) * 0.05);
-
-    // Lagoon: three wave bands drifting at different speeds.
-    for (var i = 0; i < 3; i++) {
-      final y = waterTop + i * h * 0.08;
-      final amplitude = 3.0 + i * 1.5;
-      final wavelength = w / (1.3 + i * 0.4);
-      final direction = i.isEven ? 1 : -1;
-      final phase = t * _tau * (i + 1) * direction;
-      final wave = Path()..moveTo(0, y);
-      for (var x = 0.0; x <= w + 6; x += 6) {
-        wave.lineTo(
-          x,
-          y + math.sin(x / wavelength * _tau + phase) * amplitude,
+    // Far town silhouette.
+    final far = Paint()..color = palette.skyline;
+    final farPalm = Color.lerp(palette.skyline, _authNight, 0.12)!;
+    eachTile(2, (x0) {
+      const blocks = [
+        (0.0, 40.0, 34.0),
+        (44.0, 26.0, 52.0),
+        (74.0, 52.0, 28.0),
+        (140.0, 30.0, 44.0),
+        (176.0, 56.0, 24.0),
+        (238.0, 22.0, 60.0),
+        (264.0, 44.0, 36.0),
+        (314.0, 46.0, 30.0),
+      ];
+      for (final (x, width, height) in blocks) {
+        canvas.drawRRect(
+          RRect.fromRectAndCorners(
+            Rect.fromLTWH(
+              x0 + x * u,
+              groundY - height * s,
+              width * u - 2,
+              height * s + 1,
+            ),
+            topLeft: const Radius.circular(3),
+            topRight: const Radius.circular(3),
+          ),
+          far,
         );
       }
-      wave
-        ..lineTo(w, h)
-        ..lineTo(0, h)
-        ..close();
-      canvas.drawPath(wave, Paint()..color = palette.water[i]);
+      _paintPalm(canvas, Offset(x0 + 132 * u, groundY), 64 * s, 0.25,
+          math.sin(t * _tau * 4) * 0.04, farPalm);
+      _paintPalm(canvas, Offset(x0 + 306 * u, groundY), 54 * s, -0.2,
+          math.sin(t * _tau * 4 + 2) * 0.04, farPalm);
+    });
 
-      if (i == 0) {
-        // Sun glitter on the first band.
-        final glitter = Paint()
-          ..color = Colors.white.withValues(alpha: 0.55)
-          ..strokeWidth = 2
-          ..strokeCap = StrokeCap.round;
-        for (var j = 0; j < 4; j++) {
-          final half =
-              (20 - j * 4) * (0.75 + 0.25 * math.sin(t * _tau * 6 + j));
-          final gy = y + 10 + j * 7;
-          canvas.drawLine(
-            Offset(sun.dx - half, gy),
-            Offset(sun.dx + half, gy),
-            glitter,
+    // Street of shops and homes. The home at 141 is the next customer.
+    final deliveries = <Offset>[];
+    eachTile(4, (x0) {
+      final base = groundY + 1;
+      double x(double v) => x0 + v * u;
+
+      // Grocery shop with a green awning.
+      final shopA = Rect.fromLTRB(x(8), base - 64 * s, x(96), base);
+      canvas.drawRect(shopA, Paint()..color = palette.walls[0]);
+      canvas.drawRect(
+        Rect.fromLTWH(shopA.left, shopA.top, shopA.width, 10 * s),
+        Paint()..color = _authPrimary,
+      );
+      _awning(
+        canvas,
+        Rect.fromLTWH(
+            shopA.left - 4, shopA.top + 16 * s, shopA.width + 8, 11 * s),
+        _authPrimary,
+      );
+      _shopWindow(canvas, shopA, s);
+
+      // Customer home with a tiled roof.
+      final home = Rect.fromLTRB(x(114), base - 42 * s, x(168), base);
+      canvas.drawPath(
+        Path()
+          ..moveTo(home.left - 6, home.top + 2)
+          ..lineTo(home.center.dx, home.top - 22 * s)
+          ..lineTo(home.right + 6, home.top + 2)
+          ..close(),
+        Paint()..color = _roof,
+      );
+      canvas.drawRect(home, Paint()..color = palette.walls[2]);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(home.center.dx, base - 10 * s),
+            width: 12 * s,
+            height: 20 * s,
+          ),
+          const Radius.circular(2),
+        ),
+        Paint()..color = const Color(0xFF8A5A3C),
+      );
+      for (final dx in [-17.0, 17.0]) {
+        canvas.drawRect(
+          Rect.fromCenter(
+            center: Offset(home.center.dx + dx * u, base - 26 * s),
+            width: 10 * s,
+            height: 10 * s,
+          ),
+          Paint()..color = const Color(0xFFFFD98A),
+        );
+      }
+      deliveries.add(Offset(home.center.dx, home.top - 22 * s));
+
+      _paintPalm(canvas, Offset(x(190), base), 92 * s, 0.18,
+          math.sin(t * _tau * 4 + 1) * 0.05, palette.palm);
+
+      // Two-storey shop with an orange awning.
+      final shopC = Rect.fromLTRB(x(208), base - 80 * s, x(300), base);
+      canvas.drawRect(shopC, Paint()..color = palette.walls[1]);
+      for (final dx in [0.25, 0.5, 0.75]) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(
+              center: Offset(shopC.left + shopC.width * dx, shopC.top + 16 * s),
+              width: 13 * s,
+              height: 15 * s,
+            ),
+            const Radius.circular(2),
+          ),
+          Paint()..color = const Color(0xFFBFD9E0),
+        );
+      }
+      _awning(
+        canvas,
+        Rect.fromLTWH(
+            shopC.left - 4, shopC.top + 34 * s, shopC.width + 8, 11 * s),
+        _authAccent,
+      );
+      _shopWindow(canvas, shopC, s);
+
+      // Small flat-roofed house.
+      final houseD = Rect.fromLTRB(x(314), base - 40 * s, x(354), base);
+      canvas.drawRect(houseD, Paint()..color = palette.walls[0]);
+      canvas.drawRect(
+        Rect.fromLTWH(
+            houseD.left - 3, houseD.top - 4 * s, houseD.width + 6, 5 * s),
+        Paint()..color = Color.lerp(palette.walls[1], _authNight, 0.18)!,
+      );
+      canvas.drawRect(
+        Rect.fromCenter(
+          center: Offset(houseD.center.dx, base - 22 * s),
+          width: 12 * s,
+          height: 10 * s,
+        ),
+        Paint()..color = const Color(0xFFBFD9E0),
+      );
+    });
+
+    // Pavement and road with scrolling lane marks.
+    canvas.drawRect(
+      Rect.fromLTRB(0, groundY, w, roadTop),
+      Paint()..color = const Color(0xFFE9E1D1),
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(0, roadTop, w, h),
+      Paint()..color = palette.road,
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(0, roadTop, w, roadTop + 2 * s),
+      Paint()..color = Colors.black.withValues(alpha: 0.18),
+    );
+    final dashPeriod = tile / math.max(1, (tile / 46).round());
+    final dashOffset = (t * 8 * tile) % dashPeriod;
+    final laneY = roadTop + (visibleBottom - roadTop) * 0.26;
+    final dash = Paint()..color = Colors.white.withValues(alpha: 0.55);
+    for (var x = -dashOffset; x < w; x += dashPeriod) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x, laneY, dashPeriod * 0.5, 2.6 * s),
+          const Radius.circular(2),
+        ),
+        dash,
+      );
+    }
+
+    // Drop pins land on the next home, then flip to a tick as we pass.
+    final dropStart = math.min(w - riderX - 36, 300.0);
+    final ticks = <(Offset, double)>[];
+    for (final roof in deliveries) {
+      final d = roof.dx - riderX;
+      if (d > dropStart) {
+        continue;
+      }
+      if (d > 0) {
+        final travelled = dropStart - d;
+        final fall = (travelled / (70 * s)).clamp(0.0, 1.0);
+        final hover = fall < 1 ? 0.0 : math.sin(travelled / 14) * 1.6 * s;
+        final tip = Offset(
+          roof.dx,
+          roof.dy -
+              4 * s -
+              hover -
+              (1 - Curves.bounceOut.transform(fall)) * (roof.dy + 40),
+        );
+        final ripple = ((travelled - 60 * s) / (90 * s)).clamp(0.0, 1.0);
+        if (ripple > 0 && ripple < 1) {
+          canvas.drawOval(
+            Rect.fromCenter(
+              center: roof.translate(0, -3 * s),
+              width: (14 + 34 * ripple) * s,
+              height: (5 + 12 * ripple) * s,
+            ),
+            Paint()
+              ..color = _authPrimary.withValues(alpha: 0.5 * (1 - ripple))
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2 * s,
           );
         }
+        _paintDropPin(
+          canvas,
+          tip,
+          8.5 * s,
+          opacity: math.min(1, fall * 4),
+        );
+      } else {
+        final done = (-d / (120 * s)).clamp(0.0, 1.0);
+        if (done < 1) {
+          ticks.add((roof, done));
+        }
       }
+    }
 
-      if (i == 1) {
-        // An oruwa sailing across between the wave bands.
-        final bx = -40 + (w + 80) * t;
-        final by = y - 2 + math.sin(t * _tau * 8) * 1.5;
-        final boat = Paint()..color = palette.palm;
-        canvas.drawPath(
-          Path()
-            ..moveTo(bx - 18, by)
-            ..lineTo(bx + 18, by)
-            ..lineTo(bx + 12, by + 6)
-            ..lineTo(bx - 12, by + 6)
-            ..close(),
-          boat,
-        );
-        canvas.drawLine(
-          Offset(bx - 4, by + 9),
-          Offset(bx + 18, by + 9),
-          boat..strokeWidth = 1.6,
-        );
-        canvas.drawPath(
-          Path()
-            ..moveTo(bx - 2, by - 1)
-            ..lineTo(bx - 2, by - 30)
-            ..quadraticBezierTo(bx + 14, by - 16, bx + 13, by - 2)
-            ..close(),
-          Paint()..color = Colors.white.withValues(alpha: 0.92),
-        );
-      }
+    _paintRider(canvas, Offset(riderX, wheelY), s, t);
+
+    for (final (roof, done) in ticks) {
+      final pop = Curves.elasticOut.transform(math.min(1, done * 2.4));
+      final fade = done < 0.65 ? 1.0 : (1 - done) / 0.35;
+      final center = roof.translate(0, -20 * s - done * 26 * s);
+      canvas.drawCircle(
+        center,
+        (11 + done * 30) * s,
+        Paint()
+          ..color = _authLime.withValues(alpha: 0.7 * (1 - done))
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.4 * s,
+      );
+      _paintTickBadge(canvas, center, 11 * s * pop, opacity: fade);
     }
   }
 
-  void _palm(
-    Canvas canvas,
-    Offset base,
-    double height,
-    double lean,
-    double sway,
-  ) {
-    final paint = Paint()..color = palette.palm;
-    final top = base + Offset(lean * height * 0.45, -height);
-    canvas.drawPath(
-      Path()
-        ..moveTo(base.dx, base.dy)
-        ..quadraticBezierTo(
-          base.dx + lean * height * 0.05,
-          base.dy - height * 0.55,
-          top.dx,
-          top.dy,
+  void _cloud(Canvas canvas, Offset c, double r, Paint paint) {
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: c.translate(0, r * 0.35),
+          width: r * 3.4,
+          height: r * 1.1,
         ),
-      Paint()
-        ..color = palette.palm
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = math.max(3, height * 0.05)
-        ..strokeCap = StrokeCap.round,
+        Radius.circular(r * 0.55),
+      ),
+      paint,
     );
+    canvas.drawCircle(c.translate(-r * 0.8, r * 0.1), r * 0.7, paint);
+    canvas.drawCircle(c.translate(r * 0.1, -r * 0.25), r, paint);
+    canvas.drawCircle(c.translate(r * 0.95, r * 0.15), r * 0.62, paint);
+  }
 
-    final length = height * 0.44;
-    const angles = [-2.9, -2.4, -1.95, -1.2, -0.75, -0.25];
-    for (final base in angles) {
-      final angle = base + sway;
-      final direction = Offset(math.cos(angle), math.sin(angle));
-      final normal = Offset(-direction.dy, direction.dx);
-      final end = top + direction * length + Offset(0, length * 0.38);
-      final control = top + direction * length * 0.6 + Offset(0, -length * 0.1);
-      canvas.drawPath(
-        Path()
-          ..moveTo(top.dx, top.dy)
-          ..quadraticBezierTo(
-            control.dx + normal.dx * length * 0.12,
-            control.dy + normal.dy * length * 0.12,
-            end.dx,
-            end.dy,
-          )
-          ..quadraticBezierTo(
-            control.dx - normal.dx * length * 0.08,
-            control.dy - normal.dy * length * 0.08,
-            top.dx,
-            top.dy,
-          )
-          ..close(),
+  void _awning(Canvas canvas, Rect r, Color stripe) {
+    final count = math.max(4, (r.width / 9).round());
+    final width = r.width / count;
+    for (var i = 0; i < count; i++) {
+      final paint = Paint()..color = i.isEven ? stripe : Colors.white;
+      canvas.drawRect(
+        Rect.fromLTWH(r.left + i * width, r.top, width + 0.5, r.height),
+        paint,
+      );
+      canvas.drawCircle(
+        Offset(r.left + i * width + width / 2, r.bottom),
+        width / 2,
         paint,
       );
     }
   }
 
+  /// Glass front with crates of produce, plus the door.
+  void _shopWindow(Canvas canvas, Rect shop, double s) {
+    final window = Rect.fromLTRB(
+      shop.left + 6,
+      shop.bottom - 26 * s,
+      shop.center.dx - 2,
+      shop.bottom - 4 * s,
+    );
+    canvas.drawRect(window, Paint()..color = const Color(0xFFCFE4E6));
+    const produce = [Color(0xFFE8563F), Color(0xFFF2B233), Color(0xFF7CC15B)];
+    final step = window.width / 3;
+    for (var i = 0; i < 3; i++) {
+      final cx = window.left + step * (i + 0.5);
+      canvas.drawRect(
+        Rect.fromCenter(
+          center: Offset(cx, window.bottom - 4 * s),
+          width: step - 3,
+          height: 7 * s,
+        ),
+        Paint()..color = const Color(0xFFB98552),
+      );
+      canvas.drawCircle(
+        Offset(cx, window.bottom - 9 * s),
+        3.6 * s,
+        Paint()..color = produce[i],
+      );
+    }
+    canvas.drawRect(
+      Rect.fromLTRB(
+        shop.center.dx + 8,
+        shop.bottom - 24 * s,
+        shop.center.dx + 8 + 13 * s,
+        shop.bottom,
+      ),
+      Paint()..color = const Color(0xFF6E8078),
+    );
+  }
+
+  /// The rider on an orange scooter, wheels on the road at [ground].
+  void _paintRider(Canvas canvas, Offset ground, double s, double t) {
+    final bob = math.sin(t * _tau * 48) * 0.8 * s;
+    Offset p(double dx, double dy, [double lift = 0]) =>
+        Offset(ground.dx + dx * s, ground.dy + dy * s + bob + lift);
+    Offset wheel(double dx) => Offset(ground.dx + dx * s, ground.dy);
+
+    // Exhaust puffs and speed lines trailing behind.
+    for (var i = 0; i < 3; i++) {
+      final f = _fract(t * 20 + i / 3);
+      canvas.drawCircle(
+        p(-42 - f * 28, -6 - f * 9),
+        (3 + f * 5) * s,
+        Paint()..color = Colors.white.withValues(alpha: 0.4 * (1 - f)),
+      );
+    }
+    final streak = Paint()
+      ..strokeWidth = 2 * s
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 3; i++) {
+      final f = _fract(t * 24 + i * 0.37);
+      final start = p(-50 - f * 56, -56 + i * 9.0);
+      canvas.drawLine(
+        start,
+        start.translate(-22 * s * (1 - f), 0),
+        streak..color = _authNight.withValues(alpha: 0.22 * (1 - f)),
+      );
+    }
+
+    // Shadow.
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: ground.translate(3 * s, 11 * s),
+        width: 92 * s,
+        height: 8 * s,
+      ),
+      Paint()..color = Colors.black.withValues(alpha: 0.22),
+    );
+
+    // Wheels with turning spokes.
+    final spin = t * _tau * 46;
+    for (final dx in [-24.0, 30.0]) {
+      final c = wheel(dx);
+      canvas.drawCircle(c, 10 * s, Paint()..color = _tyre);
+      canvas.drawCircle(c, 5.4 * s, Paint()..color = const Color(0xFFD7DDD9));
+      final spoke = Paint()
+        ..color = _tyre
+        ..strokeWidth = 1.4 * s;
+      for (var k = 0; k < 3; k++) {
+        final a = spin + k * _tau / 3;
+        canvas.drawLine(
+          c,
+          c + Offset(math.cos(a), math.sin(a)) * 5.2 * s,
+          spoke,
+        );
+      }
+      canvas.drawCircle(c, 1.8 * s, Paint()..color = _tyre);
+    }
+
+    final body = Paint()..color = _authAccent;
+    final bodyShade = Paint()
+      ..color = Color.lerp(_authAccent, const Color(0xFF7A2E17), 0.3)!;
+
+    // Front fender and steering column.
+    canvas.drawArc(
+      Rect.fromCircle(center: wheel(30).translate(0, bob), radius: 12.5 * s),
+      math.pi + 0.35,
+      math.pi - 0.7,
+      false,
+      Paint()
+        ..color = _authAccent
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4 * s
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(p(14, -6).dx, p(14, -6).dy)
+        ..lineTo(p(21, -44).dx, p(21, -44).dy)
+        ..lineTo(p(29, -44).dx, p(29, -44).dy)
+        ..cubicTo(
+          p(27, -28).dx,
+          p(27, -28).dy,
+          p(32, -16).dx,
+          p(32, -16).dy,
+          p(40, -9).dx,
+          p(40, -9).dy,
+        )
+        ..cubicTo(
+          p(34, -15).dx,
+          p(34, -15).dy,
+          p(24, -14).dx,
+          p(24, -14).dy,
+          p(21, -6).dx,
+          p(21, -6).dy,
+        )
+        ..close(),
+      body,
+    );
+
+    // Floorboard.
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromPoints(p(-6, -10), p(20, -4)),
+        Radius.circular(2 * s),
+      ),
+      Paint()..color = const Color(0xFF3A3F3C),
+    );
+
+    // Rear cowl over the back wheel.
+    canvas.drawPath(
+      Path()
+        ..moveTo(p(-38, -4).dx, p(-38, -4).dy)
+        ..cubicTo(
+          p(-42, -24).dx,
+          p(-42, -24).dy,
+          p(-26, -31).dx,
+          p(-26, -31).dy,
+          p(-6, -29).dx,
+          p(-6, -29).dy,
+        )
+        ..lineTo(p(2, -22).dx, p(2, -22).dy)
+        ..lineTo(p(2, -6).dx, p(2, -6).dy)
+        ..cubicTo(
+          p(-8, -6).dx,
+          p(-8, -6).dy,
+          p(-10, -18).dx,
+          p(-10, -18).dy,
+          p(-24, -18).dx,
+          p(-24, -18).dy,
+        )
+        ..cubicTo(
+          p(-32, -18).dx,
+          p(-32, -18).dy,
+          p(-34, -10).dx,
+          p(-34, -10).dy,
+          p(-34, -4).dx,
+          p(-34, -4).dy,
+        )
+        ..close(),
+      body,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(p(-34, -12).dx, p(-34, -12).dy)
+        ..quadraticBezierTo(
+          p(-22, -24).dx,
+          p(-22, -24).dy,
+          p(0, -20).dx,
+          p(0, -20).dy,
+        ),
+      bodyShade
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.6 * s,
+    );
+
+    // Headlight with a soft glow.
+    final lamp = p(30, -38);
+    canvas.drawCircle(
+      lamp,
+      9 * s,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            const Color(0xFFFFF2B0).withValues(alpha: 0.7),
+            const Color(0x00FFF2B0),
+          ],
+        ).createShader(Rect.fromCircle(center: lamp, radius: 9 * s)),
+    );
+    canvas.drawCircle(lamp, 3 * s, Paint()..color = const Color(0xFFFFF6CC));
+
+    // Delivery box on the rear rack, loaded with fresh groceries.
+    final lift = math.sin(t * _tau * 24) * 0.6 * s;
+    canvas.drawLine(
+      p(-42, -32),
+      p(-12, -32),
+      Paint()
+        ..color = const Color(0xFF3A3F3C)
+        ..strokeWidth = 2.2 * s
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawOval(
+      Rect.fromCenter(center: p(-33, -61, lift), width: 9 * s, height: 16 * s),
+      Paint()..color = const Color(0xFF7CC15B),
+    );
+    canvas.save();
+    canvas.translate(p(-24, -60, lift).dx, p(-24, -60, lift).dy);
+    canvas.rotate(0.45);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset.zero, width: 6 * s, height: 20 * s),
+        Radius.circular(3 * s),
+      ),
+      Paint()..color = const Color(0xFFE3B070),
+    );
+    canvas.restore();
+    canvas.drawCircle(
+      p(-19, -58, lift),
+      4 * s,
+      Paint()..color = const Color(0xFFE8563F),
+    );
+    final box = Rect.fromPoints(p(-42, -58, lift), p(-14, -33, lift));
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(box, Radius.circular(4 * s)),
+      Paint()..color = _authPrimary,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndCorners(
+        Rect.fromLTWH(box.left, box.top, box.width, 5 * s),
+        topLeft: Radius.circular(4 * s),
+        topRight: Radius.circular(4 * s),
+      ),
+      Paint()..color = _authLime,
+    );
+    _paintDropPin(
+      canvas,
+      box.center.translate(0, 8 * s),
+      4.6 * s,
+      color: Colors.white,
+      hole: _authPrimary,
+    );
+
+    // Rider.
+    final hip = p(-8, -36);
+    final shoulder = p(-1, -57);
+    canvas.drawPath(
+      Path()
+        ..moveTo(hip.dx, hip.dy)
+        ..lineTo(p(10, -32).dx, p(10, -32).dy)
+        ..lineTo(p(11, -11).dx, p(11, -11).dy),
+      Paint()
+        ..color = const Color(0xFF23312B)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 7 * s
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromPoints(p(8, -12), p(17, -8)),
+        Radius.circular(2 * s),
+      ),
+      Paint()..color = _tyre,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromPoints(p(-26, -33), p(2, -28)),
+        Radius.circular(3 * s),
+      ),
+      Paint()..color = const Color(0xFF2B2B2B),
+    );
+    canvas.drawLine(
+      hip,
+      shoulder,
+      Paint()
+        ..color = _jacket
+        ..strokeWidth = 13 * s
+        ..strokeCap = StrokeCap.round,
+    );
+    // Handlebar.
+    canvas.drawLine(
+      p(24, -44),
+      p(20, -50),
+      Paint()
+        ..color = const Color(0xFF3A3F3C)
+        ..strokeWidth = 2.6 * s
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(shoulder.dx, shoulder.dy)
+        ..quadraticBezierTo(
+          p(12, -44).dx,
+          p(12, -44).dy,
+          p(20, -49).dx,
+          p(20, -49).dy,
+        ),
+      Paint()
+        ..color = _jacket
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5.5 * s
+        ..strokeCap = StrokeCap.round,
+    );
+    // Head in a lime helmet with a dark visor.
+    final head = p(2, -68);
+    canvas.drawCircle(head, 7.5 * s, Paint()..color = const Color(0xFFB9794F));
+    canvas.drawArc(
+      Rect.fromCircle(center: head.translate(0, 1 * s), radius: 9.5 * s),
+      math.pi,
+      math.pi,
+      true,
+      Paint()..color = _authLime,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromPoints(p(5, -69), p(12, -65)),
+        Radius.circular(2 * s),
+      ),
+      Paint()..color = _authNight.withValues(alpha: 0.85),
+    );
+  }
+
   @override
-  bool shouldRepaint(covariant _AuthScenePainter oldDelegate) =>
+  bool shouldRepaint(covariant _RideScenePainter oldDelegate) =>
       oldDelegate.palette != palette || oldDelegate.animation != animation;
+}
+
+/// Password reset header: a little delivery map by Puttalam lagoon. A drop
+/// pin lands on the customer's home, the route draws from the shop, the
+/// rider follows it, and the order lands with a delivered tick.
+class _MapScenePainter extends CustomPainter {
+  _MapScenePainter({required this.animation}) : super(repaint: animation);
+
+  final Animation<double> animation;
+
+  static const _land = Color(0xFFF4EEE3);
+  static const _block = Color(0xFFE9E1D2);
+  static const _park = Color(0xFFD3EACB);
+  static const _tree = Color(0xFFAFD69D);
+  static const _water = Color(0xFFBEDBE3);
+  static const _street = Colors.white;
+  static const _streetEdge = Color(0xFFE2D8C6);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final t = animation.value;
+    final w = size.width;
+    final h = size.height;
+    final s = (h / 280).clamp(0.85, 1.25);
+    final bottom = h - _AuthScaffold._sheetOverlap;
+    final homeY = math.max(h * 0.42, 100.0);
+    final shopY = bottom - 26 * s;
+    final xs = [w * 0.3, w * 0.56, w * 0.74];
+    final topStreet = h * 0.17;
+
+    canvas.drawRect(Offset.zero & size, Paint()..color = _land);
+
+    // City blocks between the streets.
+    final block = Paint()..color = _block;
+    for (final r in [
+      Rect.fromLTRB(xs[2] + 10, homeY + 10, w, shopY - 10),
+      Rect.fromLTRB(xs[1] + 10, topStreet + 10, xs[2] - 10, homeY - 10),
+      Rect.fromLTRB(xs[0] + 10, 0, xs[1] - 10, topStreet - 10),
+    ]) {
+      final step = 26 * s;
+      for (var y = r.top + 4; y + step * 0.7 < r.bottom; y += step) {
+        for (var x = r.left + 4; x + step * 0.7 < r.right; x += step) {
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromLTWH(x, y, step * 0.72, step * 0.62),
+              const Radius.circular(3),
+            ),
+            block,
+          );
+        }
+      }
+    }
+
+    // A park with trees in the middle of the route.
+    final park = Rect.fromLTRB(xs[0] + 10, homeY + 10, xs[1] - 10, shopY - 10);
+    if (park.height > 8 && park.width > 8) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(park, const Radius.circular(8)),
+        Paint()..color = _park,
+      );
+      final tree = Paint()..color = _tree;
+      for (var i = 0; i < 5; i++) {
+        canvas.drawCircle(
+          Offset(
+            park.left + park.width * (0.15 + i * 0.18),
+            park.top + park.height * (i.isEven ? 0.35 : 0.68),
+          ),
+          5.5 * s,
+          tree,
+        );
+      }
+    }
+
+    // Puttalam lagoon along the left edge, with little ripples.
+    final shore = Path()..moveTo(0, 0);
+    for (var y = 0.0; y <= h; y += 8) {
+      shore.lineTo(w * 0.1 + math.sin(y / 34) * 9 * s, y);
+    }
+    shore
+      ..lineTo(0, h)
+      ..close();
+    canvas.drawPath(shore, Paint()..color = _water);
+    final ripple = Paint()
+      ..color = Colors.white.withValues(alpha: 0.7)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 3; i++) {
+      final f = _fract(t * 2 + i / 3);
+      final y = h * (0.3 + i * 0.22);
+      final x = w * 0.03 + f * w * 0.03;
+      canvas.drawLine(
+        Offset(x, y),
+        Offset(x + 10 * s, y),
+        ripple
+          ..color = Colors.white.withValues(alpha: 0.7 * math.sin(f * math.pi)),
+      );
+    }
+
+    // Streets.
+    void street(Offset a, Offset b) {
+      canvas.drawLine(
+        a,
+        b,
+        Paint()
+          ..color = _streetEdge
+          ..strokeWidth = 11 * s,
+      );
+      canvas.drawLine(
+        a,
+        b,
+        Paint()
+          ..color = _street
+          ..strokeWidth = 8 * s,
+      );
+    }
+
+    final landEdge = w * 0.1;
+    street(Offset(landEdge, topStreet), Offset(w, topStreet));
+    street(Offset(landEdge, homeY), Offset(w, homeY));
+    street(Offset(landEdge, shopY), Offset(w, shopY));
+    for (final x in xs) {
+      street(Offset(x, 0), Offset(x, h));
+    }
+
+    // Another rider out on a delivery, heading down the far street.
+    final other = _fract(t * 2);
+    canvas.drawCircle(
+      Offset(xs[2], bottom * other),
+      3.4 * s,
+      Paint()
+        ..color =
+            _authAccent.withValues(alpha: 0.55 * math.sin(other * math.pi)),
+    );
+
+    // Timeline of one delivery.
+    final shop = Offset(w * 0.18, shopY);
+    final home = Offset(w * 0.88, homeY);
+    final corner = 14 * s;
+    final turnX = xs[1];
+    final route = Path()
+      ..moveTo(shop.dx + 16 * s, shop.dy)
+      ..lineTo(turnX - corner, shopY)
+      ..quadraticBezierTo(turnX, shopY, turnX, shopY - corner)
+      ..lineTo(turnX, homeY + corner)
+      ..quadraticBezierTo(turnX, homeY, turnX + corner, homeY)
+      ..lineTo(home.dx - 36 * s, homeY);
+    final metric = route.computeMetrics().first;
+
+    final fade = 1 - _phase(t, 0.9, 1);
+    final drop = _phase(t, 0.02, 0.16);
+    final travel = Curves.easeInOutCubic.transform(_phase(t, 0.2, 0.66));
+    final arrive = _phase(t, 0.66, 0.9);
+
+    // Planned route, then the travelled part in brand green.
+    final planned = Paint()
+      ..color = _authPrimary.withValues(alpha: 0.35 * fade)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.6 * s
+      ..strokeCap = StrokeCap.round;
+    if (drop >= 1) {
+      for (var d = 0.0; d < metric.length; d += 12 * s) {
+        canvas.drawPath(
+          metric.extractPath(d, math.min(d + 6 * s, metric.length)),
+          planned,
+        );
+      }
+    }
+    if (travel > 0) {
+      final travelled = metric.extractPath(0, metric.length * travel);
+      canvas.drawPath(
+        travelled,
+        Paint()
+          ..color = _authLime.withValues(alpha: 0.55 * fade)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 10 * s
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+      );
+      canvas.drawPath(
+        travelled,
+        Paint()
+          ..color = _authPrimary.withValues(alpha: fade)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4.5 * s
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+
+    // Shop, with a pulse as the rider sets off.
+    final depart = _phase(t, 0.18, 0.36);
+    if (depart > 0 && depart < 1) {
+      canvas.drawCircle(
+        shop,
+        (16 + depart * 20) * s,
+        Paint()
+          ..color = _authAccent.withValues(alpha: 0.45 * (1 - depart))
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2 * s,
+      );
+    }
+    _paintMapBubble(
+      canvas,
+      shop,
+      16 * s,
+      Icons.storefront_rounded,
+      _authPrimary,
+    );
+
+    // Home, with landing and arrival rings.
+    final landed = _phase(t, 0.14, 0.34);
+    for (final (ring, color) in [
+      (landed, _authPrimary),
+      (arrive, _authLime),
+      (_phase(t, 0.72, 0.96), _authLime),
+    ]) {
+      if (ring > 0 && ring < 1) {
+        canvas.drawCircle(
+          home,
+          (16 + ring * 26) * s,
+          Paint()
+            ..color = color.withValues(alpha: 0.6 * (1 - ring))
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.4 * s,
+        );
+      }
+    }
+    _paintMapBubble(canvas, home, 16 * s, Icons.home_rounded, _authAccent);
+
+    // Drop pin falling onto the home.
+    if (drop > 0) {
+      final rest = home.translate(0, -18 * s);
+      final tip = rest.translate(
+        0,
+        -(1 - Curves.bounceOut.transform(drop)) * (rest.dy + 30),
+      );
+      _paintDropPin(
+        canvas,
+        tip,
+        10 * s,
+        opacity: math.min(1, drop * 4) * fade,
+      );
+    }
+
+    // Rider following the route.
+    final riderAlpha = math.min(_phase(t, 0.17, 0.22), fade);
+    if (riderAlpha > 0) {
+      final tangent = metric.getTangentForOffset(metric.length * travel)!;
+      final c = tangent.position;
+      final radius = 13 * s;
+      canvas.drawCircle(
+        c.translate(0, 4 * s),
+        radius,
+        Paint()
+          ..color = Colors.black.withValues(alpha: 0.2 * riderAlpha)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      );
+      canvas.drawCircle(
+        c,
+        radius + 2.5 * s,
+        Paint()..color = Colors.white.withValues(alpha: riderAlpha),
+      );
+      canvas.drawCircle(
+        c,
+        radius,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color.lerp(_authAccent, Colors.white, 0.25)!
+                  .withValues(alpha: riderAlpha),
+              _authAccent.withValues(alpha: riderAlpha),
+            ],
+          ).createShader(Rect.fromCircle(center: c, radius: radius)),
+      );
+      _paintIcon(
+        canvas,
+        Icons.delivery_dining_rounded,
+        c,
+        radius * 1.2,
+        Colors.white.withValues(alpha: riderAlpha),
+      );
+    }
+
+    // Delivered tick popping out beside the pin.
+    if (arrive > 0) {
+      final pop = Curves.elasticOut.transform(math.min(1, arrive * 2.2));
+      _paintTickBadge(
+        canvas,
+        home.translate(16 * s, -44 * s),
+        10 * s * pop,
+        opacity: fade,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MapScenePainter oldDelegate) =>
+      oldDelegate.animation != animation;
 }
 
 /// Dark pill button with a lime action dot whose icon nudges forward.
@@ -2520,7 +3481,7 @@ class _ForgotPasswordPhoneScreenState extends State<ForgotPasswordPhoneScreen> {
     return _AuthScaffold(
       appBarTitle: 'Forgot password',
       title: 'Reset securely',
-      scene: _AuthScenePalette.dusk,
+      scene: _AuthSceneStyle.deliveryMap,
       hero: const _AuthHero(
         title: 'Admin-approved reset',
         message:
@@ -2620,7 +3581,7 @@ class _RegisterDetailsScreenState extends State<RegisterDetailsScreen> {
     return _AuthScaffold(
       appBarTitle: 'Complete profile',
       title: 'Create account',
-      scene: _AuthScenePalette.day,
+      scene: _AuthSceneStyle.dayRide,
       hero: const _AuthHero(
         title: 'Your shopping profile',
         message:
@@ -2770,7 +3731,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     return _AuthScaffold(
       appBarTitle: 'Set new password',
       title: 'Password reset',
-      scene: _AuthScenePalette.dusk,
+      scene: _AuthSceneStyle.deliveryMap,
       children: [
         _AuthCard(
           child: Row(
